@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sign in · Willow Oak</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .auth-wrap { min-height: 100dvh; display:grid; place-items:center; background: var(--bg); }
+    .auth-card { width:min(520px, 92%); }
+    .auth-head {
+      background: var(--grad); color:#fff; padding:1rem 1.1rem;
+      border-radius: var(--r-md) var(--r-md) 0 0;
+    }
+    .auth-body { padding:1.1rem; border:1px solid var(--line); border-top:0;
+      border-radius: 0 0 var(--r-md) var(--r-md); background:#fff; box-shadow: var(--shadow-1);
+    }
+    .brand { display:flex; align-items:center; gap:.6rem; }
+    .brand .logo { width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.15);
+      display:grid;place-items:center;font-size:18px;border:1px solid rgba(255,255,255,.28); }
+    .form-row { margin:.65rem 0; }
+    .err.inline { margin-bottom:.65rem; }
+    .noscript { background:#fee2e2; color:#991b1b; border:1px solid #fecaca; padding:.5rem .75rem; border-radius:8px; margin-bottom:.5rem; }
+  </style>
+</head>
+<body>
+  <main class="auth-wrap">
+    <section class="auth-card">
+      <div class="auth-head">
+        <div class="brand">
+          <div class="logo">🌿</div>
+          <div>
+            <h1 style="color:#fff;margin:0;font-size:1.25rem">Welcome back</h1>
+            <div class="meta" style="color:#eef2ff">Sign in to your account</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="auth-body">
+        <noscript><div class="noscript">JavaScript is required to sign in. Please enable it.</div></noscript>
+        <div id="topErr" class="err inline" style="display:none"></div>
+
+        <form id="loginForm" novalidate>
+          <div class="form-row">
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" autocomplete="email" required placeholder="you@example.com" />
+          </div>
+
+          <div class="form-row">
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" required placeholder="Your password" />
+          </div>
+
+          <div class="row between" style="margin-top:.75rem">
+            <a class="meta" href="forgot.html">Forgot your password?</a>
+            <button class="btn primary" id="submitBtn" type="submit">Sign in</button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <!-- external script to satisfy CSP `script-src 'self'` -->
+  <script type="module" src="login.js"></script>
+</body>
+</html>

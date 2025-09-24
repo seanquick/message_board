@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Create account · Willow Oak</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .auth-wrap { min-height: 100dvh; display:grid; place-items:center; background: var(--bg); }
+    .auth-card { width:min(520px, 92%); }
+    .auth-head {
+      background: var(--grad); color:#fff; padding:1rem 1.1rem;
+      border-radius: var(--r-md) var(--r-md) 0 0;
+    }
+    .auth-body { padding:1.1rem; border:1px solid var(--line); border-top:0;
+      border-radius: 0 0 var(--r-md) var(--r-md); background:#fff; box-shadow: var(--shadow-1);
+    }
+    .brand { display:flex; align-items:center; gap:.6rem; }
+    .brand .logo {
+      width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.15);
+      display:grid;place-items:center;font-size:18px;
+      border:1px solid rgba(255,255,255,.28);
+    }
+    .grid-2 { display:grid; gap:.65rem; grid-template-columns:1fr 1fr; }
+    @media (max-width:560px){ .grid-2 { grid-template-columns: 1fr; } }
+    .form-row { margin:.65rem 0; }
+    .err-inline { margin:.5rem 0; }
+  </style>
+</head>
+<body>
+  <main class="auth-wrap">
+    <section class="auth-card">
+      <div class="auth-head">
+        <div class="brand">
+          <div class="logo">🌿</div>
+          <div>
+            <h1 style="color:#fff;margin:0;font-size:1.25rem">Create your account</h1>
+            <div class="meta" style="color:#eef2ff">Join the conversation</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="auth-body">
+        <form id="registerForm" novalidate>
+          <div class="grid-2">
+            <div class="form-row">
+              <label for="name">Display name</label>
+              <input id="name" name="name" required placeholder="Sage Walker" />
+            </div>
+            <div class="form-row">
+              <label for="email">Email</label>
+              <input id="email" name="email" type="email" autocomplete="email" required placeholder="you@example.com" />
+            </div>
+          </div>
+          <div class="form-row">
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" autocomplete="new-password" required placeholder="At least 8 characters" />
+          </div>
+          <label class="row" style="gap:.5rem;margin:.35rem 0 0">
+            <input id="agree" type="checkbox" /> <span>I agree to the <a href="guidelines.html" target="_blank" rel="noopener">community guidelines</a>.</span>
+          </label>
+
+          <div id="formErr" class="err err-inline" style="display:none"></div>
+
+          <div class="row between" style="margin-top:.75rem">
+            <a class="meta" href="login.html">Already have an account?</a>
+            <button class="btn primary" id="submitBtn" type="submit">Create account</button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    const $ = (s, r=document) => r.querySelector(s);
+    const getCookie = (name) => document.cookie.split('; ').find(x => x.startsWith(name+'='))?.split('=')[1];
+
+    const form = $('#registerForm');
+    const errBox = $('#formErr');
+    const btn = $('#submitBtn');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errBox.style.display = 'none'; errBox.textContent = '';
+
+      const name = $('#name').value.trim();
+      const email = $('#email').value.trim();
+      const password = $('#password').value;
+      const agree = $('#agree').checked;
+
+      if (!agree) {
+        errBox.textContent = 'Please agree to the community guidelines.'; errBox.style.display = '';
+        return;
+      }
+
+      btn.disabled = true; btn.textContent = 'Creating…';
+
+      try {
+        const csrf = getCookie('csrf');
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(csrf ? { 'x-csrf-token': csrf } : {})
+          },
+          credentials: 'include',
+          body: JSON.stringify({ name, email, password, accept: true })
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || 'Registration failed');
+
+        // success → go to threads
+        location.href = 'threads.html';
+      } catch (err) {
+        errBox.textContent = err.message || 'Registration failed';
+        errBox.style.display = '';
+        btn.disabled = false; btn.textContent = 'Create account';
+      }
+    });
+  </script>
+</body>
+</html>

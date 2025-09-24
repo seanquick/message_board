@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Account Settings</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Header is injected by nav.js (loads header.html) -->
+
+  <main class="container card" role="main" aria-labelledby="pageTitle">
+    <h2 id="pageTitle">Account Settings</h2>
+
+    <section class="mt-1">
+      <h3>Change password</h3>
+      <form id="pwForm" class="stack" novalidate>
+        <label for="old">Current password</label>
+        <input id="old" type="password" placeholder="Current password" autocomplete="current-password" required />
+
+        <label for="nw">New password</label>
+        <input id="nw" type="password" placeholder="New password (min 8 chars)" autocomplete="new-password" required />
+
+        <button class="btn" type="submit">Update Password</button>
+      </form>
+      <div id="msg" class="meta mt-05" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <!-- ✅ Shared scripts first (header injection + auth/nav wiring) -->
+  <script type="module" src="nav.js"></script>
+  <script type="module" src="main.js"></script>
+  <!-- ✅ Page script last -->
+  <script type="module" src="threads.js"></script>
+  <script type="module" src="account.js"></script>
+</body>
+</html>

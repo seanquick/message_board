@@ -1,0 +1,351 @@
+/* ==========================================================================
+   Willow Oak Theme — Full Drop-in Stylesheet
+   Palette: deep forest + warm neutral
+   Fonts: Poppins (headings), Inter (body)
+   --------------------------------------------------------------------------
+   This file is self-contained: reset + tokens + components + utilities.
+   It targets the classes you already use: .container, .card, .btn, .grid,
+   .toolbar, .pill, .meta, .err/.ok/.danger, tables, composer, admin helpers.
+   ========================================================================== */
+
+/* 0) Webfonts (safe to inline; will gracefully fall back) */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600;700&display=swap');
+
+/* 1) CSS Variables (Theme Tokens) */
+:root {
+  /* Base */
+  --bg:            #f6f7f6;
+  --bg-soft:       #f2f4f1;
+  --surface:       #ffffff;
+  --surface-2:     #fafbfa;
+  --elev:          0 10px 25px rgba(16, 24, 40, 0.08);
+  --ring:          0 0 0 3px rgba(36, 87, 55, 0.20);
+
+  /* Text */
+  --text:          #1f2937;  /* slate-800 */
+  --text-soft:     #475569;  /* slate-600 */
+  --muted:         #6b7280;  /* slate-500 */
+
+  /* Brand */
+  --brand:         #245737;  /* deep forest */
+  --brand-600:     #1f4b2f;
+  --brand-500:     #2a6a42;
+  --brand-300:     #7fb08f;
+  --accent:        #c7a36a;  /* warm gold accent */
+
+  /* State */
+  --ok:            #0ea5a5;  /* teal */
+  --warn:          #f59e0b;  /* amber */
+  --danger:        #e11d48;  /* rose-600 */
+  --pill:          #e9f2ec;  /* pale green */
+
+  /* Borders */
+  --line:          #e5e7eb;  /* gray-200 */
+  --line-2:        #d1d5db;  /* gray-300 */
+
+  /* Radius & spacing */
+  --r-sm:          8px;
+  --r-md:          12px;
+  --r-lg:          16px;
+  --space:         1rem;
+
+  /* Component sizing */
+  --input-h:       42px;
+  --btn-h:         36px;
+
+  /* Shadows */
+  --shadow-1:      0 2px 8px rgba(16,24,40,.08);
+  --shadow-2:      0 8px 24px rgba(16,24,40,.10);
+
+  /* Gradients */
+  --grad:          linear-gradient(135deg, #1f4b2f 0%, #2a6a42 60%, #7fb08f 120%);
+  --grad-soft:     linear-gradient(180deg, rgba(36,87,55,.04), rgba(36,87,55,.00));
+}
+
+/* 2) Reset / Base */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+}
+
+body {
+  margin: 0;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+img { max-width: 100%; display: block; }
+a { color: var(--brand-500); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* 3) Typography */
+h1, h2, h3, h4 {
+  font-family: Poppins, Inter, ui-sans-serif, system-ui;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  margin: 0 0 .5rem;
+}
+h1 { font-size: clamp(1.6rem, 2.6vw, 2.2rem); font-weight: 700; }
+h2 { font-size: clamp(1.25rem, 2vw, 1.5rem); font-weight: 600; }
+h3 { font-size: 1.1rem; font-weight: 600; }
+p  { margin: 0 0 1rem; color: var(--text-soft); }
+
+.meta   { color: var(--muted); font-size: .9rem; }
+.mono   { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.truncate { max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 4) Layout */
+.container {
+  width: min(1100px, 92%);
+  margin: 32px auto;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-1);
+  padding: calc(var(--space) * 1.25);
+  position: relative;
+}
+
+.grid { display: grid; gap: 1rem; }
+.grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+.row { display: flex; gap: .5rem; align-items: center; }
+.between { justify-content: space-between; }
+.items-center { align-items: center; }
+.minw-0 { min-width: 0; }
+.overflow-auto { overflow: auto; }
+
+/* Spacing utils (used by your HTML) */
+.mt-1 { margin-top: .75rem; }
+.mt-2 { margin-top: 1.25rem; }
+.gap-05 { gap: .5rem; }
+
+/* 5) Stats */
+.stat {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 1rem;
+  box-shadow: var(--shadow-1);
+}
+.stat .v { font-size: 1.6rem; font-weight: 800; margin-top: .25rem; }
+
+/* 6) Toolbar */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  flex-wrap: wrap;
+  padding: .25rem 0 .5rem;
+  border-bottom: 1px solid var(--line);
+}
+
+/* 7) Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--btn-h);
+  padding: 0 .9rem;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  font-size: .92rem;
+  cursor: pointer;
+  transition: transform .06s ease, box-shadow .15s ease, background .15s ease, border-color .15s ease;
+  box-shadow: 0 1px 0 rgba(16,24,40,0.04);
+}
+.btn:hover { background: #fbfbfb; border-color: #cbd5e1; text-decoration: none; }
+.btn:active { transform: translateY(1px); }
+
+.btn.primary {
+  background: var(--brand);
+  border-color: var(--brand-600);
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(36,87,55, .18);
+}
+.btn.primary:hover { background: var(--brand-500); }
+.btn.ghost { background: transparent; border-color: var(--line); }
+.btn.danger { background: var(--danger); border-color: #b31237; color:#fff; }
+.btn.tiny { height: 30px; padding: 0 .6rem; font-size: .85rem; }
+.btn[disabled] { opacity:.6; cursor:not-allowed; }
+
+/* 8) Pills / Badges / States */
+.pill {
+  display:inline-block; padding:.18rem .5rem; border-radius:999px;
+  font-size:.8rem; color:#1f2937; background: var(--pill); border: 1px solid #dbe7df;
+}
+.ok     { color: var(--ok); font-weight: 700; }
+.warn   { color: var(--warn); font-weight: 700; }
+.danger { color: var(--danger); font-weight: 700; }
+
+/* 9) Forms */
+input, select, textarea {
+  width: 100%;
+  height: var(--input-h);
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--r-sm);
+  padding: .6rem .75rem;
+  font: inherit;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+textarea { min-height: 120px; height: auto; resize: vertical; }
+input::placeholder, textarea::placeholder { color: #94a3b8; }
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--brand-300);
+  box-shadow: var(--ring);
+}
+
+/* 10) Tables (admin & lists) */
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+thead th {
+  text-align: left;
+  font-size: .85rem;
+  color: #334155;
+  background: linear-gradient(#fbfbfb, #f7f7f7);
+  border-bottom: 1px solid var(--line);
+  padding: .65rem .75rem;
+  position: sticky; top: 0; z-index: 1;
+}
+tbody td {
+  padding: .65rem .75rem;
+  border-bottom: 1px solid #edf0f2;
+  vertical-align: top;
+}
+tbody tr:hover { background: #fafdfb; }
+tbody tr:last-child td { border-bottom: 0; }
+td .btn.tiny { margin-right: .25rem; }
+
+/* Active row highlight (keyboard nav) */
+.activeRow { outline: 2px solid #8ab4f8; outline-offset: -2px; }
+
+/* Empty row helper */
+.empty { color:#6b7280; text-align:center; padding:.9rem }
+
+/* 11) Composer (thread page) */
+.composer {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-1);
+  padding: 1rem;
+}
+.composer .inline { display: inline-flex; gap: .4rem; align-items: center; }
+
+/* 12) Inline Note / Editors (Admin) */
+.noteBox {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-1);
+  padding: .75rem;
+}
+
+/* 13) Alerts (top error surface) */
+.err {
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  color: #9f1239;
+  padding: .6rem .75rem;
+  border-radius: var(--r-sm);
+}
+
+/* 14) Small badges for thread flags */
+.badge {
+  display: inline-flex; align-items: center; gap: .35rem;
+  padding: .18rem .45rem; border-radius: 999px; font-size: .78rem;
+  border: 1px solid var(--line-2); color: #334155; background: #f8faf9;
+}
+
+/* 15) Nav (if nav.js injects a header) */
+.site-header {
+  background: var(--grad);
+  color: #fff;
+  box-shadow: var(--shadow-2);
+}
+.site-header .inner {
+  display:flex; align-items:center; justify-content:space-between;
+  width:min(1100px, 92%); margin:0 auto; padding:.9rem 0;
+}
+.site-header a { color:#fff; text-decoration:none; }
+.site-header .nav { display:flex; gap:1rem; align-items:center; }
+
+/* 16) Lock banner (thread locked message) */
+.lock-banner {
+  display: grid; grid-template-columns: auto 1fr; gap: .6rem;
+  align-items: center;
+  padding: .65rem .8rem; margin-bottom: .75rem;
+  border-radius: var(--r-sm);
+  color: #3f3f46;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+}
+.lock-banner strong { color: #9a3412; }
+
+/* 17) Notification bell */
+#notifBell { color: #fff; }
+#notifCount {
+  background: var(--accent);
+  color: #1f2937;
+  border: 1px solid #d4bf94;
+  padding: .05rem .4rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: .78rem;
+  display: inline-block;
+}
+
+/* 18) Chips row (mod-note templates) */
+.tplBar .btn.tiny { background: #f4f7f5; border-color: #e2e8f0; }
+.tplBar .btn.tiny:hover { background: #eef2ef; }
+
+/* 19) Admin subRow disclosure */
+tr.subRow td { background: #fcfdfc; }
+
+/* 20) Progress/Loading shimmer (optional helper class) */
+.skel {
+  position: relative; overflow: hidden; background: #eef2f1; border-radius: 6px;
+}
+.skel::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.6), transparent);
+  transform: translateX(-100%);
+  animation: shimmer 1.2s infinite;
+}
+@keyframes shimmer { 100% { transform: translateX(100%); } }
+
+/* 21) Media tweaks */
+@media (max-width: 860px) {
+  .grid.cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  thead th:nth-child(5), tbody td:nth-child(5) { display: none; } /* hide one wide column on narrow screens */
+}
+@media (max-width: 560px) {
+  .grid.cols-4, .grid.cols-3, .grid.cols-2 { grid-template-columns: 1fr; }
+  .toolbar { gap: .5rem; }
+}

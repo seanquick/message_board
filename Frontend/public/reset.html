@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Create a new password · Willow Oak</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .auth-wrap { min-height: 100dvh; display:grid; place-items:center; background: var(--bg); }
+    .auth-card { width:min(520px, 92%); }
+    .auth-head {
+      background: var(--grad); color:#fff; padding:1rem 1.1rem;
+      border-radius: var(--r-md) var(--r-md) 0 0;
+    }
+    .auth-body { padding:1.1rem; border:1px solid var(--line); border-top:0;
+      border-radius: 0 0 var(--r-md) var(--r-md); background:#fff; box-shadow: var(--shadow-1);
+    }
+    .brand { display:flex; align-items:center; gap:.6rem; }
+    .brand .logo {
+      width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.15);
+      display:grid;place-items:center;font-size:18px;
+      border:1px solid rgba(255,255,255,.28);
+    }
+    .form-row { margin:.65rem 0; }
+    .success { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; padding:.65rem .75rem; border-radius:8px; }
+  </style>
+</head>
+<body>
+  <main class="auth-wrap">
+    <section class="auth-card">
+      <div class="auth-head">
+        <div class="brand">
+          <div class="logo">🌿</div>
+          <div>
+            <h1 style="color:#fff;margin:0;font-size:1.25rem">Set a new password</h1>
+            <div class="meta" style="color:#eef2ff">Enter and confirm your new password</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="auth-body">
+        <div id="topMsg" class="success" style="display:none"></div>
+        <div id="topErr" class="err" style="display:none"></div>
+
+        <form id="resetForm" novalidate>
+          <div class="form-row">
+            <label for="password">New password</label>
+            <input id="password" name="password" type="password" autocomplete="new-password" minlength="8" required placeholder="At least 8 characters" />
+          </div>
+          <div class="form-row">
+            <label for="confirm">Confirm password</label>
+            <input id="confirm" name="confirm" type="password" autocomplete="new-password" minlength="8" required placeholder="Repeat your password" />
+          </div>
+
+          <div class="row between" style="margin-top:.75rem">
+            <a class="meta" href="login.html">Back to sign in</a>
+            <button class="btn primary" id="submitBtn" type="submit">Update password</button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    const $ = (s, r=document) => r.querySelector(s);
+    const getCookie = (name) => document.cookie.split('; ').find(x => x.startsWith(name+'='))?.split('=')[1];
+
+    const url = new URL(location.href);
+    const token = url.searchParams.get('token') || '';
+
+    const form = $('#resetForm');
+    const btn  = $('#submitBtn');
+    const ok   = $('#topMsg');
+    const err  = $('#topErr');
+
+    if (!token) {
+      err.textContent = 'Missing or invalid reset token.';
+      err.style.display = '';
+      form.querySelectorAll('input,button').forEach(el => el.disabled = true);
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      ok.style.display = 'none'; err.style.display = 'none';
+
+      const pw = $('#password').value;
+      const cf = $('#confirm').value;
+      if (pw.length < 8) { err.textContent = 'Password must be at least 8 characters.'; err.style.display = ''; return; }
+      if (pw !== cf) { err.textContent = 'Passwords do not match.'; err.style.display = ''; return; }
+
+      btn.disabled = true; btn.textContent = 'Updating…';
+
+      try {
+        const csrf = getCookie('csrf');
+        const res = await fetch('/api/auth/reset', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(csrf ? { 'x-csrf-token': csrf } : {})
+          },
+          credentials: 'include',
+          body: JSON.stringify({ token, password: pw })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || 'Failed to reset password');
+
+        ok.innerHTML = 'Password updated. <a href="login.html">Sign in</a>.';
+        ok.style.display = '';
+        form.querySelectorAll('input,button').forEach(el => el.disabled = true);
+        btn.textContent = 'Done';
+        setTimeout(() => { location.href = 'login.html'; }, 1600);
+      } catch (e) {
+        err.textContent = e.message || 'Failed to reset password';
+        err.style.display = '';
+        btn.disabled = false; btn.textContent = 'Update password';
+      }
+    });
+  </script>
+</body>
+</html>
