@@ -1,6 +1,6 @@
 {
   "name": "message-board",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Reddit-style discussion board",
   "main": "server.js",
   "type": "commonjs",
