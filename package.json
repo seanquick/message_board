@@ -1,11 +1,21 @@
 {
   "name": "message-board",
   "version": "1.0.0",
+  "description": "Reddit-style discussion board",
   "main": "server.js",
   "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
-    "dev": "node server.js",
-    "start": "NODE_ENV=production node server.js"
+    "start": "cross-env NODE_ENV=production node server.js",
+    "dev": "nodemon server.js",
+    "smoke": "node scripts/smoke.mjs",
+    "db:backup:ps": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\db-backup.ps1",
+    "db:backup:bash": "bash scripts/db-backup.sh",
+    "release:patch": "npm version patch -m \"release: v%s\" && git push && git push --tags",
+    "release:minor": "npm version minor -m \"release: v%s\" && git push && git push --tags",
+    "release:major": "npm version major -m \"release: v%s\" && git push && git push --tags"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -20,5 +30,9 @@
     "morgan": "^1.10.0",
     "nodemailer": "^7.0.6",
     "xss": "^1.0.14"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "nodemon": "^3.1.10"
   }
 }
