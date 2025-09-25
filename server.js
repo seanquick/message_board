@@ -124,6 +124,11 @@ app.get('/forgot.html',     (_req, res) => res.sendFile(path.join(pubDir, 'forgo
 app.get('/reset.html',      (_req, res) => res.sendFile(path.join(pubDir, 'reset.html')));
 app.get('/guidelines.html', (_req, res) => res.sendFile(path.join(pubDir, 'guidelines.html')));
 
+/* 👇 INSERT THIS guarded home route right here */
+app.get('/', (req, res) =>
+  sessionGate(req, res, () => res.redirect('/threads.html'))
+);
+
 // --- Static files (must come AFTER the HTML routes above) ---
 app.use(express.static(pubDir));
 info(`Serving static files from ${c.bold}${pubDir}${c.reset}`);
@@ -161,10 +166,9 @@ app.set('notifyUser',         notifRouter.notifyUser);      // helper available 
 // Simple health check
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
-// --- SPA-style fallback (optional): send threads.html for unknown routes ---
-// Keep this LAST so it doesn't override API/static/public routes.
-app.get('*', (_req, res) => {
-  res.sendFile(path.join(pubDir, 'threads.html'));
+// --- SPA-style fallback: unauthenticated landing is login ---
+app.get('*', (req, res) => {
+  res.sendFile(path.join(pubDir, 'login.html'));
 });
 
 // --- Connect to Mongo, then start server ---
