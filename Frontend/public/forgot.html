@@ -58,46 +58,7 @@
     </div>
   </div>
 
-  <script>
-    const $ = s => document.querySelector(s);
-    function qs(){ return new URLSearchParams(location.search); }
-    function safeNext(def='threads.html'){
-      const p = qs().get('next') || '';
-      if (!p) return def;
-      if (/^https?:\/\//i.test(p) || p.startsWith('//')) return def;
-      return p;
-    }
-    function readCookie(name){ const m=document.cookie.match(new RegExp('(?:^|; )'+name.replace(/[-./*+?^${}()|[\\]\\\\]/g,'\\\\$&')+'=([^;]*)')); return m?decodeURIComponent(m[1]):''; }
-    function setError(msg){ const box=$('#err'); box.textContent=msg||''; box.style.display=msg?'block':'none'; if(msg) $('#ok').style.display='none'; }
-    function setOk(msg){ const box=$('#ok'); box.textContent=msg||''; box.style.display=msg?'block':'none'; if(msg) $('#err').style.display='none'; }
-    let csrfToken=''; async function ensureCsrf(){ try{ await fetch('/api/auth/csrf',{credentials:'include'}) }catch{} csrfToken=readCookie('csrf')||''; }
+<script type="module" src="auth-ui.js"></script>
 
-    document.addEventListener('DOMContentLoaded', async () => {
-      const next = safeNext();
-      $('#loginLink').href = 'login.html?next=' + encodeURIComponent(next);
-      $('#backLink').href  = next;
-
-      await ensureCsrf();
-      $('#forgotForm')?.addEventListener('submit', async (e) => {
-        e.preventDefault(); setError(''); setOk('');
-        const email = $('#email')?.value.trim();
-        if(!email || !email.includes('@')) { setError('Please enter a valid email.'); return; }
-
-        const btn = e.submitter; const txt=btn.textContent; btn.disabled=true; btn.textContent='Sending…';
-        try{
-          const res = await fetch('/api/auth/forgot', {
-            method:'POST',
-            headers:{'Content-Type':'application/json', ...(csrfToken?{'X-CSRF-Token':csrfToken}:{})},
-            credentials:'include',
-            body: JSON.stringify({ email })
-          });
-          const data = await res.json().catch(()=> ({}));
-          if(!res.ok || data.error) throw new Error(data.error || 'Request failed.');
-          setOk('If that email exists, we just sent a reset link. Please check your inbox.');
-        }catch(err){ setError(err?.message || 'Could not send reset email.'); await ensureCsrf(); }
-        finally{ btn.disabled=false; btn.textContent=txt; }
-      });
-    });
-  </script>
 </body>
 </html>

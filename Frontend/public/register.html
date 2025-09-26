@@ -58,51 +58,7 @@
     </div>
   </div>
 
-  <script>
-    const $ = s => document.querySelector(s);
-    function qs(){ return new URLSearchParams(location.search); }
-    function safeNext(def='threads.html'){
-      const p = qs().get('next') || '';
-      if (!p) return def;
-      if (/^https?:\/\//i.test(p) || p.startsWith('//')) return def;
-      return p;
-    }
-    function readCookie(name){
-      const m = document.cookie.match(new RegExp('(?:^|; )'+name.replace(/[-./*+?^${}()|[\\]\\\\]/g,'\\\\$&')+'=([^;]*)')); return m?decodeURIComponent(m[1]):'';
-    }
-    let csrfToken=''; async function ensureCsrf(){ try{ await fetch('/api/auth/csrf',{credentials:'include'}) }catch{} csrfToken=readCookie('csrf')||''; }
-    function setErr(msg){ const box=$('#err'); box.textContent=msg||''; box.style.display=msg?'block':'none'; }
+  <script type="module" src="auth-ui.js"></script>
 
-    document.addEventListener('DOMContentLoaded', async () => {
-      const next = safeNext();
-      $('#next').value = next;
-      $('#linkLogin').href = 'login.html?next=' + encodeURIComponent(next);
-      $('#linkBack').href  = next;
-
-      await ensureCsrf();
-      $('#regForm')?.addEventListener('submit', async (e) => {
-        e.preventDefault(); setErr('');
-        const name=$('#name').value.trim(), email=$('#email').value.trim(), pw=$('#password').value;
-        if(name.length<2) { setErr('Please enter your name.'); return; }
-        if(!email.includes('@')) { setErr('Please enter a valid email.'); return; }
-        if(pw.length<8) { setErr('Password must be at least 8 characters.'); return; }
-
-        const btn=e.submitter; const txt=btn.textContent; btn.disabled=true; btn.textContent='Creating…';
-        try{
-          const res = await fetch('/api/auth/register', {
-            method:'POST',
-            headers:{'Content-Type':'application/json', ...(csrfToken?{'X-CSRF-Token':csrfToken}:{})},
-            credentials:'include',
-            body: JSON.stringify({ name, email, password: pw })
-          });
-          const data = await res.json().catch(()=> ({}));
-          if(!res.ok || data.error) throw new Error(data.error || 'Registration failed.');
-          // If API auto-logs in, cookie is set; either way redirect to next
-          location.href = next || 'threads.html';
-        }catch(err){ setErr(err.message || 'Could not create account.'); await ensureCsrf(); }
-        finally{ btn.disabled=false; btn.textContent=txt; }
-      });
-    });
-  </script>
 </body>
 </html>
