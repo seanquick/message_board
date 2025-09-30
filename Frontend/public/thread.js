@@ -4,6 +4,16 @@ import { api, escapeHTML, timeAgo, q, $, qa, me, refreshMe } from './main.js';
 let THREAD_ID = null;
 let THREAD = null;
 
+// ---- null-safe DOM helpers (drop-in) ----
+function safeShow(selOrEl, visible = true) {
+  const el = typeof selOrEl === 'string' ? document.querySelector(selOrEl) : selOrEl;
+  if (el) el.style.display = visible ? '' : 'none';
+}
+function safeSetText(selOrEl, text = '') {
+  const el = typeof selOrEl === 'string' ? document.querySelector(selOrEl) : selOrEl;
+  if (el) el.textContent = text;
+}
+
 document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
@@ -111,9 +121,12 @@ function ensureScaffold() {
    ========================================================================= */
 function renderLoading() {
   setText('#threadTitle', 'Loading…');
-  q('#threadBody').innerHTML = `<div class="skeleton">
-    <div class="bar"></div><div class="bar short"></div><div class="bar"></div>
-  </div>`;
+  const body = q('#threadBody');
+  if (body) {
+    body.innerHTML = `<div class="skeleton">
+      <div class="bar"></div><div class="bar short"></div><div class="bar"></div>
+    </div>`;
+  }
 }
 
 function renderThread(t) {
@@ -138,32 +151,36 @@ function renderThread(t) {
   // Lock banner + composer state
   const isLocked = !!(t.flags?.locked || t.isLocked || t.locked);
   const lockBanner = q('#lockBanner');
-  const replyForm = q('#replyForm');
-  const replyBody = q('#replyBody');
-  const loginHint = q('#loginHint');
+  const replyForm  = q('#replyForm');
+  const replyBody  = q('#replyBody');
+  const loginHint  = q('#loginHint');
+  const cancelBtn  = q('#cancelReply');
 
-  if (me?.uid) {
-    loginHint.style.display = 'none';
-  } else {
-    loginHint.style.display = 'block';
-  }
+  // Login hint shows only if not logged in
+  safeShow(loginHint, !me?.uid);
 
   if (isLocked) {
-    lockBanner.style.display = 'block';
-    lockBanner.innerHTML = `
-      <div class="row items-center" style="gap:.4rem;color:#334155;background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:.5rem .75rem;">
-        <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1a5 5 0 00-5 5v3H6a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2v-8a2 2 0 00-2-2h-1V6a5 5 0 00-5-5zm-3 8V6a3 3 0 116 0v3H9z" fill="#334155"/></svg>
-        <strong>Thread locked.</strong>
-        <span class="meta">New comments are disabled.</span>
-      </div>
-    `;
+    if (lockBanner) {
+      lockBanner.innerHTML = `
+        <div class="row items-center" style="gap:.4rem;color:#334155;background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:.5rem .75rem;">
+          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1a5 5 0 00-5 5v3H6a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2v-8a2 2 0 00-2-2h-1V6a5 5 0 00-5-5zm-3 8V6a3 3 0 116 0v3H9z" fill="#334155"/></svg>
+          <strong>Thread locked.</strong>
+          <span class="meta">New comments are disabled.</span>
+        </div>
+      `;
+    }
+    safeShow(lockBanner, true);
     if (replyForm) replyForm.classList.add('disabled');
-    if (replyBody) { replyBody.setAttribute('disabled', 'true'); replyBody.placeholder = 'Thread is locked.'; }
-    q('#cancelReply')?.setAttribute('disabled', 'true');
+    if (replyBody) {
+      replyBody.setAttribute('disabled', 'true');
+      replyBody.placeholder = 'Thread is locked.';
+    }
+    if (cancelBtn) cancelBtn.setAttribute('disabled', 'true');
   } else {
-    lockBanner.style.display = 'none';
+    safeShow(lockBanner, false);
     replyForm?.classList.remove('disabled');
-    replyBody?.removeAttribute('disabled');
+    if (replyBody) replyBody.removeAttribute('disabled');
+    if (cancelBtn) cancelBtn.removeAttribute('disabled');
   }
 
   // Toolbar
@@ -312,7 +329,7 @@ function bindComposer() {
       const payload = { body, isAnonymous };
       if (parentId) payload.parentId = parentId;
       await api(`/api/comments/${encodeURIComponent(THREAD_ID)}`, { method: 'POST', body: payload });
-      q('#replyBody').value = '';
+      const rb = q('#replyBody'); if (rb) rb.value = '';
       clearReplyTarget();
       // Reload comments (lightweight)
       const fresh = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}`, { nocache: true });
@@ -334,11 +351,13 @@ function onReplyClick(ev) {
   if (!node) return;
   const id = node.dataset.id;
   const byline = node.querySelector('header.meta')?.textContent || '';
-  q('#parentId').value = id;
+  const pid = q('#parentId'); if (pid) pid.value = id;
   const rto = q('#replyingTo');
-  rto.textContent = `Replying to: ${byline}`;
-  rto.style.display = 'block';
-  q('#cancelReply').style.display = 'inline-block';
+  if (rto) {
+    rto.textContent = `Replying to: ${byline}`;
+    safeShow(rto, true);
+  }
+  safeShow('#cancelReply', true);
   // focus composer
   q('#replyBody')?.focus({ preventScroll: false });
   // scroll into view
@@ -346,10 +365,10 @@ function onReplyClick(ev) {
 }
 
 function clearReplyTarget() {
-  q('#parentId').value = '';
-  q('#replyingTo').style.display = 'none';
-  q('#replyingTo').textContent = '';
-  q('#cancelReply').style.display = 'none';
+  const pid = q('#parentId'); if (pid) pid.value = '';
+  safeSetText('#replyingTo', '');
+  safeShow('#replyingTo', false);
+  safeShow('#cancelReply', false);
 }
 
 async function onUpvoteComment(ev) {

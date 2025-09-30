@@ -26,12 +26,15 @@ const threadRoutes  = require('./Backend/Routes/thread');
 const commentRoutes = require('./Backend/Routes/comments');
 const reportRoutes  = require('./Backend/Routes/report'); // legacy/compat
 const adminRoutes   = require('./Backend/Routes/admin');   // updated admin
-const searchRoutes  = require('./Backend/Routes/search');  // NEW public search
-const notifRouter   = require('./Backend/Routes/notifications'); // NEW in-app notifications
+const searchRoutes  = require('./Backend/Routes/search');  // public search
+const notifRouter   = require('./Backend/Routes/notifications'); // in-app notifications
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
 const MONGO = process.env.MONGO_URI;
+
+// Honor X-Forwarded-* when running behind a proxy (Render, etc.)
+app.set('trust proxy', 1);
 
 // Disable ETag so dynamic endpoints (/me, admin) don’t 304 with empty bodies
 app.set('etag', false);
@@ -50,23 +53,59 @@ if (!process.env.JWT_SECRET) {
 // --- Security & core middleware ---
 app.use(helmet({
   contentSecurityPolicy: {
-    useDefaults: true, // sets default-src 'self'
+    useDefaults: true,
     directives: {
-      // Be explicit so fetch/XHR/SSE (EventSource) are allowed
-      "connect-src": ["'self'"],
+      "default-src": ["'self'"],
+      "script-src": ["'self'"], // no remote JS
+      "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      "font-src": ["'self'", "https://fonts.gstatic.com", "data:"],
       "img-src": ["'self'", "data:"],
-      "style-src": ["'self'", "'unsafe-inline'"],
-      "script-src": ["'self'"],
-      // If you ever embed fonts or frames later, add here.
+      "connect-src": ["'self'"], // API + SSE same-origin only
+      "frame-ancestors": ["'none'"],
+      "form-action": ["'self'"],
+      "base-uri": ["'self'"]
     }
   },
-  crossOriginEmbedderPolicy: false, // keep simple for local dev
+  referrerPolicy: { policy: "no-referrer" },
+  hsts: process.env.NODE_ENV === 'production' ? undefined : false
 }));
+
+// TEMP: discourage indexing while under review
+app.use((req, res, next) => {
+  res.set('X-Robots-Tag', 'noindex, nofollow');
+  next();
+});
+
 app.use(morgan('dev'));
 app.use(express.json({ limit: '512kb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(rateLimit({ windowMs: 60_000, max: 120 }));
+
+// --- Open-redirect guard (sanitize typical redirect params) ---
+function coerceInternalPath(p) {
+  if (!p) return '';
+  const s = String(p);
+  if (/^https?:\/\//i.test(s) || s.startsWith('//')) return '/threads.html'; // force internal
+  return s.startsWith('/') ? s : `/${s}`;
+}
+app.use((req, _res, next) => {
+  // sanitize common query params
+  ['next', 'redirect', 'returnUrl', 'url'].forEach((k) => {
+    if (typeof req.query[k] === 'string') {
+      req.query[k] = coerceInternalPath(req.query[k]);
+    }
+  });
+  // sanitize common body params
+  if (req.body && typeof req.body === 'object') {
+    ['next', 'redirect', 'returnUrl', 'url'].forEach((k) => {
+      if (typeof req.body[k] === 'string') {
+        req.body[k] = coerceInternalPath(req.body[k]);
+      }
+    });
+  }
+  next();
+});
 
 // Mild no-cache for HTML/CSS/JS delivered directly (helps during dev)
 app.use((req, res, next) => {
@@ -96,8 +135,7 @@ function sessionGate(req, res, next) {
       if (!u || u.isBanned) {
         // clear cookie and bounce to login
         const _isProd = (process.env.NODE_ENV === 'production' || process.env.FORCE_SECURE_COOKIES === '1');
-            res.clearCookie('token', { path: '/', sameSite: 'lax', httpOnly: true, secure: _isProd });
-
+        res.clearCookie('token', { path: '/', sameSite: 'lax', httpOnly: true, secure: _isProd });
         return res.redirect('/login.html?banned=1');
       }
       noStore(res);
@@ -124,10 +162,8 @@ app.get('/forgot.html',     (_req, res) => res.sendFile(path.join(pubDir, 'forgo
 app.get('/reset.html',      (_req, res) => res.sendFile(path.join(pubDir, 'reset.html')));
 app.get('/guidelines.html', (_req, res) => res.sendFile(path.join(pubDir, 'guidelines.html')));
 
-/* 👇 INSERT THIS guarded home route right here */
-app.get('/', (req, res) =>
-  sessionGate(req, res, () => res.redirect('/threads.html'))
-);
+// Guarded home: require session, otherwise login
+app.get('/', (req, res) => sessionGate(req, res, () => res.redirect('/threads.html')));
 
 // --- Static files (must come AFTER the HTML routes above) ---
 app.use(express.static(pubDir));
@@ -158,18 +194,17 @@ app.use('/api/auth',          pickRouter(authRoutes));
 app.use('/api/threads',       pickRouter(threadRoutes));
 app.use('/api/comments',      pickRouter(commentRoutes));
 app.use('/api/report',        pickRouter(reportRoutes));    // optional legacy
-app.use('/api/search',        pickRouter(searchRoutes));    // NEW public search
-app.use('/api/admin',         pickRouter(adminRoutes));     // updated admin
-app.use('/api/notifications', notifRouter);                 // NEW in-app notifications
+app.use('/api/search',        pickRouter(searchRoutes));
+app.use('/api/admin',         pickRouter(adminRoutes));
+app.use('/api/notifications', notifRouter);
 app.set('notifyUser',         notifRouter.notifyUser);      // helper available to other modules
 
-// Simple health check
+// Simple health checks
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
+app.get('/api/healthz', (_req, res) => res.json({ ok: true, uptime: process.uptime(), ts: Date.now() }));
 
 // --- SPA-style fallback: unauthenticated landing is login ---
-app.get('*', (req, res) => {
-  res.sendFile(path.join(pubDir, 'login.html'));
-});
+app.get('*', (_req, res) => res.sendFile(path.join(pubDir, 'login.html')));
 
 // --- Connect to Mongo, then start server ---
 (async () => {
