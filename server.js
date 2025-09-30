@@ -31,7 +31,12 @@ const notifRouter   = require('./Backend/Routes/notifications'); // in-app notif
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
-const MONGO = process.env.MONGO_URI;
+const MONGO =
+  process.env.MONGO_URI ||
+  process.env.MONGODB_URI ||
+  process.env.MONGO_URL  ||
+  process.env.mongoURL   || '';
+
 
 // Honor X-Forwarded-* when running behind a proxy (Render, etc.)
 app.set('trust proxy', 1);
