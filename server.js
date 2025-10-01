@@ -211,6 +211,11 @@ app.get('/api/healthz', (_req, res) => res.json({ ok: true, uptime: process.upti
 // --- SPA-style fallback: unauthenticated landing is login ---
 app.get('*', (_req, res) => res.sendFile(path.join(pubDir, 'login.html')));
 
+// near the bottom where you start the server
+app.listen(PORT, '0.0.0.0', () => {
+  ok(`Server listening on 0.0.0.0:${PORT}`);
+});
+
 // --- Connect to Mongo, then start server ---
 (async () => {
   try {
