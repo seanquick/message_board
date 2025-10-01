@@ -30,16 +30,10 @@ const searchRoutes  = require('./Backend/Routes/search');  // public search
 const notifRouter   = require('./Backend/Routes/notifications'); // in-app notifications
 
 const app  = express();
-const PORT = process.env.PORT || 3000;
-const MONGO =
-  process.env.MONGO_URI ||
-  process.env.MONGODB_URI ||
-  process.env.MONGO_URL  ||
-  process.env.mongoURL   || '';
 
-
-// Honor X-Forwarded-* when running behind a proxy (Render, etc.)
-app.set('trust proxy', 1);
+// Use PORT from env (Koyeb: set this to the Exposed Port you configured)
+const PORT = Number(process.env.PORT) || 8000;
+const MONGO = process.env.MONGO_URI;
 
 // Disable ETag so dynamic endpoints (/me, admin) don’t 304 with empty bodies
 app.set('etag', false);
@@ -47,7 +41,7 @@ app.disable('etag');
 
 // Friendly .env checks
 if (!MONGO) {
-  err('MONGO_URI is missing. Please set it in your .env file.');
+  err('MONGO_URI is missing. Please set it in your .env / platform env vars.');
   console.error(`${c.dim}Example:${c.reset} MONGO_URI=mongodb+srv://user:pass@cluster/dbname?retryWrites=true&w=majority`);
   process.exit(1);
 }
@@ -65,7 +59,7 @@ app.use(helmet({
       "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       "font-src": ["'self'", "https://fonts.gstatic.com", "data:"],
       "img-src": ["'self'", "data:"],
-      "connect-src": ["'self'"], // API + SSE same-origin only
+      "connect-src": ["'self'"], // only your API
       "frame-ancestors": ["'none'"],
       "form-action": ["'self'"],
       "base-uri": ["'self'"]
@@ -75,7 +69,7 @@ app.use(helmet({
   hsts: process.env.NODE_ENV === 'production' ? undefined : false
 }));
 
-// TEMP: discourage indexing while under review
+// Prevent indexing (until you want it indexed)
 app.use((req, res, next) => {
   res.set('X-Robots-Tag', 'noindex, nofollow');
   next();
@@ -86,31 +80,6 @@ app.use(express.json({ limit: '512kb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(rateLimit({ windowMs: 60_000, max: 120 }));
-
-// --- Open-redirect guard (sanitize typical redirect params) ---
-function coerceInternalPath(p) {
-  if (!p) return '';
-  const s = String(p);
-  if (/^https?:\/\//i.test(s) || s.startsWith('//')) return '/threads.html'; // force internal
-  return s.startsWith('/') ? s : `/${s}`;
-}
-app.use((req, _res, next) => {
-  // sanitize common query params
-  ['next', 'redirect', 'returnUrl', 'url'].forEach((k) => {
-    if (typeof req.query[k] === 'string') {
-      req.query[k] = coerceInternalPath(req.query[k]);
-    }
-  });
-  // sanitize common body params
-  if (req.body && typeof req.body === 'object') {
-    ['next', 'redirect', 'returnUrl', 'url'].forEach((k) => {
-      if (typeof req.body[k] === 'string') {
-        req.body[k] = coerceInternalPath(req.body[k]);
-      }
-    });
-  }
-  next();
-});
 
 // Mild no-cache for HTML/CSS/JS delivered directly (helps during dev)
 app.use((req, res, next) => {
@@ -138,7 +107,6 @@ function sessionGate(req, res, next) {
     const User = require('./Backend/Models/User');
     User.findById(payload.uid).select('isBanned').then(u => {
       if (!u || u.isBanned) {
-        // clear cookie and bounce to login
         const _isProd = (process.env.NODE_ENV === 'production' || process.env.FORCE_SECURE_COOKIES === '1');
         res.clearCookie('token', { path: '/', sameSite: 'lax', httpOnly: true, secure: _isProd });
         return res.redirect('/login.html?banned=1');
@@ -153,6 +121,7 @@ function sessionGate(req, res, next) {
 
 // --- Static frontend directory ---
 const pubDir = path.join(__dirname, 'Frontend', 'public');
+info(`Serving static files from ${c.bold}${pubDir}${c.reset}`);
 
 // --- Protected HTML pages (must be before express.static) ---
 app.get('/threads.html', sessionGate, (_req, res) => res.sendFile(path.join(pubDir, 'threads.html')));
@@ -167,12 +136,11 @@ app.get('/forgot.html',     (_req, res) => res.sendFile(path.join(pubDir, 'forgo
 app.get('/reset.html',      (_req, res) => res.sendFile(path.join(pubDir, 'reset.html')));
 app.get('/guidelines.html', (_req, res) => res.sendFile(path.join(pubDir, 'guidelines.html')));
 
-// Guarded home: require session, otherwise login
+// Guarded home → threads
 app.get('/', (req, res) => sessionGate(req, res, () => res.redirect('/threads.html')));
 
 // --- Static files (must come AFTER the HTML routes above) ---
 app.use(express.static(pubDir));
-info(`Serving static files from ${c.bold}${pubDir}${c.reset}`);
 
 // --- Route module type guard (works with default export or router export) ---
 function pickRouter(mod) {
@@ -199,44 +167,65 @@ app.use('/api/auth',          pickRouter(authRoutes));
 app.use('/api/threads',       pickRouter(threadRoutes));
 app.use('/api/comments',      pickRouter(commentRoutes));
 app.use('/api/report',        pickRouter(reportRoutes));    // optional legacy
-app.use('/api/search',        pickRouter(searchRoutes));
-app.use('/api/admin',         pickRouter(adminRoutes));
-app.use('/api/notifications', notifRouter);
+app.use('/api/search',        pickRouter(searchRoutes));    // public search
+app.use('/api/admin',         pickRouter(adminRoutes));     // admin
+app.use('/api/notifications', notifRouter);                 // in-app notifications
 app.set('notifyUser',         notifRouter.notifyUser);      // helper available to other modules
 
-// Simple health checks
+// Health endpoints
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 app.get('/api/healthz', (_req, res) => res.json({ ok: true, uptime: process.uptime(), ts: Date.now() }));
 
 // --- SPA-style fallback: unauthenticated landing is login ---
 app.get('*', (_req, res) => res.sendFile(path.join(pubDir, 'login.html')));
 
-// near the bottom where you start the server
-app.listen(PORT, '0.0.0.0', () => {
-  ok(`Server listening on 0.0.0.0:${PORT}`);
-});
+// -------------------- STARTUP (guarded) --------------------
+let server = null;
+let started = false;
 
-// --- Connect to Mongo, then start server ---
-(async () => {
+async function start() {
+  if (started) { info('Server already started; skipping listen'); return; }
+  started = true;
+
   try {
     mongoose.set('strictQuery', true);
     await mongoose.connect(MONGO, {
       serverSelectionTimeoutMS: 10000,
       family: 4, // prefer IPv4 on Windows / some DNS setups
     });
-
     ok(`Mongo connected: ${MONGO.includes('mongodb+srv') ? 'Atlas Cluster' : 'Local MongoDB'}`);
     info(`DB URI: ${c.dim}${MONGO}${c.reset}`);
-
-    app.listen(PORT, () => {
-      ok(`Server running at ${c.bold}http://localhost:${PORT}${c.reset}`);
-    });
-
-    mongoose.connection.on('error', (e) => err(`Mongo error: ${e.message}`));
-    mongoose.connection.on('disconnected', () => warn('Mongo disconnected'));
   } catch (e) {
     err(`Mongo connection failed: ${e.message}`);
     warn('Check MONGO_URI, credentials, IP allowlist (Atlas), and network connectivity.');
     process.exit(1);
   }
-})();
+
+  // Bind only once
+  server = app.listen(PORT, '0.0.0.0', () => {
+    ok(`Server listening on 0.0.0.0:${PORT}`);
+  });
+  server.on('error', (e) => {
+    err(`HTTP server error: ${e.code || e.message}`);
+    process.exit(1);
+  });
+
+  mongoose.connection.on('error', (e) => err(`Mongo error: ${e.message}`));
+  mongoose.connection.on('disconnected', () => warn('Mongo disconnected'));
+}
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  info('SIGTERM received, shutting down...');
+  try { await mongoose.disconnect(); } catch {}
+  try { if (server) await new Promise(r => server.close(r)); } catch {}
+  process.exit(0);
+});
+process.on('SIGINT', async () => {
+  info('SIGINT received, shutting down...');
+  try { await mongoose.disconnect(); } catch {}
+  try { if (server) await new Promise(r => server.close(r)); } catch {}
+  process.exit(0);
+});
+
+start();
