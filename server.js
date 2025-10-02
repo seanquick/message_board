@@ -20,20 +20,16 @@ const info = (msg) => console.log(`${c.cyan}ℹ️  ${msg}${c.reset}`);
 const warn = (msg) => console.warn(`${c.yellow}⚠️  ${msg}${c.reset}`);
 const err  = (msg) => console.error(`${c.red}❌ ${msg}${c.reset}`);
 
-// --- Routes (Backend/Routes) ---
-const authRoutes    = require('./Backend/Routes/auth');
-const threadRoutes  = require('./Backend/Routes/thread');
-const commentRoutes = require('./Backend/Routes/comments');
-const reportRoutes  = require('./Backend/Routes/report'); // legacy/compat
-const adminRoutes   = require('./Backend/Routes/admin');   // updated admin
-const searchRoutes  = require('./Backend/Routes/search');  // public search
-const notifRouter   = require('./Backend/Routes/notifications'); // in-app notifications
-
-const app  = express();
-
-// Use PORT from env (Koyeb: set this to the Exposed Port you configured)
-const PORT = Number(process.env.PORT) || 8000;
+// --- Env ---
+const PORT  = Number(process.env.PORT || 8000); // Koyeb: set to the exposed port (8000)
+const HOST  = '0.0.0.0';
 const MONGO = process.env.MONGO_URI;
+
+// --- App ---
+const app = express();
+
+// Koyeb/Heroku-style proxies terminate TLS; trust x-forwarded-* so secure cookies work
+app.set('trust proxy', 1);
 
 // Disable ETag so dynamic endpoints (/me, admin) don’t 304 with empty bodies
 app.set('etag', false);
@@ -59,13 +55,14 @@ app.use(helmet({
       "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       "font-src": ["'self'", "https://fonts.gstatic.com", "data:"],
       "img-src": ["'self'", "data:"],
-      "connect-src": ["'self'"], // only your API
+      "connect-src": ["'self'"],
       "frame-ancestors": ["'none'"],
       "form-action": ["'self'"],
       "base-uri": ["'self'"]
     }
   },
   referrerPolicy: { policy: "no-referrer" },
+  // Koyeb already terminates TLS; set HSTS only in prod
   hsts: process.env.NODE_ENV === 'production' ? undefined : false
 }));
 
@@ -142,16 +139,23 @@ app.get('/', (req, res) => sessionGate(req, res, () => res.redirect('/threads.ht
 // --- Static files (must come AFTER the HTML routes above) ---
 app.use(express.static(pubDir));
 
-// --- Route module type guard (works with default export or router export) ---
+// --- Routes (Backend/Routes) ---
+const authRoutes    = require('./Backend/Routes/auth');
+const threadRoutes  = require('./Backend/Routes/thread');
+const commentRoutes = require('./Backend/Routes/comments');
+const reportRoutes  = require('./Backend/Routes/report'); // legacy/compat
+const adminRoutes   = require('./Backend/Routes/admin');
+const searchRoutes  = require('./Backend/Routes/search');
+const notifRouter   = require('./Backend/Routes/notifications');
+
 function pickRouter(mod) {
   if (mod && typeof mod === 'object') {
     if (typeof mod.router === 'function') return mod.router;
     if (typeof mod.default === 'function') return mod.default;
   }
-  return mod; // assume it’s already a router fn
+  return mod;
 }
 
-// Probe
 console.log('[route types]', {
   auth:          typeof authRoutes,
   thread:        typeof threadRoutes,
@@ -162,24 +166,23 @@ console.log('[route types]', {
   notifications: typeof notifRouter,
 });
 
-// --- API routes ---
 app.use('/api/auth',          pickRouter(authRoutes));
 app.use('/api/threads',       pickRouter(threadRoutes));
 app.use('/api/comments',      pickRouter(commentRoutes));
-app.use('/api/report',        pickRouter(reportRoutes));    // optional legacy
-app.use('/api/search',        pickRouter(searchRoutes));    // public search
-app.use('/api/admin',         pickRouter(adminRoutes));     // admin
-app.use('/api/notifications', notifRouter);                 // in-app notifications
-app.set('notifyUser',         notifRouter.notifyUser);      // helper available to other modules
+app.use('/api/report',        pickRouter(reportRoutes));
+app.use('/api/search',        pickRouter(searchRoutes));
+app.use('/api/admin',         pickRouter(adminRoutes));
+app.use('/api/notifications', notifRouter);
+app.set('notifyUser',         notifRouter.notifyUser);
 
 // Health endpoints
-app.get('/api/health', (_req, res) => res.json({ ok: true }));
+app.get('/api/health',  (_req, res) => res.json({ ok: true }));
 app.get('/api/healthz', (_req, res) => res.json({ ok: true, uptime: process.uptime(), ts: Date.now() }));
 
 // --- SPA-style fallback: unauthenticated landing is login ---
 app.get('*', (_req, res) => res.sendFile(path.join(pubDir, 'login.html')));
 
-// -------------------- STARTUP (guarded) --------------------
+// -------------------- STARTUP (single listen) --------------------
 let server = null;
 let started = false;
 
@@ -189,10 +192,7 @@ async function start() {
 
   try {
     mongoose.set('strictQuery', true);
-    await mongoose.connect(MONGO, {
-      serverSelectionTimeoutMS: 10000,
-      family: 4, // prefer IPv4 on Windows / some DNS setups
-    });
+    await mongoose.connect(MONGO, { serverSelectionTimeoutMS: 10000, family: 4 });
     ok(`Mongo connected: ${MONGO.includes('mongodb+srv') ? 'Atlas Cluster' : 'Local MongoDB'}`);
     info(`DB URI: ${c.dim}${MONGO}${c.reset}`);
   } catch (e) {
@@ -201,10 +201,7 @@ async function start() {
     process.exit(1);
   }
 
-  // Bind only once
-  server = app.listen(PORT, '0.0.0.0', () => {
-    ok(`Server listening on 0.0.0.0:${PORT}`);
-  });
+  server = app.listen(PORT, HOST, () => ok(`Server listening on ${HOST}:${PORT}`));
   server.on('error', (e) => {
     err(`HTTP server error: ${e.code || e.message}`);
     process.exit(1);
