@@ -21,7 +21,7 @@ const warn = (msg) => console.warn(`${c.yellow}⚠️  ${msg}${c.reset}`);
 const err  = (msg) => console.error(`${c.red}❌ ${msg}${c.reset}`);
 
 // --- Env ---
-const PORT  = Number(process.env.PORT || 8000); // Koyeb: set to the exposed port (8000)
+const PORT  = Number(process.env.PORT || 8000); // Koyeb: expose 8000 on the service
 const HOST  = '0.0.0.0';
 const MONGO = process.env.MONGO_URI;
 
@@ -37,12 +37,12 @@ app.disable('etag');
 
 // Friendly .env checks
 if (!MONGO) {
-  err('MONGO_URI is missing. Please set it in your .env / platform env vars.');
+  err('MONGO_URI is missing. Please set it in your Koyeb env vars (and locally in .env).');
   console.error(`${c.dim}Example:${c.reset} MONGO_URI=mongodb+srv://user:pass@cluster/dbname?retryWrites=true&w=majority`);
   process.exit(1);
 }
 if (!process.env.JWT_SECRET) {
-  warn('JWT_SECRET is missing — using a weak fallback for dev. Set it in .env for production.');
+  warn('JWT_SECRET is missing — using a weak fallback for dev. Set it in env for production.');
 }
 
 // --- Security & core middleware ---
@@ -53,8 +53,8 @@ app.use(helmet({
       "default-src": ["'self'"],
       "script-src": ["'self'"], // no remote JS
       "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      "font-src": ["'self'", "https://fonts.gstatic.com", "data:"],
-      "img-src": ["'self'", "data:"],
+      "font-src":  ["'self'", "https://fonts.gstatic.com", "data:"],
+      "img-src":   ["'self'", "data:"],
       "connect-src": ["'self'"],
       "frame-ancestors": ["'none'"],
       "form-action": ["'self'"],
@@ -62,7 +62,6 @@ app.use(helmet({
     }
   },
   referrerPolicy: { policy: "no-referrer" },
-  // Koyeb already terminates TLS; set HSTS only in prod
   hsts: process.env.NODE_ENV === 'production' ? undefined : false
 }));
 
@@ -104,8 +103,8 @@ function sessionGate(req, res, next) {
     const User = require('./Backend/Models/User');
     User.findById(payload.uid).select('isBanned').then(u => {
       if (!u || u.isBanned) {
-        const _isProd = (process.env.NODE_ENV === 'production' || process.env.FORCE_SECURE_COOKIES === '1');
-        res.clearCookie('token', { path: '/', sameSite: 'lax', httpOnly: true, secure: _isProd });
+        const isProd = (process.env.NODE_ENV === 'production' || process.env.FORCE_SECURE_COOKIES === '1');
+        res.clearCookie('token', { path: '/', sameSite: 'lax', httpOnly: true, secure: isProd });
         return res.redirect('/login.html?banned=1');
       }
       noStore(res);
@@ -143,7 +142,7 @@ app.use(express.static(pubDir));
 const authRoutes    = require('./Backend/Routes/auth');
 const threadRoutes  = require('./Backend/Routes/thread');
 const commentRoutes = require('./Backend/Routes/comments');
-const reportRoutes  = require('./Backend/Routes/report'); // legacy/compat
+const reportRoutes  = require('./Backend/Routes/report'); // legacy/compat if present
 const adminRoutes   = require('./Backend/Routes/admin');
 const searchRoutes  = require('./Backend/Routes/search');
 const notifRouter   = require('./Backend/Routes/notifications');
