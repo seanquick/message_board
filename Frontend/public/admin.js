@@ -85,17 +85,36 @@ document.addEventListener('DOMContentLoaded', init);
 async function init() {
   await refreshMe(); meUser = meVar;
 
-  // Auth guard
-  try { await api(`/api/admin/ping?t=${Date.now()}`); }
-  catch (e) {
-    const msg = `Admin access required or session expired: ${e?.error || e?.message || ''}`;
-    showErr(msg);
-    renderErrorRow('#reportsTable', msg, 8);
-    renderErrorRow('#threadsTable', msg, 7);
-    renderErrorRow('#commentsTable', msg, 7);
-    renderErrorRow('#usersTable', msg, 6);
-    return;
+  
+  // Auth guard (refresh once if token was revoked/stale)
+  try {
+    await api(`/api/admin/ping?t=${Date.now()}`);
+  } catch (e) {
+    const firstErr = String(e?.error || e?.message || '');
+    if (/revoked|expired|token/i.test(firstErr)) {
+      try {
+        await api('/api/auth/refresh', { method: 'POST' });
+        await api(`/api/admin/ping?t=${Date.now()}`); // retry once
+      } catch (e2) {
+        const msg = `Admin access required or session expired: ${e2?.error || e2?.message || ''}`;
+        showErr(msg);
+        renderErrorRow('#reportsTable', msg, 8);
+        renderErrorRow('#threadsTable', msg, 7);
+        renderErrorRow('#commentsTable', msg, 5);
+        renderErrorRow('#usersTable', msg, 6);
+        return;
+      }
+    } else {
+      const msg = `Admin access required or session expired: ${firstErr}`;
+      showErr(msg);
+      renderErrorRow('#reportsTable', msg, 8);
+      renderErrorRow('#threadsTable', msg, 7);
+      renderErrorRow('#commentsTable', msg, 5);
+      renderErrorRow('#usersTable', msg, 6);
+      return;
+    }
   }
+
 
   // Wire UI
   q('#refreshMetrics')?.addEventListener('click', loadMetrics);
