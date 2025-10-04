@@ -8,9 +8,9 @@ const rateLimit = require('express-rate-limit');
 const mongoose = require('mongoose');
 const path = require('path');
 const jwt = require('jsonwebtoken');
-const adminExport = require('./Routes/adminExport');
 
-
+// ✅ FIXED: Correct path to adminExport route
+const adminExport = require('./Backend/Routes/adminExport');
 
 // --- tiny color helpers (no extra deps) ---
 const c = {
@@ -30,15 +30,10 @@ const MONGO = process.env.MONGO_URI;
 
 // --- App ---
 const app = express();
-
-// Koyeb/Heroku-style proxies terminate TLS; trust x-forwarded-* so secure cookies work
 app.set('trust proxy', 1);
-
-// Disable ETag so dynamic endpoints (/me, admin) don’t 304 with empty bodies
 app.set('etag', false);
 app.disable('etag');
 
-// Friendly .env checks
 if (!MONGO) {
   err('MONGO_URI is missing. Please set it in your Koyeb env vars (and locally in .env).');
   console.error(`${c.dim}Example:${c.reset} MONGO_URI=mongodb+srv://user:pass@cluster/dbname?retryWrites=true&w=majority`);
@@ -54,7 +49,7 @@ app.use(helmet({
     useDefaults: true,
     directives: {
       "default-src": ["'self'"],
-      "script-src": ["'self'"], // no remote JS
+      "script-src": ["'self'"],
       "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       "font-src":  ["'self'", "https://fonts.gstatic.com", "data:"],
       "img-src":   ["'self'", "data:"],
@@ -67,20 +62,15 @@ app.use(helmet({
   referrerPolicy: { policy: "no-referrer" },
   hsts: process.env.NODE_ENV === 'production' ? undefined : false
 }));
-
-// Prevent indexing (until you want it indexed)
 app.use((req, res, next) => {
   res.set('X-Robots-Tag', 'noindex, nofollow');
   next();
 });
-
 app.use(morgan('dev'));
 app.use(express.json({ limit: '512kb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(rateLimit({ windowMs: 60_000, max: 120 }));
-
-// Mild no-cache for HTML/CSS/JS delivered directly (helps during dev)
 app.use((req, res, next) => {
   if (/\.(js|css|html)$/.test(req.path)) res.set('Cache-Control', 'no-store');
   next();
@@ -101,8 +91,6 @@ function sessionGate(req, res, next) {
   if (!token) return res.redirect('/login.html');
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET || 'dev-change-me');
-
-    // 🔎 check DB for ban
     const User = require('./Backend/Models/User');
     User.findById(payload.uid).select('isBanned').then(u => {
       if (!u || u.isBanned) {
@@ -122,7 +110,7 @@ function sessionGate(req, res, next) {
 const pubDir = path.join(__dirname, 'Frontend', 'public');
 info(`Serving static files from ${c.bold}${pubDir}${c.reset}`);
 
-// --- Protected HTML pages (must be before express.static) ---
+// --- Protected HTML pages ---
 app.get('/threads.html', sessionGate, (_req, res) => res.sendFile(path.join(pubDir, 'threads.html')));
 app.get('/thread.html',  sessionGate, (_req, res) => res.sendFile(path.join(pubDir, 'thread.html')));
 app.get('/admin.html',   sessionGate, (_req, res) => res.sendFile(path.join(pubDir, 'admin.html')));
@@ -134,18 +122,16 @@ app.get('/register.html',   (_req, res) => res.sendFile(path.join(pubDir, 'regis
 app.get('/forgot.html',     (_req, res) => res.sendFile(path.join(pubDir, 'forgot.html')));
 app.get('/reset.html',      (_req, res) => res.sendFile(path.join(pubDir, 'reset.html')));
 app.get('/guidelines.html', (_req, res) => res.sendFile(path.join(pubDir, 'guidelines.html')));
-
-// Guarded home → threads
 app.get('/', (req, res) => sessionGate(req, res, () => res.redirect('/threads.html')));
 
-// --- Static files (must come AFTER the HTML routes above) ---
+// --- Static files ---
 app.use(express.static(pubDir));
 
-// --- Routes (Backend/Routes) ---
+// --- Routes ---
 const authRoutes    = require('./Backend/Routes/auth');
 const threadRoutes  = require('./Backend/Routes/thread');
 const commentRoutes = require('./Backend/Routes/comments');
-const reportRoutes  = require('./Backend/Routes/report'); // legacy/compat if present
+const reportRoutes  = require('./Backend/Routes/report');
 const adminRoutes   = require('./Backend/Routes/admin');
 const searchRoutes  = require('./Backend/Routes/search');
 const notifRouter   = require('./Backend/Routes/notifications');
@@ -174,17 +160,18 @@ app.use('/api/comments',      pickRouter(commentRoutes));
 app.use('/api/report',        pickRouter(reportRoutes));
 app.use('/api/search',        pickRouter(searchRoutes));
 app.use('/api/admin',         pickRouter(adminRoutes));
+app.use('/api/admin',         adminExport); // ✅ This line mounts the export route
 app.use('/api/notifications', notifRouter);
 app.set('notifyUser',         notifRouter.notifyUser);
 
-// Health endpoints
+// --- Health endpoints ---
 app.get('/api/health',  (_req, res) => res.json({ ok: true }));
 app.get('/api/healthz', (_req, res) => res.json({ ok: true, uptime: process.uptime(), ts: Date.now() }));
 
-// --- SPA-style fallback: unauthenticated landing is login ---
+// --- SPA-style fallback ---
 app.get('*', (_req, res) => res.sendFile(path.join(pubDir, 'login.html')));
 
-// -------------------- STARTUP (single listen) --------------------
+// --- STARTUP ---
 let server = null;
 let started = false;
 
@@ -213,7 +200,7 @@ async function start() {
   mongoose.connection.on('disconnected', () => warn('Mongo disconnected'));
 }
 
-// Graceful shutdown
+// --- Graceful Shutdown ---
 process.on('SIGTERM', async () => {
   info('SIGTERM received, shutting down...');
   try { await mongoose.disconnect(); } catch {}
