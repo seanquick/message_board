@@ -836,4 +836,48 @@ router.get('/search', requireAdmin, async (req, res) => {
   }
 });
 
+// --- ADD: session refresh endpoint (re-issue cookie with current tokenVersion) ---
+const jwt = require('jsonwebtoken');
+const User = require('../Models/User');
+
+function setAuthCookie(res, payload) {
+  const isProd = (process.env.NODE_ENV === 'production' || process.env.FORCE_SECURE_COOKIES === '1');
+  const token = jwt.sign(payload, process.env.JWT_SECRET || 'dev-change-me', { expiresIn: '7d' });
+  res.cookie('token', token, {
+    path: '/',
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: isProd,
+    // Optional: tweak maxAge if you want rolling sessions
+    maxAge: 7 * 24 * 60 * 60 * 1000
+  });
+}
+
+// NOTE: do NOT use requireAuth here (it would block on "revoked") —
+// we only need a valid signature to know who you are.
+router.post('/refresh', async (req, res) => {
+  try {
+    const token = req.cookies?.token;
+    if (!token) return res.status(401).json({ error: 'Not logged in' });
+
+    // verify signature; if expired/invalid -> 401
+    const payload = jwt.verify(token, process.env.JWT_SECRET || 'dev-change-me');
+    const user = await User.findById(payload.uid).select('role isBanned tokenVersion name email').lean();
+    if (!user) return res.status(401).json({ error: 'Account not found' });
+    if (user.isBanned) return res.status(403).json({ error: 'Account is banned' });
+
+    // Reissue with the current tokenVersion + role
+    setAuthCookie(res, {
+      uid: String(payload.uid),
+      role: user.role || 'user',
+      tv: Number(user.tokenVersion || 0)
+    });
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[auth:refresh] error:', e?.message || e);
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+});
+
 module.exports = router;
