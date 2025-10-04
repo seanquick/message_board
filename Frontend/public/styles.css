@@ -349,3 +349,27 @@ tr.subRow td { background: #fcfdfc; }
   .grid.cols-4, .grid.cols-3, .grid.cols-2 { grid-template-columns: 1fr; }
   .toolbar { gap: .5rem; }
 }
+
+/* 22) Test Mode UI styles */
+.test-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 8px;
+  border-bottom: 1px solid #ddd;
+  font-family: sans-serif;
+  font-size: 14px;
+}
+
+.status {
+  font-weight: bold;
+}
+.status.pass {
+  color: green;
+}
+.status.fail {
+  color: red;
+}
+.status.running {
+  color: gray;
+}
+
