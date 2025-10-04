@@ -1,27 +1,38 @@
 // Frontend/public/main.js
-// Robust helpers + nav that self-heals AND de-duplicates controls.
+// Robust helpers + nav that self-heals AND de‑duplicates controls.
 
-/* ---------------- HTTP helper ---------------- */
+/* ---------------- HTTP helper + silent refresh for admin routes ---------------- */
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 export async function api(url, opts = {}) {
   const { method = 'GET', body, headers = {}, nocache = false } = opts;
   const finalHeaders = { 'Content-Type': 'application/json', ...headers };
 
-  // Attach CSRF header for mutating requests
   const upper = String(method).toUpperCase();
   if (!['GET', 'HEAD', 'OPTIONS'].includes(upper)) {
     const csrf = getCsrfToken();
     if (csrf) finalHeaders['X-CSRF-Token'] = csrf;
   }
 
-  const res = await fetch(url, {
-    method: upper,
-    headers: finalHeaders,
-    credentials: 'include',
-    cache: nocache ? 'no-store' : 'default',
-    body: body ? JSON.stringify(body) : undefined
-  });
+  async function doFetch() {
+    return fetch(url, {
+      method: upper,
+      headers: finalHeaders,
+      credentials: 'include',
+      cache: nocache ? 'no-store' : 'default',
+      body: body ? JSON.stringify(body) : undefined
+    });
+  }
+
+  let res = await doFetch();
+
+  // If unauthorized on admin path, try silent refresh and retry
+  if (res.status === 401 && url.startsWith('/api/admin/')) {
+    const refreshed = await tryRefreshSession();
+    if (refreshed) {
+      res = await doFetch();
+    }
+  }
 
   const ct = res.headers.get('content-type') || '';
   const data = ct.includes('application/json') ? await res.json() : await res.text();
@@ -33,6 +44,19 @@ export async function api(url, opts = {}) {
   return data;
 }
 
+async function tryRefreshSession() {
+  try {
+    const r = await fetch('/api/admin/refresh', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    return r.ok;
+  } catch (e) {
+    console.error('Silent admin refresh failed:', e);
+    return false;
+  }
+}
 
 /* ---------------- Auth state ---------------- */
 export let me = null;
@@ -40,7 +64,9 @@ export async function refreshMe() {
   try {
     const data = await api('/api/auth/me', { nocache: true });
     me = data?.user ?? null;
-  } catch { me = null; }
+  } catch {
+    me = null;
+  }
   updateNav();
   return me;
 }
@@ -52,14 +78,16 @@ export const qa = (sel) => Array.from(document.querySelectorAll(sel));
 
 export function escapeHTML(s = '') {
   return String(s)
-    .replaceAll('&', '&amp;').replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;').replaceAll('"', '&quot;')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
 }
 
 export function timeAgo(v) {
-  const d = typeof v === 'string' || typeof v === 'number' ? new Date(v)
-        : v instanceof Date ? v : new Date();
+  const d = (typeof v === 'string' || typeof v === 'number') ? new Date(v)
+          : (v instanceof Date ? v : new Date());
   const s = Math.floor((Date.now() - d.getTime()) / 1000);
   if (s < 60) return `${s}s ago`;
   const m = Math.floor(s / 60); if (m < 60) return `${m}m ago`;
@@ -69,32 +97,32 @@ export function timeAgo(v) {
 }
 
 function getCookie(name) {
-  const m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1') + '=([^;]*)'));
+  const m = document.cookie.match(new RegExp('(?:^|; )' +
+    name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1') + '=([^;]*)'));
   return m ? decodeURIComponent(m[1]) : '';
 }
+
 function getCsrfToken() {
   return getCookie('csrfToken') || '';
 }
 
 /* ---------------- Nav: self-heal + de-dupe ---------------- */
- function navRoot() {
-   // Prefer header > nav; fallback to first nav; DO NOT create a new header here.
-   return document.querySelector('header nav') || document.querySelector('nav');
- }
+function navRoot() {
+  return document.querySelector('header nav') || document.querySelector('nav');
+}
 
- function navRight() {
-   const nav = navRoot();
-   if (!nav) return null; // wait for nav.js to inject header
-   let right = nav.querySelector('.nav-right');
-   if (!right) {
-     right = document.createElement('div');
-     right.className = 'nav-right row items-center gap-075';
-     nav.appendChild(right);
-   }
-   return right;
- }
+function navRight() {
+  const nav = navRoot();
+  if (!nav) return null;
+  let right = nav.querySelector('.nav-right');
+  if (!right) {
+    right = document.createElement('div');
+    right.className = 'nav-right row items-center gap-075';
+    nav.appendChild(right);
+  }
+  return right;
+}
 
-/** Keep only the first of a selector; remove the rest (de-dupe). */
 function keepFirst(selector) {
   const nodes = qa(selector);
   if (nodes.length <= 1) return nodes[0] || null;
@@ -102,7 +130,6 @@ function keepFirst(selector) {
   return nodes[0];
 }
 
-/** Find or create a control. De-dupes before returning. */
 function ensureLogin() {
   const right = navRight();
   if (!right) return null;
@@ -116,6 +143,7 @@ function ensureLogin() {
   a.id = 'loginLink';
   return a;
 }
+
 function ensureRegister() {
   const right = navRight();
   if (!right) return null;
@@ -159,31 +187,25 @@ function ensureLogout() {
     b.dataset.wired = '1';
   }
 
-  // ✅ Always return the button, even if it was already wired
   return b;
 }
 
-  
- 
-/** Ensure an Admin link exists (we only toggle visibility later). */
 function ensureAdminLink() {
   const nav = navRoot();
-  if (!nav) return null; // header/nav not ready yet; we'll try again on 'nav:ready'
-
+  if (!nav) return null;
   const left = nav.querySelector('.nav-left') || nav;
   let a = left.querySelector('a[href$="admin.html"]');
   if (!a) {
     a = document.createElement('a');
     a.href = 'admin.html';
     a.textContent = 'Admin';
-    a.classList.add('hidden'); // hidden until role=admin
+    a.classList.add('hidden');
     left.appendChild(a);
   }
   return a;
 }
 
 function ensureControls() {
-  // Header/nav may not be injected yet; bail and try again when we get 'nav:ready'
   if (!navRoot()) return;
   ensureAdminLink();
   const login    = ensureLogin();
@@ -194,9 +216,8 @@ function ensureControls() {
 
 function updateNav() {
   const controls = ensureControls();
-  if (!controls) return; // nav/header not ready yet; will run again on 'nav:ready'
+  if (!controls) return;
   const { login, register, logout } = controls;
-//  const { login, register, logout } = ensureControls();
   const adminLink = document.querySelector('a[href$="admin.html"]');
   const loggedIn = !!me;
 
@@ -216,17 +237,14 @@ function start() {
   if (started) return;
   started = true;
 
-  // Initial ensure + fetch auth
   ensureControls();
   refreshMe();
 
-  // Retry shortly (covers late header injection)
+  // Retry in case nav/header is injected later
   setTimeout(() => { ensureControls(); updateNav(); }, 50);
   setTimeout(() => { ensureControls(); updateNav(); }, 200);
 
-  // Observe DOM: if header/nav changes, re-ensure and re-toggle
   const mo = new MutationObserver(() => {
-    // De-dupe on any header/nav change
     keepFirst('#logoutBtn');
     keepFirst('#loginLink');
     keepFirst('#registerLink');
@@ -235,16 +253,16 @@ function start() {
   mo.observe(document.documentElement, { childList: true, subtree: true });
 }
 
-// document.addEventListener('DOMContentLoaded', start);
- if (document.readyState === 'loading') {
-   document.addEventListener('DOMContentLoaded', start);
- } else {
-   // DOM is already parsed; run immediately
-   start();
- }
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', start);
+} else {
+  start();
+}
 
-// If nav.js injects header.html, it will dispatch this event:
-document.addEventListener('nav:ready', () => { ensureControls(); updateNav(); });
+document.addEventListener('nav:ready', () => {
+  ensureControls();
+  updateNav();
+});
 
 /* ---------------- Debug helper ---------------- */
 window.__authDebug = () => ({
