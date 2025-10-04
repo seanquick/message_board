@@ -838,7 +838,7 @@ router.get('/search', requireAdmin, async (req, res) => {
 
 // --- ADD: session refresh endpoint (re-issue cookie with current tokenVersion) ---
 const jwt = require('jsonwebtoken');
-const User = require('../Models/User');
+
 
 function setAuthCookie(res, payload) {
   const isProd = (process.env.NODE_ENV === 'production' || process.env.FORCE_SECURE_COOKIES === '1');
