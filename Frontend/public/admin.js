@@ -93,8 +93,26 @@ async function init() {
     const firstErr = String(e?.error || e?.message || '');
     if (/revoked|expired|token/i.test(firstErr)) {
       try {
+        // Try auth-level refresh first, then admin-level refresh as fallback
+      let refreshed = false;
+      try {
         await api('/api/auth/refresh', { method: 'POST' });
-        await api(`/api/admin/ping?t=${Date.now()}`); // retry once
+        refreshed = true;
+      } catch (exAuth) {
+        try {
+          await api('/api/admin/refresh', { method: 'POST' });
+          refreshed = true;
+        } catch (exAdmin) {
+          // neither worked
+        }
+      }
+      if (refreshed) {
+        // retry admin ping
+        await api(`/api/admin/ping?t=${Date.now()}`);
+      } else {
+        throw new Error('Could not refresh session as admin');
+      }
+
       } catch (e2) {
         const msg = `Admin access required or session expired: ${e2?.error || e2?.message || ''}`;
         showErr(msg);

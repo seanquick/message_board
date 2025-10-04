@@ -6,6 +6,7 @@
  * - Blocks banned users & honors tokenVersion
  * - Sets hardened cookies (httpOnly, sameSite:lax, secure in prod)
  * - Exposes GET /api/auth/csrf to seed CSRF cookie pre-login (for double-submit CSRF)
+ * - Adds POST /api/auth/refresh to reissue token with correct role/tokenVersion
  */
 
 const router = require('express').Router();
@@ -50,7 +51,12 @@ const s = {
 
 /* ---------------- helpers ---------------- */
 function signToken(user) {
-  const payload = { uid: String(user._id), role: user.role || 'user', ver: user.tokenVersion || 0 };
+  // Note: use "tv" (tokenVersion) so it matches requireAuth’s logic
+  const payload = {
+    uid: String(user._id),
+    role: user.role || 'user',
+    tv: user.tokenVersion ?? 0
+  };
   const ttl = process.env.JWT_TTL || '7d';
   return jwt.sign(payload, JWT_SECRET, { expiresIn: ttl });
 }
@@ -60,7 +66,7 @@ function setAuthCookies(res, token) {
     httpOnly: true,
     sameSite: 'lax',
     secure: isProd,
-    path: '/',
+    path: '/'
   });
   // also refresh csrf after login
   const csrf = crypto.randomBytes(16).toString('hex');
@@ -91,12 +97,10 @@ function clearAuthCookies(res) {
 
 async function verifyPassword(user, supplied) {
   const hash = user.passwordHash || user.hash;
-  // modern hash
   if (hash && hash.startsWith('$2')) {
     const ok = await bcrypt.compare(supplied, hash);
     if (ok) return { ok: true, upgraded: false };
   }
-  // legacy paths
   if (typeof user.password === 'string' && user.password.length > 0) {
     if (user.password.startsWith('$2')) {
       const ok = await bcrypt.compare(supplied, user.password);
@@ -156,7 +160,10 @@ router.post('/login', async (req, res) => {
     const password = s.string({ trim: true, min: 1, max: 200 }).parse(req.body?.password || '');
 
     const user = await User.findOne({ email });
-    if (!user) { await new Promise(r => setTimeout(r, 150)); return res.status(401).json({ error: 'Invalid email or password' }); }
+    if (!user) {
+      await new Promise(r => setTimeout(r, 150));
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
     if (user.isBanned) return res.status(403).json({ error: 'This account has been banned.' });
 
     const check = await verifyPassword(user, password);
@@ -173,9 +180,12 @@ router.post('/login', async (req, res) => {
 });
 
 // Logout
-router.post('/logout', async (_req, res) => { clearAuthCookies(res); res.json({ ok: true }); });
+router.post('/logout', async (_req, res) => {
+  clearAuthCookies(res);
+  res.json({ ok: true });
+});
 
-// Me
+// Me (current user)
 router.get('/me', async (req, res) => {
   try {
     const token = req.cookies?.token;
@@ -183,10 +193,16 @@ router.get('/me', async (req, res) => {
     let payload;
     try { payload = jwt.verify(token, JWT_SECRET); }
     catch { return res.json({ user: null }); }
+
     const user = await User.findById(payload.uid).select('name email role isBanned tokenVersion').lean();
-    if (!user || user.isBanned || (user.tokenVersion||0)!==(payload.ver||0)) return res.json({ user: null });
+    if (!user) return res.json({ user: null });
+    if (user.isBanned) return res.json({ user: null });
+    if ((user.tokenVersion ?? 0) !== (payload.tv ?? 0)) return res.json({ user: null });
+
     res.json({ user: { id: user._id, name: user.name, email: user.email, role: user.role || 'user' } });
-  } catch { res.json({ user: null }); }
+  } catch {
+    res.json({ user: null });
+  }
 });
 
 // Forgot
@@ -198,19 +214,27 @@ router.post('/forgot', async (req, res) => {
       const token = crypto.randomBytes(32).toString('hex');
       const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
       const tokenExpMins = parseInt(process.env.RESET_TOKEN_MINS || '30', 10);
-      await User.updateOne({ _id: u._id }, { $set: { resetTokenHash: tokenHash, resetTokenExp: new Date(Date.now()+tokenExpMins*60_000) } });
+      await User.updateOne({ _id: u._id }, {
+        $set: { resetTokenHash: tokenHash, resetTokenExp: new Date(Date.now() + tokenExpMins * 60_000) }
+      });
       try {
         const { sendMail } = require('../Services/mailer');
         const base = process.env.PUBLIC_ORIGIN || '';
         const link = `${base}/reset.html?token=${encodeURIComponent(token)}`;
-        await sendMail({ to: u.email, subject: 'Password reset', text: `Hello${u.name?' '+u.name:''},\n\nReset your password:\n${link}\n\nExpires in ${tokenExpMins} minutes.\n` });
+        await sendMail({
+          to: u.email,
+          subject: 'Password reset',
+          text: `Hello${u.name ? ' ' + u.name : ''},\n\nReset your password:\n${link}\n\nExpires in ${tokenExpMins} minutes.\n`
+        });
       } catch {}
     }
     res.json({ ok: true });
-  } catch { res.json({ ok: true }); }
+  } catch {
+    res.json({ ok: true });
+  }
 });
 
-// Reset
+// Reset password
 router.post('/reset', async (req, res) => {
   try {
     const token = s.string({ trim: true, max: 256 }).parse(req.body?.token || '');
@@ -222,8 +246,9 @@ router.post('/reset', async (req, res) => {
     }
     u.passwordHash = await bcrypt.hash(password, 12);
     u.resetTokenHash = undefined;
-    u.resetTokenExp  = undefined;
+    u.resetTokenExp = undefined;
     await u.save();
+
     const jwtToken = signToken(u);
     setAuthCookies(res, jwtToken);
     res.json({ ok: true });
@@ -231,5 +256,44 @@ router.post('/reset', async (req, res) => {
     res.status(400).json({ error: e?.message || 'Failed to reset password' });
   }
 });
+
+/* ==================== NEW PART: POST /refresh ==================== */
+router.post('/refresh', async (req, res) => {
+  try {
+    const raw = req.cookies?.token;
+    if (!raw) {
+      return res.status(401).json({ error: 'Not logged in' });
+    }
+    let payload;
+    try {
+      payload = jwt.verify(raw, JWT_SECRET);
+    } catch {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+
+    const uid = payload.uid;
+    if (!uid) return res.status(401).json({ error: 'Invalid token payload' });
+
+    const user = await User.findById(uid).select('role isBanned tokenVersion name email').lean();
+    if (!user) return res.status(401).json({ error: 'Account not found' });
+    if (user.isBanned) return res.status(403).json({ error: 'Account is banned' });
+
+    // reissue token with up-to-date role and tokenVersion
+    const newPayload = {
+      uid: String(uid),
+      role: user.role || 'user',
+      tv: user.tokenVersion ?? 0
+    };
+    const newToken = jwt.sign(newPayload, JWT_SECRET, { expiresIn: process.env.JWT_TTL || '7d' });
+    setAuthCookies(res, newToken);
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[auth:refresh] error:', e.message || e);
+    res.status(401).json({ error: 'Invalid or expired token' });
+  }
+});
+
+/* ==================== END refresh addition ==================== */
 
 module.exports = router;
