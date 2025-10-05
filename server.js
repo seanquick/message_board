@@ -96,6 +96,7 @@ function sessionGate(req, res, next) {
 
 // Static and page routes
 const pubDir = path.join(__dirname, 'Frontend', 'public');
+app.use(express.static(pubDir));
 
 // Guard admin.html so non‑admins cannot view it
 app.get('/admin.html', sessionGate, requireAdmin, (_req, res) => {
@@ -114,9 +115,6 @@ app.get('/forgot.html',   (_req, res) => res.sendFile(path.join(pubDir, 'forgot.
 app.get('/reset.html',    (_req, res) => res.sendFile(path.join(pubDir, 'reset.html')));
 app.get('/guidelines.html', (_req, res) => res.sendFile(path.join(pubDir, 'guidelines.html')));
 app.get('/', (req, res) => sessionGate(req, res, () => res.redirect('/threads.html')));
-
-// Static asset serving
-app.use(express.static(pubDir));
 
 // Mount APIs
 const pickRouter = (mod) => {
