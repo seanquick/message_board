@@ -5,22 +5,31 @@ import { api, escapeHTML, timeAgo, q, $, qa, refreshMe, me as meVar } from './ma
 
 let meUser = null;
 
-// -------- Global error surface --------
-window.addEventListener('error', (e) => {
-  const msg = e?.error?.message || e?.message || 'Script error';
-  showErr(`[JS] ${msg}`);
-});
-window.addEventListener('unhandledrejection', (e) => {
-  const msg = e?.reason?.error || e?.reason?.message || String(e.reason || 'Promise error');
-  showErr(`[Promise] ${msg}`);
-});
+// ─── Early utilities before anything else ───────────────────────────────
+function showErr(msg) {
+  const host = q('#adminErr') || document.body;
+  const div = document.createElement('div');
+  div.className = 'err';
+  div.textContent = msg;
+  host.prepend(div);
+}
 
-// ---------- Templates ----------
+// Optional helpers (if needed)
+function debounce(fn, ms = 300) {
+  let t;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), ms);
+  };
+}
+
+// ─── Templates / utility functions ─────────────────────────────────────
 const DEFAULT_NOTE_TEMPLATES = [
   { label: 'Spam', text: 'Resolved as spam. Action: {action}. Content contained solicitation/repetitive promos. {targetType}={threadId}{commentId?} Reviewed by {admin} on {date}.' },
-  // ... (rest unchanged) ...
+  // ... (your other templates) ...
   { label: 'Scam/Phishing', text: 'Resolved: suspected scam/phishing. Links removed and user warned/blocked as appropriate. Action: {action}. Reviewed by {admin} on {date}.' }
 ];
+
 function getNoteTemplates() {
   try {
     const raw = localStorage.getItem('modNoteTemplates');
@@ -48,7 +57,7 @@ function fillTemplate(str, ctx = {}) {
   };
   return str
     .replace(/\{commentId\?\}/g, base.commentId ? base.commentId : '')
-    .replace(/\{(\w+)\}/g, (_m, key) => String(base[key] ?? ''));
+    .replace(/\{(\w+)\}/g((m, key) => String(base[key] ?? '')));
 }
 function insertAtCaret(textarea, text) {
   textarea.focus();
@@ -66,111 +75,131 @@ function renderTemplateChips(containerEl, textareaEl, ctx = {}) {
   bar.style.cssText = 'display:flex;flex-wrap:wrap;gap:.35rem;margin-bottom:.5rem';
   for (const t of tpls) {
     const b = document.createElement('button');
-    b.type = 'button'; b.className = 'btn tiny'; b.textContent = t.label;
+    b.type = 'button';
+    b.className = 'btn tiny';
+    b.textContent = t.label;
     b.addEventListener('click', () => insertAtCaret(textareaEl, fillTemplate(t.text, ctx) + '\n'));
     bar.appendChild(b);
   }
   containerEl.prepend(bar);
 }
 
-// ---------- State ----------
+// ─── State ────────────────────────────────────────────────────────────
 const state = {
   users:    { page: 1, limit: 50, total: 0 },
   comments: { page: 1, limit: 50, total: 0 },
   ui:       { activeTable: 'reports', activeRow: 0 }
 };
 
-document.addEventListener('DOMContentLoaded', init);
-
-/* ============================== INIT ============================== */
-async function init() {
-  await refreshMe();
-  meUser = meVar;
-
-  // Auth / refresh guard logic
+// ─── Predeclare critical functions used in init ───────────────────────
+async function loadReports() {
+  // (You should paste your existing reports-fetch + render logic here.)
   try {
-    await api(`/api/admin/ping?t=${Date.now()}`);
-  } catch (e) {
-    const firstErr = String(e?.error || e?.message || '');
-    if (/revoked|expired|token/i.test(firstErr)) {
-      let refreshed = false;
-      try {
-        await api('/api/auth/refresh', { method: 'POST' });
-        refreshed = true;
-      } catch (exAuth) {
-        try {
-          await api('/api/admin/refresh', { method: 'POST' });
-          refreshed = true;
-        } catch (exAdmin) {
-          // neither worked
-        }
-      }
-      if (refreshed) {
-        await api(`/api/admin/ping?t=${Date.now()}`);
-      } else {
-        throw new Error('Could not refresh session as admin');
-      }
-    } else {
-      throw e;
+    const { reports } = await api(`/api/admin/reports?t=${Date.now()}`);
+    // TODO: render the reports into #reportsTable
+    // Example skeleton:
+    const tbody = document.querySelector('#reportsTable tbody');
+    tbody.innerHTML = '';
+    for (const r of reports) {
+      const tr = document.createElement('tr');
+      // Fill table cells based on your report schema
+      tr.innerHTML = `
+        <td><input type="checkbox" class="rSelect" data-id="${r._id}" /></td>
+        <td>${new Date(r.createdAt).toLocaleString()}</td>
+        <td>${escapeHTML(r.targetType)}</td>
+        <td>${escapeHTML(r.snippet)}</td>
+        <td>${escapeHTML(r.details)}</td>
+        <td>${escapeHTML(r.reporter?.name || '')}</td>
+        <td>${escapeHTML(r.status)}</td>
+        <td><!-- action buttons --></td>
+      `;
+      tbody.appendChild(tr);
     }
+  } catch (e) {
+    showErr(`Failed to load reports: ${e?.error || e?.message || ''}`);
   }
-
-  // Wire UI event listeners
-  q('#refreshMetrics')?.addEventListener('click', loadMetrics);
-
-  // Reports
-  q('#rFilter')?.addEventListener('change', loadReports);
-  q('#rRefresh')?.addEventListener('click', loadReports);
-  q('#rGroup')?.addEventListener('change', loadReports);
-  q('#rBulkResolve')?.addEventListener('click', bulkResolveSelected);
-  q('#rExport')?.addEventListener('click', exportReportsCSV);
-  q('#rSelectAll')?.addEventListener('change', () => {
-    const checked = q('#rSelectAll')?.checked;
-    qa('#reportsTable tbody .rSelect').forEach(cb => { cb.checked = !!checked; });
-  });
-
-  // Users
-  (q('#uSearch') || q('#userSearch'))?.addEventListener('input', debounce(() => { state.users.page = 1; loadUsers(); }, 300));
-  q('#uRefresh')?.addEventListener('click', () => { state.users.page = 1; loadUsers(); });
-  q('#uPageSize')?.addEventListener('change', () => { state.users.limit = +q('#uPageSize').value || 50; state.users.page = 1; loadUsers(); });
-  q('#uPrev')?.addEventListener('click', () => { if (state.users.page > 1) { state.users.page--; loadUsers(); } });
-  q('#uNext')?.addEventListener('click', () => { const pages = pagesFor(state.users); if (state.users.page < pages) { state.users.page++; loadUsers(); } });
-  q('#uExport')?.addEventListener('click', exportUsersCSV);
-
-  // Comments
-  q('#cIncludeDeleted')?.addEventListener('change', () => { state.comments.page = 1; loadComments(); });
-  q('#cRefresh')?.addEventListener('click', () => { state.comments.page = 1; loadComments(); });
-  q('#cPageSize')?.addEventListener('change', () => { state.comments.limit = +q('#cPageSize').value || 50; state.comments.page = 1; loadComments(); });
-  q('#cPrev')?.addEventListener('click', () => { if (state.comments.page > 1) { state.comments.page--; loadComments(); } });
-  q('#cNext')?.addEventListener('click', () => { const pages = pagesFor(state.comments); if (state.comments.page < pages) { state.comments.page++; loadComments(); } });
-  q('#cExport')?.addEventListener('click', exportCommentsCSV);
-
-  // Threads
-  q('#tIncludeDeleted')?.addEventListener('change', loadThreads);
-  q('#tRefresh')?.addEventListener('click', loadThreads);
-
-  // Global Search
-  q('#sGo')?.addEventListener('click', doSearch);
-  q('#sReset')?.addEventListener('click', resetSearch);
-  q('#sQ')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
-
-  // Keyboard + SSE
-  q('#kbdHelpClose')?.addEventListener('click', () => toggleKbdHelp(false));
-  document.addEventListener('keydown', onKeyDown);
-  startEventStream();
-
-  // Notification bell (admin too)
-  initUserNotifBell();
-
-  // Initial loads
-  loadMetrics().catch(console.error);
-  loadThreads().catch(console.error);
-  loadComments().catch(console.error);
-  loadReports().catch(console.error);
-  loadUsers().catch(console.error);
 }
 
-/* ============================== METRICS ============================== */
+// You should ensure your other functions used below are declared similarly:
+// exportReportsCSV, bulkResolveSelected, loadMetrics, loadThreads, loadComments, resetSearch, doSearch, etc.
+// loadUsers is written below.
+
+document.addEventListener('DOMContentLoaded', init);
+
+async function init() {
+  try {
+    await refreshMe();
+    meUser = meVar;
+
+    try {
+      await api(`/api/admin/ping?t=${Date.now()}`);
+    } catch (e) {
+      const firstErr = String(e?.error || e?.message || '');
+      if (/revoked|expired|token/i.test(firstErr)) {
+        let refreshed = false;
+        try { await api('/api/auth/refresh', { method: 'POST' }); refreshed = true; }
+        catch {
+          try { await api('/api/admin/refresh', { method: 'POST' }); refreshed = true; }
+          catch {}
+        }
+        if (refreshed) {
+          await api(`/api/admin/ping?t=${Date.now()}`);
+        } else throw new Error('Could not refresh session as admin');
+      } else {
+        throw e;
+      }
+    }
+
+    q('#refreshMetrics')?.addEventListener('click', loadMetrics);
+
+    q('#rFilter')?.addEventListener('change', loadReports);
+    q('#rRefresh')?.addEventListener('click', loadReports);
+    q('#rGroup')?.addEventListener('change', loadReports);
+    q('#rBulkResolve')?.addEventListener('click', bulkResolveSelected);
+    q('#rExport')?.addEventListener('click', exportReportsCSV);
+    q('#rSelectAll')?.addEventListener('change', () => {
+      const checked = q('#rSelectAll')?.checked;
+      qa('#reportsTable tbody .rSelect').forEach(cb => { cb.checked = !!checked; });
+    });
+
+    (q('#uSearch') || q('#userSearch'))?.addEventListener('input', debounce(() => { state.users.page = 1; loadUsers(); }, 300));
+    q('#uRefresh')?.addEventListener('click', () => { state.users.page = 1; loadUsers(); });
+    q('#uPageSize')?.addEventListener('change', () => { state.users.limit = +q('#uPageSize').value || 50; state.users.page = 1; loadUsers(); });
+    q('#uPrev')?.addEventListener('click', () => { if (state.users.page > 1) { state.users.page--; loadUsers(); } });
+    q('#uNext')?.addEventListener('click', () => { const pages = pagesFor(state.users); if (state.users.page < pages) { state.users.page++; loadUsers(); } });
+    q('#uExport')?.addEventListener('click', exportUsersCSV);
+
+    q('#cIncludeDeleted')?.addEventListener('change', () => { state.comments.page = 1; loadComments(); });
+    q('#cRefresh')?.addEventListener('click', () => { state.comments.page = 1; loadComments(); });
+    q('#cPageSize')?.addEventListener('change', () => { state.comments.limit = +q('#cPageSize').value || 50; state.comments.page = 1; loadComments(); });
+    q('#cPrev')?.addEventListener('click', () => { if (state.comments.page > 1) { state.comments.page--; loadComments(); } });
+    q('#cNext')?.addEventListener('click', () => { const pages = pagesFor(state.comments); if (state.comments.page < pages) { state.comments.page++; loadComments(); } });
+    q('#cExport')?.addEventListener('click', exportCommentsCSV);
+
+    q('#tIncludeDeleted')?.addEventListener('change', loadThreads);
+    q('#tRefresh')?.addEventListener('click', loadThreads);
+
+    q('#sGo')?.addEventListener('click', doSearch);
+    q('#sReset')?.addEventListener('click', resetSearch);
+    q('#sQ')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
+
+    q('#kbdHelpClose')?.addEventListener('click', () => toggleKbdHelp(false));
+    document.addEventListener('keydown', onKeyDown);
+    startEventStream();
+
+    initUserNotifBell();
+
+    loadMetrics().catch(console.error);
+    loadThreads().catch(console.error);
+    loadComments().catch(console.error);
+    loadReports().catch(console.error);
+    loadUsers().catch(console.error);
+  } catch (err) {
+    showErr(`Init error: ${err?.message || err}`);
+  }
+}
+
+// ─── Metrics ───────────────
 async function loadMetrics() {
   try {
     const { metrics } = await api(`/api/admin/metrics?t=${Date.now()}`);
@@ -183,7 +212,7 @@ async function loadMetrics() {
   }
 }
 
-/* ============================== USERS ============================== */
+// ─── Users ───────────────
 async function loadUsers() {
   const tbody = ensureTbody('#usersTable');
   try {
@@ -199,7 +228,7 @@ async function loadUsers() {
     const users =
       Array.isArray(payload) ? payload :
       Array.isArray(payload?.users) ? payload.users :
-      Array.isArray(payload?.data)  ? payload.data  : [];
+      Array.isArray(payload?.data) ? payload.data : [];
 
     state.users.total = Number(payload?.total ?? users.length ?? 0);
     const pages = pagesFor(state.users);
@@ -214,7 +243,6 @@ async function loadUsers() {
     for (const u of users) {
       const tr = document.createElement('tr');
       tr.dataset.id = u._id || u.id || '';
-      // Name / email clickable link
       const nameLink = u.name
         ? `<a href="#" class="user-link" data-uid="${u._id}">${escapeHTML(u.name)}</a>`
         : `<a href="#" class="user-link" data-uid="${u._id}">${escapeHTML(u.email)}</a>`;
@@ -288,7 +316,6 @@ async function onEditUserNote(ev) {
   const tr = ev.currentTarget.closest('tr');
   if (!tr) return;
   const id = tr.dataset.id;
-  const current = tr.children[4]?.textContent || '';
   showModEditor(tr, {
     title: 'Edit user note',
     placeholder: 'Private admin note for this user…',
@@ -304,9 +331,9 @@ async function onEditUserNote(ev) {
 async function onDeleteUser(ev) {
   ev.stopPropagation();
   const tr = ev.currentTarget.closest('tr');
-  const id = tr?.dataset.id;
+  const id = tr?.dataset?.id;
   if (!id) return;
-  if (!confirm('Are you sure you want to delete this user? This may be irreversible.')) return;
+  if (!confirm('Are you sure you want to delete this user?')) return;
   try {
     await api(`/api/admin/users/${id}`, { method: 'DELETE' });
     tr.remove();
@@ -346,10 +373,6 @@ function showUserContentModal(uid, threads, comments) {
   });
 }
 
-/* ============================== REPORTS (flat + grouped) ============================== */
-// ... (rest of your original code, unchanged) ...
-
-// (I am not rewriting the rest of your large code here to avoid duplication, but you should keep all your existing logic for reports, threads, comments, search, CSV, SSE, keyboard shortcuts etc.)
-
-// Ensure shared utility functions remain (pagesFor, updatePagerUI, ensureTbody, renderErrorRow, setText, showErr, debounce) as in your original file.
+// ─── Rest of your admin features: threads, comments, search, CSV, SSE, etc.
+// (Paste in your original logic for those parts, unchanged)
 
