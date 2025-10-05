@@ -1,11 +1,10 @@
 // Frontend/public/admin.js
-// Full drop-in version with all features: reports, comments, threads, users, exports, SSE, etc.
 
 import { api, escapeHTML, timeAgo, q, $, qa, refreshMe, me as meVar } from './main.js';
 
 let meUser = null;
 
-/** Display error banner/message */
+/** Show error to user */
 function showErr(msg) {
   const host = q('#adminErr') || document.body;
   const div = document.createElement('div');
@@ -14,7 +13,7 @@ function showErr(msg) {
   host.prepend(div);
 }
 
-// Utility: debounce
+/** Debounce helper */
 function debounce(fn, ms = 300) {
   let timer;
   return (...args) => {
@@ -23,17 +22,17 @@ function debounce(fn, ms = 300) {
   };
 }
 
-// Templates / note insertion
+// Note templates and helpers
 const DEFAULT_NOTE_TEMPLATES = [
-  { label: 'Spam', text: 'Resolved as spam. Action: {action}. … Reviewed by {admin} on {date}.' },
-  { label: 'Scam/Phishing', text: 'Resolved: suspected scam/phishing. … Reviewed by {admin} on {date}.' }
+  { label: 'Spam', text: 'Resolved as spam. Action: {action}. Reviewed by {admin} on {date}.' },
+  { label: 'Scam/Phishing', text: 'Resolved: suspected scam/phishing. Action: {action}. Reviewed by {admin} on {date}.' }
 ];
 function getNoteTemplates() {
   try {
     const raw = localStorage.getItem('modNoteTemplates');
     const arr = raw ? JSON.parse(raw) : DEFAULT_NOTE_TEMPLATES;
     if (Array.isArray(arr) && arr.length) return arr;
-  } catch {}
+  } catch (_) {}
   return DEFAULT_NOTE_TEMPLATES;
 }
 function formatDate(d = new Date()) {
@@ -88,11 +87,45 @@ const state = {
   comments: { page: 1, limit: 50, total: 0 }
 };
 
-document.addEventListener('DOMContentLoaded', init);
+// Ensure tbody exists or creates one
+function ensureTbody(sel) {
+  const tbl = q(sel);
+  if (!tbl) return null;
+  let tb = tbl.querySelector('tbody');
+  if (!tb) {
+    tb = document.createElement('tbody');
+    tbl.appendChild(tb);
+  }
+  return tb;
+}
 
-// ========== Functions that init() will refer to ==========
+// Pager UI (users etc.)
+function pagesFor(p) {
+  if (!p.limit || !p.total) return 1;
+  return Math.ceil(p.total / p.limit);
+}
+function updatePagerUI(section, pages) {
+  if (section === 'users') {
+    q('#uPageInfo')?.textContent = `${state.users.page} / ${pages}`;
+  }
+  // similar for comments etc. if needed
+}
 
-// Load metrics
+// Text setter
+function setText(sel, text) {
+  const el = q(sel);
+  if (el) el.textContent = text;
+}
+
+// Render error in table
+function renderErrorRow(tableSel, msg, colspan = 5) {
+  const tbody = ensureTbody(tableSel);
+  if (!tbody) return;
+  tbody.innerHTML = `<tr><td colspan="${colspan}" class="err">${escapeHTML(msg)}</td></tr>`;
+}
+
+// ========== Core functions ==========
+
 async function loadMetrics() {
   try {
     const { metrics } = await api(`/api/admin/metrics?t=${Date.now()}`);
@@ -105,11 +138,11 @@ async function loadMetrics() {
   }
 }
 
-// Load reports
 async function loadReports() {
   try {
     const { reports } = await api(`/api/admin/reports?t=${Date.now()}`);
     const tbody = ensureTbody('#reportsTable');
+    if (!tbody) return;
     tbody.innerHTML = '';
     for (const r of reports) {
       const tr = document.createElement('tr');
@@ -122,13 +155,10 @@ async function loadReports() {
         <td>${escapeHTML(r.details || '')}</td>
         <td>${escapeHTML(r.reporter?.name || '')}</td>
         <td>${escapeHTML(r.status)}</td>
-        <td>
-          <button class="btn tiny resolveOne">Resolve</button>
-        </td>
+        <td><button class="btn tiny resolveOne">Resolve</button></td>
       `;
       tbody.appendChild(tr);
     }
-    // Attach resolveOne handlers
     tbody.querySelectorAll('.resolveOne').forEach(btn => {
       btn.addEventListener('click', async (ev) => {
         const tr = ev.currentTarget.closest('tr');
@@ -148,7 +178,6 @@ async function loadReports() {
   }
 }
 
-// Bulk resolve selected
 async function bulkResolveSelected() {
   const checks = qa('#reportsTable tbody .rSelect:checked');
   const ids = checks.map(cb => cb.dataset.id).filter(Boolean);
@@ -165,20 +194,15 @@ async function bulkResolveSelected() {
   }
 }
 
-// Export reports CSV
 async function exportReportsCSV() {
-  try {
-    const resp = await api(`/api/admin/reports/export.csv?t=${Date.now()}`, { nocache: true });
-    // The response may not be JSON but a CSV text — simpler to navigate:
-    window.location.href = `/api/admin/reports/export.csv?t=${Date.now()}`;
-  } catch (e) {
-    showErr(`Failed to export reports: ${e?.error || e?.message || ''}`);
-  }
+  // Use window location to download
+  window.location.href = `/api/admin/reports/export.csv?t=${Date.now()}`;
 }
 
-// Load users
+// ===== Users functions =====
 async function loadUsers() {
   const tbody = ensureTbody('#usersTable');
+  if (!tbody) return;
   try {
     const searchEl = q('#uSearch') || q('#userSearch');
     const qstr = (searchEl?.value || '').trim();
@@ -202,6 +226,7 @@ async function loadUsers() {
       tbody.innerHTML = '<tr><td colspan="7">No users found.</td></tr>';
       return;
     }
+
     for (const u of users) {
       const tr = document.createElement('tr');
       tr.dataset.id = u._id;
@@ -225,6 +250,7 @@ async function loadUsers() {
       `;
       tbody.appendChild(tr);
     }
+
     tbody.querySelectorAll('.editNote').forEach(btn => btn.addEventListener('click', onEditUserNote));
     tbody.querySelectorAll('.toggleBan').forEach(btn => btn.addEventListener('click', onToggleBan));
     tbody.querySelectorAll('.setRole').forEach(btn => btn.addEventListener('click', onSetRole));
@@ -311,7 +337,7 @@ async function onUserLinkClick(ev) {
     const payload = await api(`/api/admin/users/${uid}/content`);
     showUserContentModal(uid, payload.threads || [], payload.comments || []);
   } catch (e) {
-    showErr(`Failed fetching user content: ${e?.error || e?.message || ''}`);
+    showErr(`Failed fetch user content: ${e?.error || e?.message || ''}`);
   }
 }
 
@@ -331,8 +357,92 @@ function showUserContentModal(uid, threads, comments) {
   modal.querySelector('.close-modal')?.addEventListener('click', () => modal.remove());
 }
 
-// ========== grid / threads / comments / search / exports / SSE etc ==========
-// You must paste in your original logic for threads, comments, search, CSV, SSE, etc., here.
-// E.g. loadThreads(), loadComments(), resetSearch(), doSearch(), startEventStream(), onKeyDown, initUserNotifBell,
-// and any utility functions: ensureTbody, pagesFor, updatePagerUI, renderErrorRow, setText, etc.
+// ========== init function ==========
+
+async function init() {
+  try {
+    await refreshMe();
+    meUser = meVar;
+
+    // Ping / refresh
+    try {
+      await api(`/api/admin/ping?t=${Date.now()}`);
+    } catch (e) {
+      const errMsg = String(e?.error || e?.message || '');
+      if (/revoked|expired|token/i.test(errMsg)) {
+        let refreshed = false;
+        try { await api('/api/auth/refresh', { method: 'POST' }); refreshed = true; }
+        catch {
+          try { await api('/api/admin/refresh', { method: 'POST' }); refreshed = true; } catch {}
+        }
+        if (refreshed) {
+          await api(`/api/admin/ping?t=${Date.now()}`);
+        } else {
+          throw new Error('Could not refresh as admin');
+        }
+      } else {
+        throw e;
+      }
+    }
+
+    // Event wiring
+    q('#refreshMetrics')?.addEventListener('click', loadMetrics);
+
+    q('#rFilter')?.addEventListener('change', loadReports);
+    q('#rRefresh')?.addEventListener('click', loadReports);
+    q('#rGroup')?.addEventListener('change', loadReports);
+    q('#rBulkResolve')?.addEventListener('click', bulkResolveSelected);
+    q('#rExport')?.addEventListener('click', exportReportsCSV);
+    q('#rSelectAll')?.addEventListener('change', () => {
+      const checked = q('#rSelectAll')?.checked;
+      qa('#reportsTable tbody .rSelect').forEach(cb => { cb.checked = !!checked; });
+    });
+
+    (q('#uSearch') || q('#userSearch'))?.addEventListener('input', debounce(() => { state.users.page = 1; loadUsers(); }, 300));
+    q('#uRefresh')?.addEventListener('click', () => { state.users.page = 1; loadUsers(); });
+    q('#uPageSize')?.addEventListener('change', () => { state.users.limit = +q('#uPageSize').value || 50; state.users.page = 1; loadUsers(); });
+    q('#uPrev')?.addEventListener('click', () => { if (state.users.page > 1) { state.users.page--; loadUsers(); } });
+    q('#uNext')?.addEventListener('click', () => { const pages = pagesFor(state.users); if (state.users.page < pages) { state.users.page++; loadUsers(); } });
+    q('#uExport')?.addEventListener('click', loadUsers);  // maybe you meant exportUsersCSV
+
+    q('#cIncludeDeleted')?.addEventListener('change', () => { state.comments.page = 1; loadComments(); });
+    q('#cRefresh')?.addEventListener('click', () => { state.comments.page = 1; loadComments(); });
+    q('#cPageSize')?.addEventListener('change', () => { state.comments.limit = +q('#cPageSize').value || 50; state.comments.page = 1; loadComments(); });
+    q('#cPrev')?.addEventListener('click', () => { if (state.comments.page > 1) { state.comments.page--; loadComments(); } });
+    q('#cNext')?.addEventListener('click', () => { const pages = pagesFor(state.comments); if (state.comments.page < pages) { state.comments.page++; loadComments(); } });
+    q('#cExport')?.addEventListener('click', loadComments);  // adjust to export if needed
+
+    q('#tIncludeDeleted')?.addEventListener('change', loadThreads);
+    q('#tRefresh')?.addEventListener('click', loadThreads);
+
+    q('#sGo')?.addEventListener('click', doSearch);
+    q('#sReset')?.addEventListener('click', resetSearch);
+    q('#sQ')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
+
+    q('#kbdHelpClose')?.addEventListener('click', () => toggleKbdHelp(false));
+    document.addEventListener('keydown', onKeyDown);
+    startEventStream();
+
+    initUserNotifBell();
+
+    // Initial loads
+    loadMetrics().catch(console.error);
+    loadThreads().catch(console.error);
+    loadComments().catch(console.error);
+    loadReports().catch(console.error);
+    loadUsers().catch(console.error);
+  } catch (outerErr) {
+    showErr(`Init failed: ${outerErr?.message || outerErr}`);
+    console.error('Init failure:', outerErr);
+  }
+}
+
+// Start init
+// If DOMContentLoaded listener above fails (e.g. script order), you can also trigger fallback:
+if (document.readyState !== 'loading') {
+  // DOM already loaded
+  init();
+}
+
+document.addEventListener('DOMContentLoaded', init);
 
