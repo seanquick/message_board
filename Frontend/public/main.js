@@ -1,5 +1,4 @@
 // Frontend/public/main.js
-// Robust helpers + nav that self-heals AND de‑duplicates controls.
 
 /* ---------------- HTTP helper + silent refresh for admin routes ---------------- */
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
@@ -26,7 +25,6 @@ export async function api(url, opts = {}) {
 
   let res = await doFetch();
 
-  // If unauthorized on admin path, try silent refresh and retry
   if (res.status === 401 && url.startsWith('/api/admin/')) {
     const refreshed = await tryRefreshSession();
     if (refreshed) {
@@ -46,7 +44,7 @@ export async function api(url, opts = {}) {
 
 async function tryRefreshSession() {
   try {
-    const r = await fetch('/api/admin/refresh', {
+    const r = await fetch('/api/auth/refresh', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' }
@@ -72,9 +70,9 @@ export async function refreshMe() {
 }
 
 /* ---------------- Tiny DOM helpers ---------------- */
-export const $  = (id)  => document.getElementById(id);
-export const q  = (sel) => document.querySelector(sel);
-export const qa = (sel) => Array.from(document.querySelectorAll(sel));
+export const $  = id => document.getElementById(id);
+export const q  = sel => document.querySelector(sel);
+export const qa = sel => Array.from(document.querySelectorAll(sel));
 
 export function escapeHTML(s = '') {
   return String(s)
@@ -87,7 +85,7 @@ export function escapeHTML(s = '') {
 
 export function timeAgo(v) {
   const d = (typeof v === 'string' || typeof v === 'number') ? new Date(v)
-          : (v instanceof Date ? v : new Date());
+    : (v instanceof Date ? v : new Date());
   const s = Math.floor((Date.now() - d.getTime()) / 1000);
   if (s < 60) return `${s}s ago`;
   const m = Math.floor(s / 60); if (m < 60) return `${m}m ago`;
@@ -103,10 +101,10 @@ function getCookie(name) {
 }
 
 function getCsrfToken() {
-  return getCookie('csrfToken') || '';
+  return getCookie('csrf') || '';
 }
 
-/* ---------------- Nav: self-heal + de-dupe ---------------- */
+/* ---------------- Nav + admin link hiding ---------------- */
 function navRoot() {
   return document.querySelector('header nav') || document.querySelector('nav');
 }
@@ -138,7 +136,7 @@ function ensureLogin() {
     a = document.createElement('a');
     a.href = 'login.html';
     a.textContent = 'Login';
-    navRight().appendChild(a);
+    right.appendChild(a);
   }
   a.id = 'loginLink';
   return a;
@@ -152,7 +150,7 @@ function ensureRegister() {
     a = document.createElement('a');
     a.href = 'register.html';
     a.textContent = 'Register';
-    navRight().appendChild(a);
+    right.appendChild(a);
   }
   a.id = 'registerLink';
   return a;
@@ -161,7 +159,6 @@ function ensureRegister() {
 function ensureLogout() {
   const right = navRight();
   if (!right) return null;
-
   let b = keepFirst('#logoutBtn');
   if (!b) {
     b = document.createElement('button');
@@ -169,15 +166,14 @@ function ensureLogout() {
     b.className = 'btn';
     b.textContent = 'Logout';
     b.style.display = 'none';
-    navRight().appendChild(b);
+    right.appendChild(b);
   }
-
   if (!b.dataset.wired) {
     b.addEventListener('click', async () => {
       try {
         await api('/api/auth/logout', { method: 'POST' });
       } catch (err) {
-        console.warn('[logout] error (continuing to login):', err);
+        console.warn('[logout] error:', err);
       } finally {
         me = null;
         updateNav();
@@ -186,7 +182,6 @@ function ensureLogout() {
     });
     b.dataset.wired = '1';
   }
-
   return b;
 }
 
@@ -199,7 +194,7 @@ function ensureAdminLink() {
     a = document.createElement('a');
     a.href = 'admin.html';
     a.textContent = 'Admin';
-    a.classList.add('hidden');
+    a.classList.add('admin-link', 'hidden');  // hidden by default
     left.appendChild(a);
   }
   return a;
@@ -208,9 +203,9 @@ function ensureAdminLink() {
 function ensureControls() {
   if (!navRoot()) return;
   ensureAdminLink();
-  const login    = ensureLogin();
+  const login = ensureLogin();
   const register = ensureRegister();
-  const logout   = ensureLogout();
+  const logout = ensureLogout();
   return { login, register, logout };
 }
 
@@ -221,17 +216,22 @@ function updateNav() {
   const adminLink = document.querySelector('a[href$="admin.html"]');
   const loggedIn = !!me;
 
-  if (logout)  logout.style.display    = loggedIn ? 'inline-block' : 'none';
-  if (login)   login.style.display     = loggedIn ? 'none' : 'inline-block';
-  if (register)register.style.display  = loggedIn ? 'none' : 'inline-block';
+  if (logout) logout.style.display = loggedIn ? 'inline-block' : 'none';
+  if (login) login.style.display = loggedIn ? 'none' : 'inline-block';
+  if (register) register.style.display = loggedIn ? 'none' : 'inline-block';
 
   if (adminLink) {
-    if (me?.role === 'admin') adminLink.classList.remove('hidden');
-    else                      adminLink.classList.add('hidden');
+    if (me?.role === 'admin') {
+      adminLink.classList.remove('hidden');
+      adminLink.style.display = 'inline-block';
+    } else {
+      adminLink.classList.add('hidden');
+      adminLink.style.display = 'none';
+    }
   }
 }
 
-/* ---------------- Boot + observers ---------------- */
+/* ---------------- Boot + mutation observer ---------------- */
 let started = false;
 function start() {
   if (started) return;
@@ -240,7 +240,6 @@ function start() {
   ensureControls();
   refreshMe();
 
-  // Retry in case nav/header is injected later
   setTimeout(() => { ensureControls(); updateNav(); }, 50);
   setTimeout(() => { ensureControls(); updateNav(); }, 200);
 
@@ -270,5 +269,5 @@ window.__authDebug = () => ({
   hasLogin: !!$('#loginLink'),
   hasRegister: !!$('#registerLink'),
   hasLogout: !!$('#logoutBtn'),
-  adminVisible: !document.querySelector('a[href$="admin.html"]')?.classList?.contains('hidden')
+  adminVisible: !document.querySelector('a[href$="admin.html"]')?.classList.contains('hidden')
 });

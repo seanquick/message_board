@@ -9,41 +9,29 @@ const mongoose = require('mongoose');
 const path = require('path');
 const jwt = require('jsonwebtoken');
 
-// ✅ FIXED: Correct path to adminExport route
-const adminExport = require('./Backend/Routes/adminExport');
+const { requireAdmin } = require('./Backend/Middleware/auth'); // import admin guard
 
-// --- tiny color helpers (no extra deps) ---
-const c = {
-  reset: '\x1b[0m', bold: '\x1b[1m', dim: '\x1b[2m',
-  red: '\x1b[31m', green: '\x1b[32m', yellow: '\x1b[33m',
-  blue: '\x1b[34m', cyan: '\x1b[36m',
-};
-const ok   = (msg) => console.log(`${c.green}✅ ${msg}${c.reset}`);
-const info = (msg) => console.log(`${c.cyan}ℹ️  ${msg}${c.reset}`);
-const warn = (msg) => console.warn(`${c.yellow}⚠️  ${msg}${c.reset}`);
-const err  = (msg) => console.error(`${c.red}❌ ${msg}${c.reset}`);
+// Route modules
+const authRoutes    = require('./Backend/Routes/auth');
+const threadRoutes  = require('./Backend/Routes/thread');
+const commentRoutes = require('./Backend/Routes/comments');
+const reportRoutes  = require('./Backend/Routes/report');
+const adminRoutes   = require('./Backend/Routes/admin');
+const searchRoutes  = require('./Backend/Routes/search');
+const notifRouter   = require('./Backend/Routes/notifications');
 
-// --- Env ---
-const PORT  = Number(process.env.PORT || 8000); // Koyeb: expose 8000 on the service
-const HOST  = '0.0.0.0';
-const MONGO = process.env.MONGO_URI;
-
-// --- App ---
 const app = express();
 app.set('trust proxy', 1);
 app.set('etag', false);
 app.disable('etag');
 
+const MONGO = process.env.MONGO_URI;
 if (!MONGO) {
-  err('MONGO_URI is missing. Please set it in your Koyeb env vars (and locally in .env).');
-  console.error(`${c.dim}Example:${c.reset} MONGO_URI=mongodb+srv://user:pass@cluster/dbname?retryWrites=true&w=majority`);
+  console.error('MONGO_URI missing');
   process.exit(1);
 }
-if (!process.env.JWT_SECRET) {
-  warn('JWT_SECRET is missing — using a weak fallback for dev. Set it in env for production.');
-}
 
-// --- Security & core middleware ---
+// Security & middleware
 app.use(helmet({
   contentSecurityPolicy: {
     useDefaults: true,
@@ -51,8 +39,8 @@ app.use(helmet({
       "default-src": ["'self'"],
       "script-src": ["'self'"],
       "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      "font-src":  ["'self'", "https://fonts.gstatic.com", "data:"],
-      "img-src":   ["'self'", "data:"],
+      "font-src": ["'self'", "https://fonts.gstatic.com", "data:"],
+      "img-src": ["'self'", "data:"],
       "connect-src": ["'self'"],
       "frame-ancestors": ["'none'"],
       "form-action": ["'self'"],
@@ -76,16 +64,16 @@ app.use((req, res, next) => {
   next();
 });
 
-// --- Helpers for gated pages ---
 function noStore(res) {
   res.set({
     'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
     'Pragma': 'no-cache',
     'Expires': '0',
-    'Surrogate-Control': 'no-store',
+    'Surrogate-Control': 'no-store'
   });
 }
 
+// sessionGate from your prior code
 function sessionGate(req, res, next) {
   const token = req.cookies?.token;
   if (!token) return res.redirect('/login.html');
@@ -99,60 +87,45 @@ function sessionGate(req, res, next) {
         return res.redirect('/login.html?banned=1');
       }
       noStore(res);
-      return next();
+      next();
     }).catch(() => res.redirect('/login.html'));
   } catch {
     return res.redirect('/login.html');
   }
 }
 
-// --- Static frontend directory ---
+// Static and page routes
 const pubDir = path.join(__dirname, 'Frontend', 'public');
-info(`Serving static files from ${c.bold}${pubDir}${c.reset}`);
 
-// --- Protected HTML pages ---
+// Guard admin.html so non‑admins cannot view it
+app.get('/admin.html', sessionGate, requireAdmin, (_req, res) => {
+  res.sendFile(path.join(pubDir, 'admin.html'));
+});
+
+// Other gated pages
 app.get('/threads.html', sessionGate, (_req, res) => res.sendFile(path.join(pubDir, 'threads.html')));
 app.get('/thread.html',  sessionGate, (_req, res) => res.sendFile(path.join(pubDir, 'thread.html')));
-app.get('/admin.html',   sessionGate, (_req, res) => res.sendFile(path.join(pubDir, 'admin.html')));
 app.get('/account.html', sessionGate, (_req, res) => res.sendFile(path.join(pubDir, 'account.html')));
 
-// --- Public HTML pages ---
-app.get('/login.html',      (_req, res) => res.sendFile(path.join(pubDir, 'login.html')));
-app.get('/register.html',   (_req, res) => res.sendFile(path.join(pubDir, 'register.html')));
-app.get('/forgot.html',     (_req, res) => res.sendFile(path.join(pubDir, 'forgot.html')));
-app.get('/reset.html',      (_req, res) => res.sendFile(path.join(pubDir, 'reset.html')));
+// Public pages
+app.get('/login.html',    (_req, res) => res.sendFile(path.join(pubDir, 'login.html')));
+app.get('/register.html', (_req, res) => res.sendFile(path.join(pubDir, 'register.html')));
+app.get('/forgot.html',   (_req, res) => res.sendFile(path.join(pubDir, 'forgot.html')));
+app.get('/reset.html',    (_req, res) => res.sendFile(path.join(pubDir, 'reset.html')));
 app.get('/guidelines.html', (_req, res) => res.sendFile(path.join(pubDir, 'guidelines.html')));
 app.get('/', (req, res) => sessionGate(req, res, () => res.redirect('/threads.html')));
 
-// --- Static files ---
+// Static asset serving
 app.use(express.static(pubDir));
 
-// --- Routes ---
-const authRoutes    = require('./Backend/Routes/auth');
-const threadRoutes  = require('./Backend/Routes/thread');
-const commentRoutes = require('./Backend/Routes/comments');
-const reportRoutes  = require('./Backend/Routes/report');
-const adminRoutes   = require('./Backend/Routes/admin');
-const searchRoutes  = require('./Backend/Routes/search');
-const notifRouter   = require('./Backend/Routes/notifications');
-
-function pickRouter(mod) {
+// Mount APIs
+const pickRouter = (mod) => {
   if (mod && typeof mod === 'object') {
     if (typeof mod.router === 'function') return mod.router;
     if (typeof mod.default === 'function') return mod.default;
   }
   return mod;
-}
-
-console.log('[route types]', {
-  auth:          typeof authRoutes,
-  thread:        typeof threadRoutes,
-  comment:       typeof commentRoutes,
-  report:        typeof reportRoutes,
-  admin:         typeof adminRoutes,
-  search:        typeof searchRoutes,
-  notifications: typeof notifRouter,
-});
+};
 
 app.use('/api/auth',          pickRouter(authRoutes));
 app.use('/api/threads',       pickRouter(threadRoutes));
@@ -160,55 +133,49 @@ app.use('/api/comments',      pickRouter(commentRoutes));
 app.use('/api/report',        pickRouter(reportRoutes));
 app.use('/api/search',        pickRouter(searchRoutes));
 app.use('/api/admin',         pickRouter(adminRoutes));
-app.use('/api/admin',         adminExport); // ✅ This line mounts the export route
 app.use('/api/notifications', notifRouter);
-app.set('notifyUser',         notifRouter.notifyUser);
+app.set('notifyUser', notifRouter.notifyUser);
 
-// --- Health endpoints ---
+// Health
 app.get('/api/health',  (_req, res) => res.json({ ok: true }));
 app.get('/api/healthz', (_req, res) => res.json({ ok: true, uptime: process.uptime(), ts: Date.now() }));
 
-// --- SPA-style fallback ---
+// Fallback for SPA
 app.get('*', (_req, res) => res.sendFile(path.join(pubDir, 'login.html')));
 
-// --- STARTUP ---
+// Startup and DB
 let server = null;
 let started = false;
-
 async function start() {
-  if (started) { info('Server already started; skipping listen'); return; }
+  if (started) return;
   started = true;
-
   try {
     mongoose.set('strictQuery', true);
     await mongoose.connect(MONGO, { serverSelectionTimeoutMS: 10000, family: 4 });
-    ok(`Mongo connected: ${MONGO.includes('mongodb+srv') ? 'Atlas Cluster' : 'Local MongoDB'}`);
-    info(`DB URI: ${c.dim}${MONGO}${c.reset}`);
+    console.log('✅ Mongo connected');
   } catch (e) {
-    err(`Mongo connection failed: ${e.message}`);
-    warn('Check MONGO_URI, credentials, IP allowlist (Atlas), and network connectivity.');
+    console.error('Mongo connect failed:', e.message);
     process.exit(1);
   }
-
-  server = app.listen(PORT, HOST, () => ok(`Server listening on ${HOST}:${PORT}`));
+  server = app.listen(process.env.PORT || 8000, '0.0.0.0', () => {
+    console.log('Server listening');
+  });
   server.on('error', (e) => {
-    err(`HTTP server error: ${e.code || e.message}`);
+    console.error('HTTP server error:', e);
     process.exit(1);
   });
-
-  mongoose.connection.on('error', (e) => err(`Mongo error: ${e.message}`));
-  mongoose.connection.on('disconnected', () => warn('Mongo disconnected'));
+  mongoose.connection.on('error', (e) => console.error('Mongo error:', e.message));
+  mongoose.connection.on('disconnected', () => console.warn('Mongo disconnected'));
 }
 
-// --- Graceful Shutdown ---
 process.on('SIGTERM', async () => {
-  info('SIGTERM received, shutting down...');
-  try { await mongoose.disconnect(); } catch {}
-  try { if (server) await new Promise(r => server.close(r)); } catch {}
+  console.log('SIGTERM, shutting down...');
+  try { await mongoose.disconnect(); } catch {} 
+  try { if (server) await new Promise(r => server.close(r)); } catch {} 
   process.exit(0);
 });
 process.on('SIGINT', async () => {
-  info('SIGINT received, shutting down...');
+  console.log('SIGINT, shutting down...');
   try { await mongoose.disconnect(); } catch {}
   try { if (server) await new Promise(r => server.close(r)); } catch {}
   process.exit(0);
