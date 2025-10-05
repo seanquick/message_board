@@ -1,10 +1,8 @@
 // Frontend/public/admin.js
-
 import { api, escapeHTML, timeAgo, q, $, qa, refreshMe, me as meVar } from './main.js';
 
 let meUser = null;
 
-/** Show error to user */
 function showErr(msg) {
   const host = q('#adminErr') || document.body;
   const div = document.createElement('div');
@@ -13,7 +11,6 @@ function showErr(msg) {
   host.prepend(div);
 }
 
-/** Debounce helper */
 function debounce(fn, ms = 300) {
   let timer;
   return (...args) => {
@@ -22,19 +19,20 @@ function debounce(fn, ms = 300) {
   };
 }
 
-// Note templates and helpers
 const DEFAULT_NOTE_TEMPLATES = [
   { label: 'Spam', text: 'Resolved as spam. Action: {action}. Reviewed by {admin} on {date}.' },
   { label: 'Scam/Phishing', text: 'Resolved: suspected scam/phishing. Action: {action}. Reviewed by {admin} on {date}.' }
 ];
+
 function getNoteTemplates() {
   try {
     const raw = localStorage.getItem('modNoteTemplates');
     const arr = raw ? JSON.parse(raw) : DEFAULT_NOTE_TEMPLATES;
     if (Array.isArray(arr) && arr.length) return arr;
-  } catch (_) {}
+  } catch (_) { }
   return DEFAULT_NOTE_TEMPLATES;
 }
+
 function formatDate(d = new Date()) {
   try {
     return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(d);
@@ -42,6 +40,7 @@ function formatDate(d = new Date()) {
     return d.toISOString();
   }
 }
+
 function fillTemplate(str, ctx = {}) {
   const base = {
     admin: meUser?.name || meUser?.email || 'admin',
@@ -52,11 +51,11 @@ function fillTemplate(str, ctx = {}) {
     category: ctx.category || '',
     action: ctx.action || 'Resolved'
   };
-  return str
-    .replace(/\{commentId\?\}/g, base.commentId ? base.commentId : '')
-    .replace(/\{(\w+)\}/g, (_m, key) => String(base[key] ?? ''));
-
+  const step1 = str.replace(/\{commentId\?\}/g, base.commentId ? base.commentId : '');
+  // Correct replace with comma, not parenthesis mistake:
+  return step1.replace(/\{(\w+)\}/g, (_m, key) => String(base[key] ?? ''));
 }
+
 function insertAtCaret(textarea, text) {
   textarea.focus();
   const s = textarea.selectionStart ?? textarea.value.length;
@@ -65,6 +64,7 @@ function insertAtCaret(textarea, text) {
   const pos = s + text.length;
   textarea.setSelectionRange(pos, pos);
 }
+
 function renderTemplateChips(containerEl, textareaEl, ctx = {}) {
   const tpls = getNoteTemplates();
   if (!tpls.length || !containerEl || !textareaEl) return;
@@ -76,21 +76,22 @@ function renderTemplateChips(containerEl, textareaEl, ctx = {}) {
     b.type = 'button';
     b.className = 'btn tiny';
     b.textContent = t.label;
-    b.addEventListener('click', () => insertAtCaret(textareaEl, fillTemplate(t.text, ctx) + '\n'));
+    b.addEventListener('click', () => {
+      insertAtCaret(textareaEl, fillTemplate(t.text, ctx) + '\n');
+    });
     bar.appendChild(b);
   }
   containerEl.prepend(bar);
 }
 
-// State
+// State for pagination etc.
 const state = {
   users: { page: 1, limit: 50, total: 0 },
   comments: { page: 1, limit: 50, total: 0 }
 };
 
-// Ensure tbody exists or creates one
-function ensureTbody(sel) {
-  const tbl = q(sel);
+function ensureTbody(selector) {
+  const tbl = q(selector);
   if (!tbl) return null;
   let tb = tbl.querySelector('tbody');
   if (!tb) {
@@ -100,32 +101,29 @@ function ensureTbody(sel) {
   return tb;
 }
 
-// Pager UI (users etc.)
 function pagesFor(p) {
   if (!p.limit || !p.total) return 1;
   return Math.ceil(p.total / p.limit);
 }
+
 function updatePagerUI(section, pages) {
   if (section === 'users') {
     q('#uPageInfo')?.textContent = `${state.users.page} / ${pages}`;
   }
-  // similar for comments etc. if needed
 }
 
-// Text setter
-function setText(sel, text) {
-  const el = q(sel);
+function setText(selector, text) {
+  const el = q(selector);
   if (el) el.textContent = text;
 }
 
-// Render error in table
-function renderErrorRow(tableSel, msg, colspan = 5) {
-  const tbody = ensureTbody(tableSel);
+function renderErrorRow(tableSelector, msg, colspan = 5) {
+  const tbody = ensureTbody(tableSelector);
   if (!tbody) return;
   tbody.innerHTML = `<tr><td colspan="${colspan}" class="err">${escapeHTML(msg)}</td></tr>`;
 }
 
-// ========== Core functions ==========
+// ========== Feature functions ==========
 
 async function loadMetrics() {
   try {
@@ -195,12 +193,12 @@ async function bulkResolveSelected() {
   }
 }
 
-async function exportReportsCSV() {
-  // Use window location to download
+function exportReportsCSV() {
   window.location.href = `/api/admin/reports/export.csv?t=${Date.now()}`;
 }
 
-// ===== Users functions =====
+// ===== Users =====
+
 async function loadUsers() {
   const tbody = ensureTbody('#usersTable');
   if (!tbody) return;
@@ -358,14 +356,13 @@ function showUserContentModal(uid, threads, comments) {
   modal.querySelector('.close-modal')?.addEventListener('click', () => modal.remove());
 }
 
-// ========== init function ==========
+// ========== init ==========
 
 async function init() {
   try {
     await refreshMe();
     meUser = meVar;
 
-    // Ping / refresh
     try {
       await api(`/api/admin/ping?t=${Date.now()}`);
     } catch (e) {
@@ -386,7 +383,6 @@ async function init() {
       }
     }
 
-    // Event wiring
     q('#refreshMetrics')?.addEventListener('click', loadMetrics);
 
     q('#rFilter')?.addEventListener('change', loadReports);
@@ -404,14 +400,14 @@ async function init() {
     q('#uPageSize')?.addEventListener('change', () => { state.users.limit = +q('#uPageSize').value || 50; state.users.page = 1; loadUsers(); });
     q('#uPrev')?.addEventListener('click', () => { if (state.users.page > 1) { state.users.page--; loadUsers(); } });
     q('#uNext')?.addEventListener('click', () => { const pages = pagesFor(state.users); if (state.users.page < pages) { state.users.page++; loadUsers(); } });
-    q('#uExport')?.addEventListener('click', loadUsers);  // maybe you meant exportUsersCSV
+    q('#uExport')?.addEventListener('click', loadUsers);
 
     q('#cIncludeDeleted')?.addEventListener('change', () => { state.comments.page = 1; loadComments(); });
     q('#cRefresh')?.addEventListener('click', () => { state.comments.page = 1; loadComments(); });
     q('#cPageSize')?.addEventListener('change', () => { state.comments.limit = +q('#cPageSize').value || 50; state.comments.page = 1; loadComments(); });
     q('#cPrev')?.addEventListener('click', () => { if (state.comments.page > 1) { state.comments.page--; loadComments(); } });
     q('#cNext')?.addEventListener('click', () => { const pages = pagesFor(state.comments); if (state.comments.page < pages) { state.comments.page++; loadComments(); } });
-    q('#cExport')?.addEventListener('click', loadComments);  // adjust to export if needed
+    q('#cExport')?.addEventListener('click', loadComments);
 
     q('#tIncludeDeleted')?.addEventListener('change', loadThreads);
     q('#tRefresh')?.addEventListener('click', loadThreads);
@@ -426,7 +422,6 @@ async function init() {
 
     initUserNotifBell();
 
-    // Initial loads
     loadMetrics().catch(console.error);
     loadThreads().catch(console.error);
     loadComments().catch(console.error);
@@ -438,12 +433,8 @@ async function init() {
   }
 }
 
-// Start init
-// If DOMContentLoaded listener above fails (e.g. script order), you can also trigger fallback:
 if (document.readyState !== 'loading') {
-  // DOM already loaded
   init();
 }
-
 document.addEventListener('DOMContentLoaded', init);
 
