@@ -194,7 +194,7 @@ function ensureAdminLink() {
     a = document.createElement('a');
     a.href = 'admin.html';
     a.textContent = 'Admin';
-    a.classList.add('admin-link', 'hidden');  // hidden by default
+    a.classList.add('admin-link', 'hidden');
     left.appendChild(a);
   }
   return a;
@@ -271,3 +271,6 @@ window.__authDebug = () => ({
   hasLogout: !!$('#logoutBtn'),
   adminVisible: !document.querySelector('a[href$="admin.html"]')?.classList.contains('hidden')
 });
+
+/* ✅ Export alias for compatibility */
+export const apiFetch = api;
