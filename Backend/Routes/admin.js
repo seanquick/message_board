@@ -638,6 +638,38 @@ router.post('/users/:id/note', requireAdmin, async (req, res) => {
   }
 });
 
+
+
+  // Delete user (soft-delete or full delete depending on your model)
+  router.delete('/users/:id', requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    const User = require('../Models/User');
+    try {
+      await User.findByIdAndDelete(id);
+      // Optionally cascade, anonymize, or clean associated content
+      res.json({ ok: true });
+    } catch (err) {
+      console.error('admin delete user error:', err);
+      res.status(500).json({ error: 'Failed to delete user' });
+    }
+  });
+
+  // Fetch user content (threads + comments)
+  router.get('/users/:id/content', requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    const Thread = require('../Models/Thread');
+    const Comment = require('../Models/Comment');
+    try {
+      const threads = await Thread.find({ author: id }).lean();
+      const comments = await Comment.find({ author: id }).lean();
+      res.json({ ok: true, threads, comments });
+    } catch (err) {
+      console.error('admin get user content error:', err);
+      res.status(500).json({ error: 'Failed to fetch user content' });
+    }
+  });
+
+
 /* =============================== THREADS (admin) =============================== */
 async function logThreadAction(type, threadId, actorId, note, meta = {}) {
   if (!ModLog) return;
@@ -702,6 +734,8 @@ router.post('/threads/:id/delete', requireAdmin, async (req, res) => {
     res.status(500).json({ error: 'Failed to delete/restore thread' });
   }
 });
+
+
 
 /* ================================ ADMIN SEARCH ================================ */
 router.get('/search', requireAdmin, async (req, res) => {
@@ -877,6 +911,29 @@ router.post('/refresh', async (req, res) => {
   } catch (e) {
     console.error('[auth:refresh] error:', e?.message || e);
     return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+});
+
+// Delete user by ID
+router.delete('/users/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await User.findByIdAndDelete(id);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
+// Get user threads + comments
+router.get('/users/:id/content', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const threads = await Thread.find({ author: id }).select('_id title').lean();
+    const comments = await Comment.find({ author: id }).select('thread body').lean();
+    res.json({ threads, comments });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to fetch user content' });
   }
 });
 
