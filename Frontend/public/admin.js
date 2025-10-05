@@ -54,7 +54,8 @@ function fillTemplate(str, ctx = {}) {
   };
   return str
     .replace(/\{commentId\?\}/g, base.commentId ? base.commentId : '')
-    .replace(/\{(\w+)\}/g((m, key) => String(base[key] ?? '')));
+    .replace(/\{(\w+)\}/g, (_m, key) => String(base[key] ?? ''));
+
 }
 function insertAtCaret(textarea, text) {
   textarea.focus();
