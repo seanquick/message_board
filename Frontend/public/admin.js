@@ -19,28 +19,6 @@ function debounce(fn, ms = 300) {
   };
 }
 
-function formatDate(d = new Date()) {
-  try {
-    return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(d);
-  } catch {
-    return d.toISOString();
-  }
-}
-
-function fillTemplate(str, ctx = {}) {
-  const base = {
-    admin: meUser?.name || meUser?.email || 'admin',
-    date: formatDate(new Date()),
-    targetType: ctx.targetType || '',
-    threadId: ctx.threadId || '',
-    commentId: ctx.commentId || '',
-    category: ctx.category || '',
-    action: ctx.action || 'Resolved',
-  };
-  const s1 = str.replace(/\{commentId\?\}/g, base.commentId ? base.commentId : '');
-  return s1.replace(/\{(\w+)\}/g, (_m, key) => String(base[key] ?? ''));
-}
-
 function ensureTbody(selector) {
   const tbl = q(selector);
   if (!tbl) return null;
@@ -59,7 +37,8 @@ function pagesFor(p) {
 
 function updatePagerUI(section, pages) {
   if (section === 'users') {
-    q('#uPageInfo')?.textContent = `${state.users.page} / ${pages}`;
+    const el = q('#uPageInfo');
+    if (el) el.textContent = `${state.users.page} / ${pages}`;
   }
 }
 
@@ -84,6 +63,7 @@ async function loadUsers() {
     console.error('No usersTable in DOM');
     return;
   }
+
   try {
     const searchEl = q('#uSearch') || q('#userSearch');
     const qstr = (searchEl?.value || '').trim();
@@ -107,6 +87,7 @@ async function loadUsers() {
       tbody.innerHTML = '<tr><td colspan="7">No users found.</td></tr>';
       return;
     }
+
     for (const u of users) {
       const tr = document.createElement('tr');
       tr.dataset.id = u._id;
@@ -140,6 +121,7 @@ async function loadUsers() {
         }
       });
     });
+
   } catch (e) {
     showErr(`Failed to load users: ${e?.error || e?.message}`);
   }
@@ -150,7 +132,6 @@ async function init() {
     await refreshMe();
     meUser = meVar;
 
-    // Ping / session
     try {
       await api(`/api/admin/ping?t=${Date.now()}`);
     } catch (e) {
@@ -171,13 +152,18 @@ async function init() {
       }
     }
 
-    q('#uRefresh')?.addEventListener('click', () => { state.users.page = 1; loadUsers(); });
+    q('#uRefresh')?.addEventListener('click', () => {
+      state.users.page = 1;
+      loadUsers();
+    });
+
     q('#uSearch')?.addEventListener('input', debounce(() => {
       state.users.page = 1;
       loadUsers();
     }));
 
     loadUsers().catch(console.error);
+
   } catch (err) {
     showErr(`Init failed: ${err?.message || err}`);
     console.error('Init error', err);
