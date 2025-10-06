@@ -35,7 +35,7 @@ function fillTemplate(str, ctx = {}) {
     threadId: ctx.threadId || '',
     commentId: ctx.commentId || '',
     category: ctx.category || '',
-    action: ctx.action || 'Resolved'
+    action: ctx.action || 'Resolved',
   };
   const s1 = str.replace(/\{commentId\?\}/g, base.commentId ? base.commentId : '');
   return s1.replace(/\{(\w+)\}/g, (_m, key) => String(base[key] ?? ''));
