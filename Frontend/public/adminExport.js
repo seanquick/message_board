@@ -1,38 +1,56 @@
 // Frontend/public/adminExport.js
-import { apiFetch } from './main.js';  // your helper
+import { api, apiFetch } from './main.js';
 
-async function triggerExport(model, format) {
-  const resp = await apiFetch(`/api/admin/export/${model}?format=${format}`, {
-    method: 'GET',
-    headers: {
-      'Accept': format === 'json' ? 'application/json' : 'text/csv'
-    }
-  });
+async function triggerExportResource(resource, format) {
+  let url;
+  // Map resource to backend endpoint
+  switch (resource) {
+    case 'reports':
+      // backend: /api/admin/reports/export.csv
+      url = `/api/admin/reports/export.csv`;
+      break;
+    case 'comments':
+      url = `/api/admin/comments/export.csv`;
+      break;
+    case 'users':
+      url = `/api/admin/users/export.csv`;
+      break;
+    default:
+      console.warn('No export support for resource:', resource);
+      return;
+  }
+  if (format === 'json') {
+    // backend does not have JSON export for those; fallback or alert
+    alert('JSON export not supported currently');
+    return;
+  }
+  // append cache‑buster
+  url += `?t=${Date.now()}`;
+
+  const resp = await apiFetch(url, { method: 'GET', headers: { 'Accept': 'text/csv' } });
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));
     alert('Export failed: ' + (err.error || resp.status));
     return;
   }
   const blob = await resp.blob();
-  const ext = format === 'csv' ? 'csv' : 'json';
-  const url = URL.createObjectURL(blob);
+  const ext = 'csv';
+  const downloadUrl = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
-  a.download = `${model}.${ext}`;
+  a.href = downloadUrl;
+  a.download = `${resource}.${ext}`;
   a.click();
-  URL.revokeObjectURL(url);
+  URL.revokeObjectURL(downloadUrl);
 }
 
-// Attach to UI buttons
 document.addEventListener('DOMContentLoaded', () => {
-  const models = ['threads','comments','users','reports','modlogs'];
+  const resources = ['reports', 'comments', 'users'];
   const container = document.getElementById('export-container');
-  models.forEach(model => {
-    ['json','csv'].forEach(format => {
-      const btn = document.createElement('button');
-      btn.textContent = `Export ${model.toUpperCase()} (${format})`;
-      btn.addEventListener('click', () => triggerExport(model, format));
-      container.appendChild(btn);
-    });
+  if (!container) return;
+  resources.forEach(resource => {
+    const btn = document.createElement('button');
+    btn.textContent = `Export ${resource.toUpperCase()}`;
+    btn.addEventListener('click', () => triggerExportResource(resource, 'csv'));
+    container.appendChild(btn);
   });
 });
