@@ -62,6 +62,10 @@ function updatePagerUI(section, pages) {
     const el = q('#uPageInfo');
     if (el) el.textContent = `${state.users.page} / ${pages}`;
   }
+  if (section === 'comments') {
+    const el = q('#cPageInfo');
+    if (el) el.textContent = `${state.comments.page} / ${pages}`;
+  }
 }
 
 function setText(selector, text) {
@@ -75,9 +79,13 @@ function renderErrorRow(tableSelector, msg, colspan = 5) {
   tbody.innerHTML = `<tr><td colspan="${colspan}" class="err">${escapeHTML(msg)}</td></tr>`;
 }
 
+/**** State for pagination etc ****/
 const state = {
-  users: { page: 1, limit: 50, total: 0 }
+  users: { page: 1, limit: 50, total: 0 },
+  comments: { page: 1, limit: 50, total: 0 }
 };
+
+/**** --- USERS section --- ****/
 
 async function loadUsers() {
   const tbody = ensureTbody('#usersTable');
@@ -109,6 +117,7 @@ async function loadUsers() {
       tbody.innerHTML = '<tr><td colspan="7">No users found.</td></tr>';
       return;
     }
+
     for (const u of users) {
       const tr = document.createElement('tr');
       tr.dataset.id = u._id;
@@ -133,7 +142,6 @@ async function loadUsers() {
       tbody.appendChild(tr);
     }
 
-    // Attach handlers
     tbody.querySelectorAll('.editNote').forEach(btn => btn.addEventListener('click', onEditUserNote));
     tbody.querySelectorAll('.toggleBan').forEach(btn => btn.addEventListener('click', onToggleBan));
     tbody.querySelectorAll('.setRole').forEach(btn => btn.addEventListener('click', onSetRole));
@@ -153,7 +161,6 @@ async function onToggleBan(ev) {
 
   try {
     const res = await api(`/api/admin/users/${id}/toggle-ban`, { method: 'POST' });
-    // Update UI
     const statusCell = tr.children[2];
     const btn = tr.querySelector('.toggleBan');
     if (res.isBanned) {
@@ -177,7 +184,6 @@ async function onSetRole(ev) {
 
   try {
     const res = await api(`/api/admin/users/${id}/role`, { method: 'POST', body: { role: next } });
-    // Update UI
     tr.children[1].textContent = res.role;
     ev.currentTarget.setAttribute('data-role', res.role === 'admin' ? 'user' : 'admin');
     ev.currentTarget.textContent = res.role === 'admin' ? 'Revoke Admin' : 'Make Admin';
@@ -212,7 +218,7 @@ async function onDeleteUser(ev) {
   const tr = ev.currentTarget.closest('tr');
   const id = tr?.dataset.id;
   if (!id) return;
-  if (!confirm('Are you sure you want to delete this user? This cannot be undone.')) return;
+  if (!confirm('Are you sure you want to delete this user?')) return;
 
   try {
     await api(`/api/admin/users/${id}`, { method: 'DELETE' });
@@ -249,17 +255,293 @@ function showUserContentModal(uid, threads, comments) {
     ${comments.map(c => `<div>${escapeHTML(c.body || '')} <em>(thread: ${escapeHTML(String(c.thread))})</em></div>`).join('')}
   `;
   document.body.appendChild(modal);
-  modal.querySelector('.close-modal')?.addEventListener('click', () => {
-    modal.remove();
+  modal.querySelector('.close-modal')?.addEventListener('click', () => modal.remove());
+}
+
+/**** --- THREADS section (admin controls) ****/
+
+async function loadThreads() {
+  const tbody = ensureTbody('#threadsTable');
+  if (!tbody) return;
+  try {
+    const includeDeleted = q('#tIncludeDeleted')?.checked;
+    const params = new URLSearchParams();
+    params.set('t', String(Date.now()));
+    if (includeDeleted) params.set('includeDeleted', '1');
+    const { results } = await api(`/api/admin/search?type=threads&${params.toString()}`, { nocache: true });
+    tbody.innerHTML = '';
+    if (!Array.isArray(results) || !results.length) {
+      tbody.innerHTML = '<tr><td colspan="7">No threads found.</td></tr>';
+      return;
+    }
+    for (const t of results) {
+      const tr = document.createElement('tr');
+      tr.dataset.id = t._id;
+      tr.innerHTML = `
+        <td>${new Date(t.createdAt).toLocaleString()}</td>
+        <td>${escapeHTML(t.title || '(no title)')}</td>
+        <td>${escapeHTML(t.authorId || '')}</td>
+        <td>${t.upvotes || 0}</td>
+        <td>${escapeHTML(String(t.comments || ''))}</td>
+        <td>${t.status || ''}</td>
+        <td class="row gap-05">
+          <button class="btn tiny pinBtn">Pin/Unpin</button>
+          <button class="btn tiny lockBtn">Lock/Unlock</button>
+          <button class="btn tiny deleteThread">Delete/Restore</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    }
+    // Attach thread action handlers
+    tbody.querySelectorAll('.pinBtn').forEach(btn => {
+      btn.addEventListener('click', async (ev) => {
+        const tr = ev.currentTarget.closest('tr');
+        const tid = tr.dataset.id;
+        const isNowPinned = ! (tr.dataset.pinned === 'true');
+        const note = prompt('Note (optional):');
+        try {
+          await api(`/api/admin/threads/${tid}/pin`, { method: 'POST', body: { pinned: isNowPinned, note } });
+          loadThreads();
+        } catch (e) {
+          showErr(`Failed to pin/unpin: ${e?.error || e?.message}`);
+        }
+      });
+    });
+    tbody.querySelectorAll('.lockBtn').forEach(btn => {
+      btn.addEventListener('click', async (ev) => {
+        const tr = ev.currentTarget.closest('tr');
+        const tid = tr.dataset.id;
+        const isNowLocked = ! (tr.dataset.locked === 'true');
+        const note = prompt('Note (optional):');
+        try {
+          await api(`/api/admin/threads/${tid}/lock`, { method: 'POST', body: { locked: isNowLocked, note } });
+          loadThreads();
+        } catch (e) {
+          showErr(`Failed to lock/unlock: ${e?.error || e?.message}`);
+        }
+      });
+    });
+    tbody.querySelectorAll('.deleteThread').forEach(btn => {
+      btn.addEventListener('click', async (ev) => {
+        const tr = ev.currentTarget.closest('tr');
+        const tid = tr.dataset.id;
+        const isDeleted = !(tr.dataset.deleted === 'true');
+        const note = prompt('Note (optional):');
+        try {
+          await api(`/api/admin/threads/${tid}/delete`, { method: 'POST', body: { deleted: isDeleted, reason: note } });
+          loadThreads();
+        } catch (e) {
+          showErr(`Failed to delete/restore: ${e?.error || e?.message}`);
+        }
+      });
+    });
+  } catch (e) {
+    renderErrorRow('#threadsTable', `Error loading threads: ${e?.error || e?.message}`, 7);
+  }
+}
+
+/**** --- COMMENTS section (moderation) ****/
+
+async function loadComments() {
+  const tbody = ensureTbody('#commentsTable');
+  if (!tbody) return;
+  try {
+    const includeDeleted = q('#cIncludeDeleted')?.checked;
+    const params = new URLSearchParams();
+    params.set('t', String(Date.now()));
+    if (includeDeleted) params.set('includeDeleted', '1');
+    const { results } = await api(`/api/admin/search?type=comments&${params.toString()}`, { nocache: true });
+    tbody.innerHTML = '';
+    if (!Array.isArray(results) || !results.length) {
+      tbody.innerHTML = '<tr><td colspan="7">No comments found.</td></tr>';
+      return;
+    }
+    for (const c of results) {
+      const tr = document.createElement('tr');
+      tr.dataset.id = c._id;
+      tr.innerHTML = `
+        <td>${new Date(c.createdAt).toLocaleString()}</td>
+        <td>${escapeHTML(c.snippet || '')}</td>
+        <td>${escapeHTML(c.authorId || '')}</td>
+        <td>${escapeHTML(c.thread || '')}</td>
+        <td>${c.upvotes || 0}</td>
+        <td>${c.status || ''}</td>
+        <td><button class="btn tiny delRestoreComment">Delete/Restore</button></td>
+      `;
+      tbody.appendChild(tr);
+    }
+    tbody.querySelectorAll('.delRestoreComment').forEach(btn => {
+      btn.addEventListener('click', async (ev) => {
+        const tr = ev.currentTarget.closest('tr');
+        const cid = tr.dataset.id;
+        const toDeleted = !(tr.dataset.deleted === 'true');
+        const reason = prompt('Reason (optional):');
+        try {
+          await api(`/api/admin/comments/${cid}/delete`, { method: 'POST', body: { deleted: toDeleted, reason } });
+          loadComments();
+        } catch (e) {
+          showErr(`Failed comment delete/restore: ${e?.error || e?.message}`);
+        }
+      });
+    });
+  } catch (e) {
+    renderErrorRow('#commentsTable', `Error loading comments: ${e?.error || e?.message}`, 7);
+  }
+}
+
+/**** --- REPORTS section (list, resolve, export) ****/
+
+async function loadReports() {
+  const tbody = ensureTbody('#reportsTable');
+  if (!tbody) return;
+  try {
+    const status = q('#rFilter')?.value || 'open';
+    const group = q('#rGroup')?.checked;
+    const params = new URLSearchParams();
+    params.set('t', String(Date.now()));
+    params.set('status', status);
+    const path = group ? 'reports/grouped' : 'reports';
+    const { [group ? 'groups' : 'reports']: list } = await api(`/api/admin/${path}?${params.toString()}`, { nocache: true });
+    tbody.innerHTML = '';
+    if (!Array.isArray(list) || !list.length) {
+      tbody.innerHTML = '<tr><td colspan="8">No reports found.</td></tr>';
+      return;
+    }
+    for (const r of list) {
+      const tr = document.createElement('tr');
+      tr.dataset.id = r._id || r.ids?.[0] || '';
+      tr.innerHTML = `
+        <td><input type="checkbox" class="rSelect" data-id="${r._id}"></td>
+        <td>${new Date(r.latestAt ? new Date(r.latestAt) : r.createdAt).toLocaleString()}</td>
+        <td>${escapeHTML(r.targetType || '')}</td>
+        <td>${escapeHTML(r.snippet || '')}</td>
+        <td>${escapeHTML(r.category || '')}</td>
+        <td>${escapeHTML(r.reporterCount?.toString() || '')}</td>
+        <td>${escapeHTML(r.status || '')}</td>
+        <td><button class="btn tiny resolveOne">Resolve</button></td>
+      `;
+      tbody.appendChild(tr);
+    }
+    tbody.querySelectorAll('.resolveOne').forEach(btn => {
+      btn.addEventListener('click', async (ev) => {
+        const tr = ev.currentTarget.closest('tr');
+        const id = tr.dataset.id;
+        const note = prompt('Resolution note (optional):');
+        try {
+          await api(`/api/admin/reports/${id}/resolve`, { method: 'POST', body: { note } });
+          loadReports();
+        } catch (e) {
+          showErr(`Resolve failed: ${e?.error || e?.message}`);
+        }
+      });
+    });
+  } catch (e) {
+    renderErrorRow('#reportsTable', `Error loading reports: ${e?.error || e?.message}`, 8);
+  }
+}
+
+async function bulkResolveSelected() {
+  const cbs = qa('#reportsTable tbody .rSelect:checked');
+  const ids = cbs.map(cb => cb.dataset.id).filter(Boolean);
+  if (!ids.length) {
+    showErr('No reports selected.');
+    return;
+  }
+  const note = prompt('Optional resolution note:');
+  try {
+    await api('/api/admin/reports/bulk-resolve', { method: 'POST', body: { ids, note } });
+    loadReports();
+  } catch (e) {
+    showErr(`Bulk resolve failed: ${e?.error || e?.message}`);
+  }
+}
+
+function exportReportsCSV() {
+  window.location.href = `/api/admin/reports/export.csv?t=${Date.now()}`;
+}
+
+/**** --- GLOBAL SEARCH section --- ****/
+
+async function doSearch() {
+  const qstr = (q('#sQ')?.value || '').trim();
+  const type = (q('#sType')?.value || 'all').toLowerCase();
+  const status = (q('#sStatus')?.value || '').toLowerCase();
+  const from = q('#sFrom')?.value;
+  const to = q('#sTo')?.value;
+  const minUp = q('#sMinUp')?.value;
+  const category = q('#sCategory')?.value;
+
+  const params = new URLSearchParams();
+  params.set('t', String(Date.now()));
+  if (qstr) params.set('q', qstr);
+  if (type) params.set('type', type);
+  if (status) params.set('status', status);
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  if (minUp) params.set('minUp', minUp);
+  if (category) params.set('category', category);
+
+  const { results } = await api(`/api/admin/search?${params.toString()}`, { nocache: true });
+  const tbody = ensureTbody('#searchTable');
+  tbody.innerHTML = '';
+  if (!Array.isArray(results) || !results.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">No results</td></tr>';
+    return;
+  }
+  for (const r of results) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${new Date(r.createdAt).toLocaleString()}</td>
+      <td>${escapeHTML(r.type || '')}</td>
+      <td>${escapeHTML(r.title || '')}</td>
+      <td>${escapeHTML(r.snippet || '')}</td>
+      <td>${escapeHTML(String(r.upvotes || ''))}</td>
+      <td>${escapeHTML(r.link || '')}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+/**** --- SSE / Notifications / Live Updates --- ****/
+
+const _clients = new Set();
+function sseWrite(res, type, data) {
+  try {
+    res.write(`event: ${type}\n`);
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  } catch {}
+}
+function broadcast(type, data) {
+  for (const res of _clients) {
+    sseWrite(res, type, data);
+  }
+}
+function startEventStream() {
+  const evtSource = new EventSource(`/api/admin/stream`);
+  evtSource.onmessage = (ev) => {
+    // default “message” event
+  };
+  evtSource.addEventListener('thread:updated', ev => {
+    loadThreads();
+  });
+  evtSource.addEventListener('comment:updated', ev => {
+    loadComments();
+  });
+  evtSource.addEventListener('report:resolved', ev => {
+    loadReports();
+  });
+  evtSource.addEventListener('reports:bulk_resolved', ev => {
+    loadReports();
   });
 }
+
+/**** --- INIT and wiring UI --- ****/
 
 async function init() {
   try {
     await refreshMe();
     meUser = meVar;
 
-    // Ping / session check
     try {
       await api(`/api/admin/ping?t=${Date.now()}`);
     } catch (e) {
@@ -280,6 +562,7 @@ async function init() {
       }
     }
 
+    // Users UI events
     q('#uRefresh')?.addEventListener('click', () => {
       state.users.page = 1;
       loadUsers();
@@ -289,6 +572,49 @@ async function init() {
       loadUsers();
     }));
 
+    // Threads UI
+    q('#tRefresh')?.addEventListener('click', loadThreads);
+    q('#tIncludeDeleted')?.addEventListener('change', loadThreads);
+
+    // Comments UI
+    q('#cRefresh')?.addEventListener('click', loadComments);
+    q('#cIncludeDeleted')?.addEventListener('change', loadComments);
+
+    // Reports UI
+    q('#rRefresh')?.addEventListener('click', loadReports);
+    q('#rGroup')?.addEventListener('change', loadReports);
+    q('#rFilter')?.addEventListener('change', loadReports);
+    q('#rBulkResolve')?.addEventListener('click', bulkResolveSelected);
+    q('#rExport')?.addEventListener('click', exportReportsCSV);
+    q('#rSelectAll')?.addEventListener('change', () => {
+      const checked = q('#rSelectAll')?.checked;
+      qa('#reportsTable tbody .rSelect').forEach(cb => { cb.checked = !!checked; });
+    });
+
+    // Search UI
+    q('#sGo')?.addEventListener('click', doSearch);
+    q('#sReset')?.addEventListener('click', () => {
+      q('#sQ').value = '';
+      q('#sType').value = 'all';
+      q('#sStatus').value = '';
+      q('#sFrom').value = '';
+      q('#sTo').value = '';
+      q('#sMinUp').value = '';
+      q('#sCategory').value = '';
+      doSearch();
+    });
+    q('#sQ')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') doSearch();
+    });
+
+    // Start live updates
+    startEventStream();
+
+    // Initial loads
+    loadMetrics().catch(console.error);
+    loadThreads().catch(console.error);
+    loadComments().catch(console.error);
+    loadReports().catch(console.error);
     loadUsers().catch(console.error);
 
   } catch (err) {
