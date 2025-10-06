@@ -3,6 +3,7 @@ import { api, escapeHTML, timeAgo, q, $, qa, refreshMe, me as meVar } from './ma
 
 let meUser = null;
 
+/** Show error message */
 function showErr(msg) {
   const host = q('#adminErr') || document.body;
   const div = document.createElement('div');
@@ -11,6 +12,7 @@ function showErr(msg) {
   host.prepend(div);
 }
 
+/** Debounce helper */
 function debounce(fn, ms = 300) {
   let timer;
   return (...args) => {
@@ -19,6 +21,7 @@ function debounce(fn, ms = 300) {
   };
 }
 
+/** Format date nicely */
 function formatDate(d = new Date()) {
   try {
     return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(d);
@@ -27,6 +30,7 @@ function formatDate(d = new Date()) {
   }
 }
 
+/** Fill note template */
 function fillTemplate(str, ctx = {}) {
   const base = {
     admin: meUser?.name || meUser?.email || 'admin',
@@ -41,6 +45,7 @@ function fillTemplate(str, ctx = {}) {
   return s1.replace(/\{(\w+)\}/g, (_m, key) => String(base[key] ?? ''));
 }
 
+/** Ensure <tbody> exists under table selector */
 function ensureTbody(selector) {
   const tbl = q(selector);
   if (!tbl) return null;
@@ -52,11 +57,13 @@ function ensureTbody(selector) {
   return tb;
 }
 
+/** Compute pages from total & limit */
 function pagesFor(p) {
   if (!p.limit || !p.total) return 1;
   return Math.ceil(p.total / p.limit);
 }
 
+/** Update pager UI for given section */
 function updatePagerUI(section, pages) {
   if (section === 'users') {
     const el = q('#uPageInfo');
@@ -68,25 +75,39 @@ function updatePagerUI(section, pages) {
   }
 }
 
+/** Set text content of selector */
 function setText(selector, text) {
   const el = q(selector);
   if (el) el.textContent = text;
 }
 
+/** Render a row of error in a table */
 function renderErrorRow(tableSelector, msg, colspan = 5) {
   const tbody = ensureTbody(tableSelector);
   if (!tbody) return;
   tbody.innerHTML = `<tr><td colspan="${colspan}" class="err">${escapeHTML(msg)}</td></tr>`;
 }
 
-/**** State for pagination etc ****/
+/** Application state */
 const state = {
   users: { page: 1, limit: 50, total: 0 },
   comments: { page: 1, limit: 50, total: 0 }
 };
 
-/**** --- USERS section --- ****/
+/** --- METRICS --- */
+async function loadMetrics() {
+  try {
+    const { metrics } = await api(`/api/admin/metrics?t=${Date.now()}`);
+    setText('#mUsers', metrics.users);
+    setText('#mThreads', metrics.threads);
+    setText('#mComments', metrics.comments);
+    setText('#mReports', metrics.reports);
+  } catch (e) {
+    showErr(`Failed to load metrics: ${e?.error || e?.message}`);
+  }
+}
 
+/** --- USERS --- */
 async function loadUsers() {
   const tbody = ensureTbody('#usersTable');
   if (!tbody) {
@@ -117,7 +138,6 @@ async function loadUsers() {
       tbody.innerHTML = '<tr><td colspan="7">No users found.</td></tr>';
       return;
     }
-
     for (const u of users) {
       const tr = document.createElement('tr');
       tr.dataset.id = u._id;
@@ -258,8 +278,7 @@ function showUserContentModal(uid, threads, comments) {
   modal.querySelector('.close-modal')?.addEventListener('click', () => modal.remove());
 }
 
-/**** --- THREADS section (admin controls) ****/
-
+/** --- THREADS moderation --- */
 async function loadThreads() {
   const tbody = ensureTbody('#threadsTable');
   if (!tbody) return;
@@ -292,12 +311,11 @@ async function loadThreads() {
       `;
       tbody.appendChild(tr);
     }
-    // Attach thread action handlers
     tbody.querySelectorAll('.pinBtn').forEach(btn => {
       btn.addEventListener('click', async (ev) => {
         const tr = ev.currentTarget.closest('tr');
         const tid = tr.dataset.id;
-        const isNowPinned = ! (tr.dataset.pinned === 'true');
+        const isNowPinned = !(tr.dataset.pinned === 'true');
         const note = prompt('Note (optional):');
         try {
           await api(`/api/admin/threads/${tid}/pin`, { method: 'POST', body: { pinned: isNowPinned, note } });
@@ -311,7 +329,7 @@ async function loadThreads() {
       btn.addEventListener('click', async (ev) => {
         const tr = ev.currentTarget.closest('tr');
         const tid = tr.dataset.id;
-        const isNowLocked = ! (tr.dataset.locked === 'true');
+        const isNowLocked = !(tr.dataset.locked === 'true');
         const note = prompt('Note (optional):');
         try {
           await api(`/api/admin/threads/${tid}/lock`, { method: 'POST', body: { locked: isNowLocked, note } });
@@ -340,8 +358,7 @@ async function loadThreads() {
   }
 }
 
-/**** --- COMMENTS section (moderation) ****/
-
+/** --- COMMENTS moderation --- */
 async function loadComments() {
   const tbody = ensureTbody('#commentsTable');
   if (!tbody) return;
@@ -389,8 +406,7 @@ async function loadComments() {
   }
 }
 
-/**** --- REPORTS section (list, resolve, export) ****/
-
+/** --- REPORTS section --- */
 async function loadReports() {
   const tbody = ensureTbody('#reportsTable');
   if (!tbody) return;
@@ -409,14 +425,14 @@ async function loadReports() {
     }
     for (const r of list) {
       const tr = document.createElement('tr');
-      tr.dataset.id = r._id || r.ids?.[0] || '';
+      tr.dataset.id = r._id || (r.ids ? r.ids[0] : '');
       tr.innerHTML = `
         <td><input type="checkbox" class="rSelect" data-id="${r._id}"></td>
-        <td>${new Date(r.latestAt ? new Date(r.latestAt) : r.createdAt).toLocaleString()}</td>
+        <td>${new Date(r.latestAt || r.createdAt).toLocaleString()}</td>
         <td>${escapeHTML(r.targetType || '')}</td>
         <td>${escapeHTML(r.snippet || '')}</td>
         <td>${escapeHTML(r.category || '')}</td>
-        <td>${escapeHTML(r.reporterCount?.toString() || '')}</td>
+        <td>${escapeHTML(String(r.reporterCount || ''))}</td>
         <td>${escapeHTML(r.status || '')}</td>
         <td><button class="btn tiny resolveOne">Resolve</button></td>
       `;
@@ -460,8 +476,7 @@ function exportReportsCSV() {
   window.location.href = `/api/admin/reports/export.csv?t=${Date.now()}`;
 }
 
-/**** --- GLOBAL SEARCH section --- ****/
-
+/** --- GLOBAL SEARCH --- */
 async function doSearch() {
   const qstr = (q('#sQ')?.value || '').trim();
   const type = (q('#sType')?.value || 'all').toLowerCase();
@@ -502,41 +517,17 @@ async function doSearch() {
   }
 }
 
-/**** --- SSE / Notifications / Live Updates --- ****/
-
-const _clients = new Set();
-function sseWrite(res, type, data) {
-  try {
-    res.write(`event: ${type}\n`);
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
-  } catch {}
-}
-function broadcast(type, data) {
-  for (const res of _clients) {
-    sseWrite(res, type, data);
-  }
-}
+/** --- SSE / Live updates --- */
 function startEventStream() {
   const evtSource = new EventSource(`/api/admin/stream`);
-  evtSource.onmessage = (ev) => {
-    // default “message” event
-  };
-  evtSource.addEventListener('thread:updated', ev => {
-    loadThreads();
-  });
-  evtSource.addEventListener('comment:updated', ev => {
-    loadComments();
-  });
-  evtSource.addEventListener('report:resolved', ev => {
-    loadReports();
-  });
-  evtSource.addEventListener('reports:bulk_resolved', ev => {
-    loadReports();
-  });
+  evtSource.onmessage = (ev) => { /* generic message handler if needed */ };
+  evtSource.addEventListener('thread:updated', () => loadThreads());
+  evtSource.addEventListener('comment:updated', () => loadComments());
+  evtSource.addEventListener('report:resolved', () => loadReports());
+  evtSource.addEventListener('reports:bulk_resolved', () => loadReports());
 }
 
-/**** --- INIT and wiring UI --- ****/
-
+/** --- Initialization and wiring up UI --- */
 async function init() {
   try {
     await refreshMe();
@@ -562,7 +553,6 @@ async function init() {
       }
     }
 
-    // Users UI events
     q('#uRefresh')?.addEventListener('click', () => {
       state.users.page = 1;
       loadUsers();
@@ -572,15 +562,12 @@ async function init() {
       loadUsers();
     }));
 
-    // Threads UI
     q('#tRefresh')?.addEventListener('click', loadThreads);
     q('#tIncludeDeleted')?.addEventListener('change', loadThreads);
 
-    // Comments UI
     q('#cRefresh')?.addEventListener('click', loadComments);
     q('#cIncludeDeleted')?.addEventListener('change', loadComments);
 
-    // Reports UI
     q('#rRefresh')?.addEventListener('click', loadReports);
     q('#rGroup')?.addEventListener('change', loadReports);
     q('#rFilter')?.addEventListener('change', loadReports);
@@ -591,7 +578,6 @@ async function init() {
       qa('#reportsTable tbody .rSelect').forEach(cb => { cb.checked = !!checked; });
     });
 
-    // Search UI
     q('#sGo')?.addEventListener('click', doSearch);
     q('#sReset')?.addEventListener('click', () => {
       q('#sQ').value = '';
@@ -607,10 +593,8 @@ async function init() {
       if (e.key === 'Enter') doSearch();
     });
 
-    // Start live updates
     startEventStream();
 
-    // Initial loads
     loadMetrics().catch(console.error);
     loadThreads().catch(console.error);
     loadComments().catch(console.error);
