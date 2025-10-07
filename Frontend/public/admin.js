@@ -3,7 +3,6 @@ import { api, escapeHTML, timeAgo, q, $, qa, refreshMe, me as meVar } from './ma
 
 let meUser = null;
 
-/** Show error message */
 function showErr(msg) {
   const host = q('#adminErr') || document.body;
   const div = document.createElement('div');
@@ -12,7 +11,6 @@ function showErr(msg) {
   host.prepend(div);
 }
 
-/** Debounce helper */
 function debounce(fn, ms = 300) {
   let timer;
   return (...args) => {
@@ -21,7 +19,6 @@ function debounce(fn, ms = 300) {
   };
 }
 
-/** Format date nicely */
 function formatDate(d = new Date()) {
   try {
     return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(d);
@@ -30,7 +27,6 @@ function formatDate(d = new Date()) {
   }
 }
 
-/** Fill note template */
 function fillTemplate(str, ctx = {}) {
   const base = {
     admin: meUser?.name || meUser?.email || 'admin',
@@ -45,7 +41,6 @@ function fillTemplate(str, ctx = {}) {
   return s1.replace(/\{(\w+)\}/g, (_m, key) => String(base[key] ?? ''));
 }
 
-/** Ensure <tbody> exists under table selector */
 function ensureTbody(selector) {
   const tbl = q(selector);
   if (!tbl) return null;
@@ -57,13 +52,11 @@ function ensureTbody(selector) {
   return tb;
 }
 
-/** Compute pages from total & limit */
 function pagesFor(p) {
   if (!p.limit || !p.total) return 1;
   return Math.ceil(p.total / p.limit);
 }
 
-/** Update pager UI for given section */
 function updatePagerUI(section, pages) {
   if (section === 'users') {
     const el = q('#uPageInfo');
@@ -75,26 +68,23 @@ function updatePagerUI(section, pages) {
   }
 }
 
-/** Set text content of selector */
 function setText(selector, text) {
   const el = q(selector);
   if (el) el.textContent = text;
 }
 
-/** Render a row of error in a table */
 function renderErrorRow(tableSelector, msg, colspan = 5) {
   const tbody = ensureTbody(tableSelector);
   if (!tbody) return;
   tbody.innerHTML = `<tr><td colspan="${colspan}" class="err">${escapeHTML(msg)}</td></tr>`;
 }
 
-/** Application state */
 const state = {
   users: { page: 1, limit: 50, total: 0 },
   comments: { page: 1, limit: 50, total: 0 }
 };
 
-/** --- METRICS --- */
+// METRICS
 async function loadMetrics() {
   try {
     const { metrics } = await api(`/api/admin/metrics?t=${Date.now()}`);
@@ -107,7 +97,7 @@ async function loadMetrics() {
   }
 }
 
-/** --- USERS --- */
+// USERS
 async function loadUsers() {
   const tbody = ensureTbody('#usersTable');
   if (!tbody) {
@@ -125,6 +115,8 @@ async function loadUsers() {
     params.set('t', String(Date.now()));
 
     const payload = await api(`/api/admin/users?${params.toString()}`, { nocache: true });
+    console.log('loadUsers payload:', payload);
+
     const users = Array.isArray(payload) ? payload :
       Array.isArray(payload?.users) ? payload.users :
       Array.isArray(payload?.data) ? payload.data : [];
@@ -173,6 +165,7 @@ async function loadUsers() {
   }
 }
 
+// USER ACTIONS (toggle ban, set role, note, delete, view content) …
 async function onToggleBan(ev) {
   const tr = ev.currentTarget.closest('tr');
   const id = tr?.dataset.id;
@@ -181,6 +174,7 @@ async function onToggleBan(ev) {
 
   try {
     const res = await api(`/api/admin/users/${id}/toggle-ban`, { method: 'POST' });
+    console.log('toggleBan result:', res);
     const statusCell = tr.children[2];
     const btn = tr.querySelector('.toggleBan');
     if (res.isBanned) {
@@ -204,6 +198,7 @@ async function onSetRole(ev) {
 
   try {
     const res = await api(`/api/admin/users/${id}/role`, { method: 'POST', body: { role: next } });
+    console.log('setRole result:', res);
     tr.children[1].textContent = res.role;
     ev.currentTarget.setAttribute('data-role', res.role === 'admin' ? 'user' : 'admin');
     ev.currentTarget.textContent = res.role === 'admin' ? 'Revoke Admin' : 'Make Admin';
@@ -224,7 +219,8 @@ async function onEditUserNote(ev) {
     onConfirm: async (note) => {
       const final = note || '';
       try {
-        await api(`/api/admin/users/${id}/note`, { method: 'POST', body: { note: final } });
+        const res = await api(`/api/admin/users/${id}/note`, { method: 'POST', body: { note: final } });
+        console.log('editNote result:', res);
         if (tr.children[4]) tr.children[4].textContent = final;
       } catch (e) {
         showErr(e?.message || 'Failed to save note');
@@ -241,7 +237,8 @@ async function onDeleteUser(ev) {
   if (!confirm('Are you sure you want to delete this user?')) return;
 
   try {
-    await api(`/api/admin/users/${id}`, { method: 'DELETE' });
+    const res = await api(`/api/admin/users/${id}`, { method: 'DELETE' });
+    console.log('deleteUser result:', res);
     tr.remove();
   } catch (e) {
     showErr(e?.error || e?.message || 'Failed to delete user');
@@ -256,6 +253,7 @@ async function onUserLinkClick(ev) {
 
   try {
     const payload = await api(`/api/admin/users/${uid}/content`);
+    console.log('userContent payload:', payload);
     showUserContentModal(uid, payload.threads || [], payload.comments || []);
   } catch (e) {
     showErr(`Failed to fetch user content: ${e?.error || e?.message}`);
@@ -272,13 +270,13 @@ function showUserContentModal(uid, threads, comments) {
     <h3>Threads (${threads.length})</h3>
     ${threads.map(t => `<div><a href="thread.html?id=${encodeURIComponent(t._id)}" target="_blank">${escapeHTML(t.title || '(untitled)')}</a></div>`).join('')}
     <h3>Comments (${comments.length})</h3>
-    ${comments.map(c => `<div>${escapeHTML(c.body || '')} <em>(thread: ${escapeHTML(String(c.thread))})</em></div>`).join('')}
-  `;
+    ${comments.map(c => `<div>${escapeHTML(c.body || '')} <em>(thread: ${escapeHTML(String(c.thread))})</em></div>`).join('')}`
+  ;
   document.body.appendChild(modal);
   modal.querySelector('.close-modal')?.addEventListener('click', () => modal.remove());
 }
 
-/** --- THREADS moderation --- */
+// THREADS moderation with debugging
 async function loadThreads() {
   const tbody = ensureTbody('#threadsTable');
   if (!tbody) return;
@@ -287,7 +285,11 @@ async function loadThreads() {
     const params = new URLSearchParams();
     params.set('t', String(Date.now()));
     if (includeDeleted) params.set('includeDeleted', '1');
-    const { results } = await api(`/api/admin/search?type=threads&${params.toString()}`, { nocache: true });
+    const url = `/api/admin/search?type=threads&${params.toString()}`;
+    console.log('loadThreads fetch url:', url);
+    const resp = await api(url, { nocache: true });
+    console.log('loadThreads response:', resp);
+    const { results } = resp;
     tbody.innerHTML = '';
     if (!Array.isArray(results) || !results.length) {
       tbody.innerHTML = '<tr><td colspan="7">No threads found.</td></tr>';
@@ -358,7 +360,7 @@ async function loadThreads() {
   }
 }
 
-/** --- COMMENTS moderation --- */
+// COMMENTS moderation with debugging
 async function loadComments() {
   const tbody = ensureTbody('#commentsTable');
   if (!tbody) return;
@@ -367,7 +369,11 @@ async function loadComments() {
     const params = new URLSearchParams();
     params.set('t', String(Date.now()));
     if (includeDeleted) params.set('includeDeleted', '1');
-    const { results } = await api(`/api/admin/search?type=comments&${params.toString()}`, { nocache: true });
+    const url = `/api/admin/search?type=comments&${params.toString()}`;
+    console.log('loadComments fetch url:', url);
+    const resp = await api(url, { nocache: true });
+    console.log('loadComments response:', resp);
+    const { results } = resp;
     tbody.innerHTML = '';
     if (!Array.isArray(results) || !results.length) {
       tbody.innerHTML = '<tr><td colspan="7">No comments found.</td></tr>';
@@ -406,7 +412,7 @@ async function loadComments() {
   }
 }
 
-/** --- REPORTS section --- */
+// REPORTS section with debugging
 async function loadReports() {
   const tbody = ensureTbody('#reportsTable');
   if (!tbody) return;
@@ -417,7 +423,11 @@ async function loadReports() {
     params.set('t', String(Date.now()));
     params.set('status', status);
     const path = group ? 'reports/grouped' : 'reports';
-    const { [group ? 'groups' : 'reports']: list } = await api(`/api/admin/${path}?${params.toString()}`, { nocache: true });
+    const url = `/api/admin/${path}?${params.toString()}`;
+    console.log('loadReports fetch url:', url);
+    const resp = await api(url, { nocache: true });
+    console.log('loadReports response:', resp);
+    const list = resp[group ? 'groups' : 'reports'];
     tbody.innerHTML = '';
     if (!Array.isArray(list) || !list.length) {
       tbody.innerHTML = '<tr><td colspan="8">No reports found.</td></tr>';
@@ -476,7 +486,6 @@ function exportReportsCSV() {
   window.location.href = `/api/admin/reports/export.csv?t=${Date.now()}`;
 }
 
-/** --- GLOBAL SEARCH --- */
 async function doSearch() {
   const qstr = (q('#sQ')?.value || '').trim();
   const type = (q('#sType')?.value || 'all').toLowerCase();
@@ -496,7 +505,11 @@ async function doSearch() {
   if (minUp) params.set('minUp', minUp);
   if (category) params.set('category', category);
 
-  const { results } = await api(`/api/admin/search?${params.toString()}`, { nocache: true });
+  console.log('search URL:', `/api/admin/search?${params.toString()}`);
+  const resp = await api(`/api/admin/search?${params.toString()}`, { nocache: true });
+  console.log('search response:', resp);
+  const { results } = resp;
+
   const tbody = ensureTbody('#searchTable');
   tbody.innerHTML = '';
   if (!Array.isArray(results) || !results.length) {
@@ -517,17 +530,15 @@ async function doSearch() {
   }
 }
 
-/** --- SSE / Live updates --- */
 function startEventStream() {
   const evtSource = new EventSource(`/api/admin/stream`);
-  evtSource.onmessage = (ev) => { /* generic message handler if needed */ };
+  evtSource.onmessage = (ev) => { };
   evtSource.addEventListener('thread:updated', () => loadThreads());
   evtSource.addEventListener('comment:updated', () => loadComments());
   evtSource.addEventListener('report:resolved', () => loadReports());
   evtSource.addEventListener('reports:bulk_resolved', () => loadReports());
 }
 
-/** --- Initialization and wiring up UI --- */
 async function init() {
   try {
     await refreshMe();
