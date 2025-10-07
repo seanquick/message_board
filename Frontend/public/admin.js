@@ -604,7 +604,7 @@ async function init() {
       if (e.key === 'Enter') doSearch();
     });
 
-    startEventStream();
+    //startEventStream();
 
     loadMetrics().catch(console.error);
     loadThreads().catch(console.error);
