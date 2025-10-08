@@ -81,10 +81,9 @@ function renderErrorRow(tableSelector, msg, colspan = 5) {
 
 const state = {
   users: { page: 1, limit: 50, total: 0 },
-  comments: { page: 1, limit: 50, total: 0 }
+  comments: { page: 1, limit: 50, total: 0 },
 };
 
-// METRICS
 async function loadMetrics() {
   try {
     const { metrics } = await api(`/api/admin/metrics?t=${Date.now()}`);
@@ -97,7 +96,7 @@ async function loadMetrics() {
   }
 }
 
-// USERS
+/** --- USERS --- */
 async function loadUsers() {
   const tbody = ensureTbody('#usersTable');
   if (!tbody) {
@@ -165,13 +164,11 @@ async function loadUsers() {
   }
 }
 
-// USER ACTIONS (toggle ban, set role, note, delete, view content) …
 async function onToggleBan(ev) {
   const tr = ev.currentTarget.closest('tr');
   const id = tr?.dataset.id;
   if (!id) return;
   if (!confirm('Toggle ban for this user?')) return;
-
   try {
     const res = await api(`/api/admin/users/${id}/toggle-ban`, { method: 'POST' });
     console.log('toggleBan result:', res);
@@ -211,7 +208,6 @@ async function onEditUserNote(ev) {
   const tr = ev.currentTarget.closest('tr');
   if (!tr) return;
   const id = tr.dataset.id;
-
   showModEditor(tr, {
     title: 'Edit user note',
     placeholder: 'Private admin note…',
@@ -250,7 +246,6 @@ async function onUserLinkClick(ev) {
   const a = ev.currentTarget;
   const uid = a.dataset.uid;
   if (!uid) return;
-
   try {
     const payload = await api(`/api/admin/users/${uid}/content`);
     console.log('userContent payload:', payload);
@@ -270,13 +265,13 @@ function showUserContentModal(uid, threads, comments) {
     <h3>Threads (${threads.length})</h3>
     ${threads.map(t => `<div><a href="thread.html?id=${encodeURIComponent(t._id)}" target="_blank">${escapeHTML(t.title || '(untitled)')}</a></div>`).join('')}
     <h3>Comments (${comments.length})</h3>
-    ${comments.map(c => `<div>${escapeHTML(c.body || '')} <em>(thread: ${escapeHTML(String(c.thread))})</em></div>`).join('')}`
-  ;
+    ${comments.map(c => `<div>${escapeHTML(c.body || '')} <em>(thread: ${escapeHTML(String(c.thread))})</em></div>`).join('')}
+  `;
   document.body.appendChild(modal);
   modal.querySelector('.close-modal')?.addEventListener('click', () => modal.remove());
 }
 
-// THREADS moderation with debugging
+/** --- THREADS --- */
 async function loadThreads() {
   const tbody = ensureTbody('#threadsTable');
   if (!tbody) return;
@@ -304,7 +299,7 @@ async function loadThreads() {
         <td>${escapeHTML(t.authorId || '')}</td>
         <td>${t.upvotes || 0}</td>
         <td>${escapeHTML(String(t.comments || ''))}</td>
-        <td>${t.status || ''}</td>
+        <td>${escapeHTML(t.status || '')}</td>
         <td class="row gap-05">
           <button class="btn tiny pinBtn">Pin/Unpin</button>
           <button class="btn tiny lockBtn">Lock/Unlock</button>
@@ -313,54 +308,48 @@ async function loadThreads() {
       `;
       tbody.appendChild(tr);
     }
-    tbody.querySelectorAll('.pinBtn').forEach(btn => {
-      btn.addEventListener('click', async (ev) => {
-        const tr = ev.currentTarget.closest('tr');
-        const tid = tr.dataset.id;
-        const isNowPinned = !(tr.dataset.pinned === 'true');
-        const note = prompt('Note (optional):');
-        try {
-          await api(`/api/admin/threads/${tid}/pin`, { method: 'POST', body: { pinned: isNowPinned, note } });
-          loadThreads();
-        } catch (e) {
-          showErr(`Failed to pin/unpin: ${e?.error || e?.message}`);
-        }
-      });
-    });
-    tbody.querySelectorAll('.lockBtn').forEach(btn => {
-      btn.addEventListener('click', async (ev) => {
-        const tr = ev.currentTarget.closest('tr');
-        const tid = tr.dataset.id;
-        const isNowLocked = !(tr.dataset.locked === 'true');
-        const note = prompt('Note (optional):');
-        try {
-          await api(`/api/admin/threads/${tid}/lock`, { method: 'POST', body: { locked: isNowLocked, note } });
-          loadThreads();
-        } catch (e) {
-          showErr(`Failed to lock/unlock: ${e?.error || e?.message}`);
-        }
-      });
-    });
-    tbody.querySelectorAll('.deleteThread').forEach(btn => {
-      btn.addEventListener('click', async (ev) => {
-        const tr = ev.currentTarget.closest('tr');
-        const tid = tr.dataset.id;
-        const isDeleted = !(tr.dataset.deleted === 'true');
-        const note = prompt('Note (optional):');
-        try {
-          await api(`/api/admin/threads/${tid}/delete`, { method: 'POST', body: { deleted: isDeleted, reason: note } });
-          loadThreads();
-        } catch (e) {
-          showErr(`Failed to delete/restore: ${e?.error || e?.message}`);
-        }
-      });
-    });
+    tbody.querySelectorAll('.pinBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
+      const tr = ev.currentTarget.closest('tr');
+      const tid = tr.dataset.id;
+      const isNowPinned = !(tr.dataset.pinned === 'true');
+      const note = prompt('Note (optional):');
+      try {
+        await api(`/api/admin/threads/${tid}/pin`, { method: 'POST', body: { pinned: isNowPinned, note } });
+        loadThreads();
+      } catch (e) {
+        showErr(`Failed to pin/unpin: ${e?.error || e?.message}`);
+      }
+    }));
+    tbody.querySelectorAll('.lockBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
+      const tr = ev.currentTarget.closest('tr');
+      const tid = tr.dataset.id;
+      const isNowLocked = !(tr.dataset.locked === 'true');
+      const note = prompt('Note (optional):');
+      try {
+        await api(`/api/admin/threads/${tid}/lock`, { method: 'POST', body: { locked: isNowLocked, note } });
+        loadThreads();
+      } catch (e) {
+        showErr(`Failed to lock/unlock: ${e?.error || e?.message}`);
+      }
+    }));
+    tbody.querySelectorAll('.deleteThread').forEach(btn => btn.addEventListener('click', async (ev) => {
+      const tr = ev.currentTarget.closest('tr');
+      const tid = tr.dataset.id;
+      const isDeleted = !(tr.dataset.deleted === 'true');
+      const note = prompt('Note (optional):');
+      try {
+        await api(`/api/admin/threads/${tid}/delete`, { method: 'POST', body: { deleted: isDeleted, reason: note } });
+        loadThreads();
+      } catch (e) {
+        showErr(`Failed to delete/restore: ${e?.error || e?.message}`);
+      }
+    }));
   } catch (e) {
     renderErrorRow('#threadsTable', `Error loading threads: ${e?.error || e?.message}`, 7);
   }
 }
 
-// COMMENTS moderation with debugging
+/** --- COMMENTS --- */
 async function loadComments() {
   const tbody = ensureTbody('#commentsTable');
   if (!tbody) return;
@@ -388,31 +377,29 @@ async function loadComments() {
         <td>${escapeHTML(c.authorId || '')}</td>
         <td>${escapeHTML(c.thread || '')}</td>
         <td>${c.upvotes || 0}</td>
-        <td>${c.status || ''}</td>
+        <td>${escapeHTML(c.status || '')}</td>
         <td><button class="btn tiny delRestoreComment">Delete/Restore</button></td>
       `;
       tbody.appendChild(tr);
     }
-    tbody.querySelectorAll('.delRestoreComment').forEach(btn => {
-      btn.addEventListener('click', async (ev) => {
-        const tr = ev.currentTarget.closest('tr');
-        const cid = tr.dataset.id;
-        const toDeleted = !(tr.dataset.deleted === 'true');
-        const reason = prompt('Reason (optional):');
-        try {
-          await api(`/api/admin/comments/${cid}/delete`, { method: 'POST', body: { deleted: toDeleted, reason } });
-          loadComments();
-        } catch (e) {
-          showErr(`Failed comment delete/restore: ${e?.error || e?.message}`);
-        }
-      });
-    });
+    tbody.querySelectorAll('.delRestoreComment').forEach(btn => btn.addEventListener('click', async (ev) => {
+      const tr = ev.currentTarget.closest('tr');
+      const cid = tr.dataset.id;
+      const toDeleted = !(tr.dataset.deleted === 'true');
+      const reason = prompt('Reason (optional):');
+      try {
+        await api(`/api/admin/comments/${cid}/delete`, { method: 'POST', body: { deleted: toDeleted, reason } });
+        loadComments();
+      } catch (e) {
+        showErr(`Failed comment delete/restore: ${e?.error || e?.message}`);
+      }
+    }));
   } catch (e) {
     renderErrorRow('#commentsTable', `Error loading comments: ${e?.error || e?.message}`, 7);
   }
 }
 
-// REPORTS section with debugging
+/** --- REPORTS (unchanged) --- */
 async function loadReports() {
   const tbody = ensureTbody('#reportsTable');
   if (!tbody) return;
@@ -486,6 +473,7 @@ function exportReportsCSV() {
   window.location.href = `/api/admin/reports/export.csv?t=${Date.now()}`;
 }
 
+/** --- GLOBAL SEARCH --- */
 async function doSearch() {
   const qstr = (q('#sQ')?.value || '').trim();
   const type = (q('#sType')?.value || 'all').toLowerCase();
@@ -530,16 +518,14 @@ async function doSearch() {
   }
 }
 
+/** --- SSE removed for now --- */
 function startEventStream() {
-  const evtSource = new EventSource(`/api/admin/stream`);
-  evtSource.onmessage = (ev) => { };
-  evtSource.addEventListener('thread:updated', () => loadThreads());
-  evtSource.addEventListener('comment:updated', () => loadComments());
-  evtSource.addEventListener('report:resolved', () => loadReports());
-  evtSource.addEventListener('reports:bulk_resolved', () => loadReports());
+  // intentionally no-op for now
 }
 
+/** --- Initialization --- */
 async function init() {
+  console.log('admin init running');
   try {
     await refreshMe();
     meUser = meVar;
@@ -550,9 +536,14 @@ async function init() {
       const errMsg = String(e?.error || e?.message || '');
       if (/revoked|expired|token/i.test(errMsg)) {
         let refreshed = false;
-        try { await api('/api/auth/refresh', { method: 'POST' }); refreshed = true; }
-        catch {
-          try { await api('/api/admin/refresh', { method: 'POST' }); refreshed = true; } catch {}
+        try {
+          await api('/api/auth/refresh', { method: 'POST' });
+          refreshed = true;
+        } catch {
+          try {
+            await api('/api/admin/refresh', { method: 'POST' });
+            refreshed = true;
+          } catch {}
         }
         if (refreshed) {
           await api(`/api/admin/ping?t=${Date.now()}`);
@@ -604,14 +595,13 @@ async function init() {
       if (e.key === 'Enter') doSearch();
     });
 
-    //startEventStream();
+    // startEventStream();  // disabled
 
     loadMetrics().catch(console.error);
     loadThreads().catch(console.error);
     loadComments().catch(console.error);
     loadReports().catch(console.error);
     loadUsers().catch(console.error);
-
   } catch (err) {
     showErr(`Init failed: ${err?.message || err}`);
     console.error('Init error', err);
