@@ -1,38 +1,34 @@
-// Backend/Routes/admin.js
-
-/**
- * Admin API — validation‑focused drop-in
- * Features:
- *  - metrics
- *  - reports list / grouped / resolve / history / CSV
- *  - threads moderation: pin/lock/delete + mod logs + notifications
- *  - comments moderation: delete / restore + mod logs
- *  - users: list / paginate / CSV / toggle-ban / role / note
- *  - admin search
- *  - SSE stream (/stream) for live updates
- *  - refresh endpoint
- *  - new: delete user, fetch user content
- */
-
-const router   = require('express').Router();
+// Backend/routes/admin.js
+const router = require('express').Router();
 const mongoose = require('mongoose');
-const jwt      = require('jsonwebtoken');
+const jwt = require('jsonwebtoken');
 
-const User    = require('../Models/User');
-const Thread  = require('../Models/Thread');
+const User = require('../Models/User');
+const Thread = require('../Models/Thread');
 const Comment = require('../Models/Comment');
-const Report  = require('../Models/Report');
-const Notification = (() => { try { return require('../Models/Notification'); } catch { return null; } })();
-const ModLog  = (() => { try { return require('../Models/ModLog'); } catch { return null; } })();
+const Report = require('../Models/Report');
+const Notification = (() => {
+  try { return require('../Models/Notification'); }
+  catch { return null; }
+})();
+const ModLog = (() => {
+  try { return require('../Models/ModLog'); }
+  catch { return null; }
+})();
 
 const { requireAdmin } = require('../Middleware/auth');
-const { enumValues } = (() => { try { return require('../Util/enum'); } catch { return { enumValues: () => [] }; } })();
+const { enumValues } = (() => {
+  try { return require('../Util/enum').enumValues; }
+  catch { return () => []; }
+})();
 
-// --- Helpers ---
-const toBool = (v) => v === true || v === 'true' || v === '1' || v === 1;
-const notDeleted = (field = 'isDeleted') => ({ $or: [{ [field]: false }, { [field]: { $exists: false } }] });
-const isId = (v) => mongoose.isValidObjectId(v);
-const toId = (v) => (isId(v) ? new mongoose.Types.ObjectId(v) : null);
+// Helpers
+const toBool = v => v === true || v === 'true' || v === '1' || v === 1;
+const notDeleted = (field = 'isDeleted') => ({
+  $or: [{ [field]: false }, { [field]: { $exists: false } }]
+});
+const isId = v => mongoose.isValidObjectId(v);
+const toId = v => isId(v) ? new mongoose.Types.ObjectId(v) : null;
 const s = (v, max = 1000) => String(v ?? '').trim().slice(0, max);
 const iRange = (v, min, max, def) => {
   let n = Number.parseInt(v, 10);
@@ -40,7 +36,7 @@ const iRange = (v, min, max, def) => {
   return Math.max(min, Math.min(max, n));
 };
 
-// No-cache for admin endpoints
+// No-cache headers
 router.use((req, res, next) => {
   res.set({
     'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
@@ -57,7 +53,7 @@ function sseWrite(res, type, data) {
   try {
     res.write(`event: ${type}\n`);
     res.write(`data: ${JSON.stringify(data || {})}\n\n`);
-  } catch {}
+  } catch { }
 }
 function broadcast(type, data) {
   for (const res of _clients) sseWrite(res, type, data);
@@ -101,6 +97,45 @@ router.get('/metrics', requireAdmin, async (_req, res) => {
   }
 });
 
+/** ===== SEARCH route for threads / comments ===== */
+router.get('/search', requireAdmin, async (req, res) => {
+  try {
+    const type = (req.query.type || '').toLowerCase();
+    const includeDeleted = toBool(req.query.includeDeleted);
+
+    let results = [];
+
+    if (type === 'threads') {
+      const filter = includeDeleted ? {} : notDeleted('isDeleted');
+      results = await Thread.find(filter)
+        .sort({ createdAt: -1 })
+        .limit(100)
+        .select('_id title author createdAt isDeleted isPinned pinned isLocked locked upvoteCount commentCount status')
+        .lean();
+    } else if (type === 'comments') {
+      const filter = includeDeleted ? {} : notDeleted('isDeleted');
+      results = await Comment.find(filter)
+        .sort({ createdAt: -1 })
+        .limit(100)
+        .select('_id thread author createdAt body isDeleted upvoteCount status')
+        .lean();
+      // add snippet
+      results = results.map(c => ({
+        ...c,
+        snippet: (c.body || '').slice(0, 120)
+      }));
+    } else {
+      // optional: if type not threads/comments, return empty
+      results = [];
+    }
+
+    return res.json({ results });
+  } catch (e) {
+    console.error('[admin/search] error:', e);
+    return res.status(500).json({ error: 'Search failed', detail: e?.message || String(e) });
+  }
+});
+
 // Reports list
 router.get('/reports', requireAdmin, async (req, res) => {
   try {
@@ -112,20 +147,26 @@ router.get('/reports', requireAdmin, async (req, res) => {
 
     let filter;
     if (status === 'all') filter = {};
-    else if (status === 'resolved') filter = resolvedVals.length ? { status: { $in: resolvedVals } } : { status: 'resolved' };
-    else filter = openVals.length ? { status: { $in: openVals } } : { $or: [{ status: 'open' }, { status: null }, { status: { $exists: false } }] };
+    else if (status === 'resolved') {
+      filter = resolvedVals.length ? { status: { $in: resolvedVals } } : { status: 'resolved' };
+    } else {
+      filter = openVals.length
+        ? { status: { $in: openVals } }
+        : { $or: [{ status: 'open' }, { status: null }, { status: { $exists: false } }] };
+    }
 
     const reports = await Report.find(filter).sort({ createdAt: -1 }).limit(400).lean();
 
-    const threadIds  = reports.filter(r => r.targetType === 'thread').map(r => r.targetId).filter(Boolean);
+    const threadIds = reports.filter(r => r.targetType === 'thread').map(r => r.targetId).filter(Boolean);
     const commentIds = reports.filter(r => r.targetType === 'comment').map(r => r.targetId).filter(Boolean);
     const reporterIds = reports.map(r => r.reporterId).filter(Boolean);
 
     const [threads, comments, users] = await Promise.all([
       Thread.find({ _id: { $in: threadIds } }).select('title body content author isDeleted isPinned pinned isLocked locked').lean(),
       Comment.find({ _id: { $in: commentIds } }).select('body author thread isDeleted').lean(),
-      User.find({ _id: { $in: reporterIds } }).select('name email').lean(),
+      User.find({ _id: { $in: reporterIds } }).select('name email').lean()
     ]);
+
     const tMap = new Map(threads.map(t => [String(t._id), t]));
     const cMap = new Map(comments.map(c => [String(c._id), c]));
     const uMap = new Map(users.map(u => [String(u._id), u]));
@@ -194,20 +235,42 @@ router.get('/reports/grouped', requireAdmin, async (req, res) => {
 
     let filter;
     if (status === 'all') filter = {};
-    else if (status === 'resolved') filter = resolvedVals.length ? { status: { $in: resolvedVals } } : { status: 'resolved' };
-    else filter = openVals.length ? { status: { $in: openVals } } : { $or: [{ status: 'open' }, { status: null }, { status: { $exists: false } }] };
+    else if (status === 'resolved') {
+      filter = resolvedVals.length ? { status: { $in: resolvedVals } } : { status: 'resolved' };
+    } else {
+      filter = openVals.length
+        ? { status: { $in: openVals } }
+        : { $or: [{ status: 'open' }, { status: null }, { status: { $exists: false } }] };
+    }
 
     const reports = await Report.find(filter).sort({ createdAt: -1 }).limit(1000).lean();
 
-    const keyOf = (r) => `${r.targetType}:${r.targetId}:${r.category || 'other'}`;
+    const keyOf = r => `${r.targetType}:${r.targetId}:${r.category || 'other'}`;
     const groupsMap = new Map();
     for (const r of reports) {
       const k = keyOf(r);
-      const g = groupsMap.get(k) || { ids: [], targetType: r.targetType, threadId: null, commentId: null, category: r.category || 'other', latestAt: 0, count: 0, openCount: 0, reporters: new Map(), reasons: new Map(), threadFlags: {}, commentFlags: {}, targetOwnerId: null, status: 'open', snippet: '' };
+      const g = groupsMap.get(k) || {
+        ids: [],
+        targetType: r.targetType,
+        threadId: null,
+        commentId: null,
+        category: r.category || 'other',
+        latestAt: 0,
+        count: 0,
+        openCount: 0,
+        reporters: new Map(),
+        reasons: new Map(),
+        threadFlags: {},
+        commentFlags: {},
+        targetOwnerId: null,
+        status: 'open',
+        snippet: ''
+      };
       g.ids.push(String(r._id));
       g.count++;
       if (!r.status || /open|new|pending|unresolved/i.test(String(r.status))) g.openCount++;
-      const ts = new Date(r.createdAt).getTime(); if (ts > g.latestAt) g.latestAt = ts;
+      const ts = new Date(r.createdAt).getTime();
+      if (ts > g.latestAt) g.latestAt = ts;
       if (r.details) g.reasons.set(r.details, (g.reasons.get(r.details) || 0) + 1);
       if (r.reporterId) g.reporters.set(String(r.reporterId), true);
       groupsMap.set(k, g);
@@ -219,8 +282,8 @@ router.get('/reports/grouped', requireAdmin, async (req, res) => {
       Thread.find({ _id: { $in: tIds } }).select('title body content author isDeleted isPinned pinned isLocked locked').lean(),
       Comment.find({ _id: { $in: cIds } }).select('body author thread isDeleted').lean()
     ]);
-    const tMap = new Map(threads.map(t => [String(t._id), t]));
-    const cMap = new Map(comments.map(c => [String(c._id), c]));
+    const tMap2 = new Map(threads.map(t => [String(t._id), t]));
+    const cMap2 = new Map(comments.map(c => [String(c._id), c]));
 
     const groups = [];
     for (const [, g] of groupsMap) {
@@ -229,15 +292,19 @@ router.get('/reports/grouped', requireAdmin, async (req, res) => {
       if (!r) continue;
 
       if (r.targetType === 'thread') {
-        const t = tMap.get(String(r.targetId));
+        const t = tMap2.get(String(r.targetId));
         if (t) {
           g.threadId = String(t._id);
           g.snippet = `${t.title || '(untitled)'} — ${(t.body ?? t.content ?? '').slice(0, 180)}`;
           g.targetOwnerId = t.author || null;
-          g.threadFlags = { isDeleted: !!t.isDeleted, pinned: !!(t.isPinned || t.pinned), locked: !!(t.isLocked || t.locked) };
+          g.threadFlags = {
+            isDeleted: !!t.isDeleted,
+            pinned: !!(t.isPinned || t.pinned),
+            locked: !!(t.isLocked || t.locked)
+          };
         }
       } else {
-        const c = cMap.get(String(r.targetId));
+        const c = cMap2.get(String(r.targetId));
         if (c) {
           g.commentId = String(c._id);
           g.threadId = String(c.thread);
@@ -380,10 +447,10 @@ router.get('/reports/:id/logs', requireAdmin, async (req, res) => {
     const id = String(req.params.id || '');
     if (!isId(id)) return res.status(400).json({ error: 'Invalid report id' });
 
-    const logs = await ModLog.find({ targetType: 'report', $or: [{ targetId: toId(id) }, { targetId: id }] })
-      .sort({ createdAt: -1 })
-      .limit(50)
-      .lean();
+    const logs = await ModLog.find({
+      targetType: 'report',
+      $or: [{ targetId: toId(id) }, { targetId: id }]
+    }).sort({ createdAt: -1 }).limit(50).lean();
 
     const actorIds = [...new Set(logs.map(l => String(l.actorId)).filter(isId))];
     const actors = await User.find({ _id: { $in: actorIds } }).select('name email').lean();
@@ -404,10 +471,16 @@ router.get('/reports/export.csv', requireAdmin, async (req, res) => {
     const sVals = enumValues(Report, 'status') || [];
     const openVals = sVals.filter(v => /open|new|pending|unresolved/i.test(String(v)));
     const resolvedVals = sVals.filter(v => /resol|clos|done/i.test(String(v)));
+
     let filter;
     if (status === 'all') filter = {};
-    else if (status === 'resolved') filter = resolvedVals.length ? { status: { $in: resolvedVals } } : { status: 'resolved' };
-    else filter = openVals.length ? { status: { $in: openVals } } : { $or: [{ status: 'open' }, { status: null }, { status: { $exists: false } }] };
+    else if (status === 'resolved') {
+      filter = resolvedVals.length ? { status: { $in: resolvedVals } } : { status: 'resolved' };
+    } else {
+      filter = openVals.length
+        ? { status: { $in: openVals } }
+        : { $or: [{ status: 'open' }, { status: null }, { status: { $exists: false } }] };
+    }
 
     const list = await Report.find(filter).sort({ createdAt: -1 }).limit(5000).lean();
 
@@ -595,7 +668,7 @@ router.post('/users/:id/toggle-ban', requireAdmin, async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     user.isBanned = !user.isBanned;
-    user.tokenVersion = (user.tokenVersion || 0) + 1; // force token invalidation
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
     await user.save();
 
     if (ModLog) {
@@ -669,15 +742,15 @@ router.post('/users/:id/note', requireAdmin, async (req, res) => {
   }
 });
 
-// Refresh session / reissue token with correct fields
+// Refresh session / reissue token
 function setAuthCookie(res, payload) {
-  const isProd = (process.env.NODE_ENV === 'production' || process.env.FORCE_SECURE_COOKIES === '1');
+  const isProdEnv = (process.env.NODE_ENV === 'production' || process.env.FORCE_SECURE_COOKIES === '1');
   const token = jwt.sign(payload, process.env.JWT_SECRET || 'dev-change-me', { expiresIn: '7d' });
   res.cookie('token', token, {
     path: '/',
     httpOnly: true,
     sameSite: 'lax',
-    secure: isProd,
+    secure: isProdEnv,
     maxAge: 7 * 24 * 60 * 60 * 1000
   });
 }
@@ -704,7 +777,7 @@ router.post('/refresh', async (req, res) => {
   }
 });
 
-// New: Delete user
+// Delete user
 router.delete('/users/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
@@ -717,7 +790,7 @@ router.delete('/users/:id', requireAdmin, async (req, res) => {
   }
 });
 
-// New: Fetch user content (threads + comments)
+// Fetch user content
 router.get('/users/:id/content', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
