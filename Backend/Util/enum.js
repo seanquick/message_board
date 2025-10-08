@@ -1,26 +1,17 @@
-// Backend/Util/enum.js
-function enumValues(model, path) {
-  try { return model.schema.path(path).enumValues || []; } catch { return []; }
-}
-function coerceEnum(model, path, val, fallback) {
-  const enums = enumValues(model, path);
-  if (!enums.length) return val ?? fallback ?? undefined;
+// backend/Util/enum.js
 
-  // try exact (case-insensitive)
-  if (val != null) {
-    const hit = enums.find(e => String(e).toLowerCase() === String(val).toLowerCase());
-    if (hit) return hit;
-  }
-  // try fallback token
-  if (fallback != null) {
-    const hit = enums.find(e => String(e).toLowerCase() === String(fallback).toLowerCase());
-    if (hit) return hit;
-  }
-  // prefer "other"
-  const other = enums.find(e => String(e).toLowerCase() === 'other');
-  if (other) return other;
-
-  // else first enum
-  return enums[0];
+/**
+ * Returns all possible values of an enum-like field on a Mongoose model.
+ * For example: enumValues(Model, 'status') will return all distinct string values
+ * defined in the schema's enum for field `status`.
+ *
+ * If no schema enum is found, returns empty array.
+ */
+function enumValues(model, field) {
+  if (!model || !model.schema || !model.schema.paths) return [];
+  const path = model.schema.paths[field];
+  if (!path || !path.options || !path.options.enum) return [];
+  return Array.isArray(path.options.enum) ? path.options.enum : [];
 }
-module.exports = { enumValues, coerceEnum };
+
+module.exports = { enumValues };
