@@ -1,4 +1,5 @@
 // backend/routes/admin.js
+
 const router = require('express').Router();
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
@@ -12,11 +13,8 @@ const ModLog = (() => { try { return require('../Models/ModLog'); } catch { retu
 
 const { requireAdmin } = require('../Middleware/auth');
 const { enumValues } = (() => {
-  try {
-    return require('../Util/enum').enumValues;
-  } catch {
-    return () => [];
-  }
+  try { return require('../Util/enum').enumValues; }
+  catch { return () => []; }
 })();
 
 // Helper functions
@@ -44,7 +42,7 @@ router.use((req, res, next) => {
   next();
 });
 
-// SSE
+// SSE stream
 const _clients = new Set();
 function sseWrite(res, type, data) {
   try {
@@ -102,7 +100,7 @@ router.get('/metrics', requireAdmin, async (_req, res) => {
   }
 });
 
-// SEARCH route for threads / comments
+// SEARCH (threads / comments)
 router.get('/search', requireAdmin, async (req, res) => {
   try {
     const type = (req.query.type || '').toLowerCase();
@@ -115,14 +113,14 @@ router.get('/search', requireAdmin, async (req, res) => {
       results = await Thread.find(filter)
         .sort({ createdAt: -1 })
         .limit(100)
-        .select('_id title author createdAt isDeleted isPinned pinned isLocked locked')
+        .select('_id title author createdAt isDeleted isPinned pinned isLocked locked upvoteCount commentCount')
         .lean();
     } else if (type === 'comments') {
       const filter = includeDeleted ? {} : notDeleted('isDeleted');
       results = await Comment.find(filter)
         .sort({ createdAt: -1 })
         .limit(100)
-        .select('_id thread author createdAt body isDeleted')
+        .select('_id thread author createdAt body isDeleted upvoteCount')
         .lean();
       results = results.map(c => ({
         ...c,
@@ -161,7 +159,6 @@ router.get('/reports', requireAdmin, async (req, res) => {
       .limit(400)
       .lean();
 
-    // join with threads/comments maps
     const threadIds = reports.filter(r => r.targetType === 'thread').map(r => r.targetId).filter(Boolean);
     const commentIds = reports.filter(r => r.targetType === 'comment').map(r => r.targetId).filter(Boolean);
     const reporterIds = reports.map(r => r.reporterId).filter(Boolean);
@@ -176,7 +173,7 @@ router.get('/reports', requireAdmin, async (req, res) => {
     const cMap = new Map(comments.map(c => [String(c._id), c]));
     const uMap = new Map(users.map(u => [String(u._id), u]));
 
-    const result = reports.map(r => {
+    const shaped = reports.map(r => {
       let snippet = '', threadId = null, targetOwnerId = null;
       let threadFlags = {}, commentFlags = {};
 
@@ -224,15 +221,149 @@ router.get('/reports', requireAdmin, async (req, res) => {
       };
     });
 
-    res.json({ reports: result });
+    res.json({ reports: shaped });
   } catch (e) {
     console.error('[admin] reports error:', e);
     res.status(500).json({ error: 'Failed to load reports', detail: String(e) });
   }
 });
 
-// The rest of your admin routes (resolve, bulk-resolve, logs, export, comments list/delete, users routes...)  
-// You can keep the same code from previous versions (unchanged sections).
+// Resolve, bulk resolve, logs, exports, comments delete/restore etc.
+// (You can reuse your previous implementations for those here.)
 
-// Finally export router
+// USERS list + user actions
+router.get('/users', requireAdmin, async (req, res) => {
+  try {
+    const qstr = s(req.query.q, 200);
+    const page = iRange(req.query.page, 1, 1e6, 1);
+    const limit = iRange(req.query.limit, 1, 200, 50);
+
+    let filter = {};
+    if (qstr) {
+      filter = {
+        $or: [
+          { name: { $regex: qstr, $options: 'i' } },
+          { email: { $regex: qstr, $options: 'i' } }
+        ]
+      };
+    }
+
+    const [users, total] = await Promise.all([
+      User.find(filter).select('name email role isBanned createdAt notes').sort({ createdAt: -1 })
+        .skip((page - 1) * limit).limit(limit).lean(),
+      User.countDocuments(filter)
+    ]);
+
+    res.json({ users, total });
+  } catch (e) {
+    console.error('[admin] users error:', e);
+    res.status(500).json({ error: 'Failed to load users', detail: String(e) });
+  }
+});
+
+// Export users CSV, toggle-ban, set role, note, delete user, fetch user content
+// — you would include your existing code here, wrapped under requireAdmin similarly.
+
+router.get('/users/export.csv', requireAdmin, async (req, res) => {
+  try {
+    const qstr = s(req.query.q, 200);
+    const limit = iRange(req.query.limit, 1, 10000, 1000);
+    let filter = {};
+    if (qstr) {
+      filter = {
+        $or: [
+          { name: { $regex: qstr, $options: 'i' } },
+          { email: { $regex: qstr, $options: 'i' } }
+        ]
+      };
+    }
+    const list = await User.find(filter).select('name email role isBanned createdAt notes').sort({ createdAt: -1 }).limit(limit).lean();
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="users.csv"');
+    res.write('id,createdAt,name,email,role,isBanned,notes\n');
+    for (const u of list) {
+      const line = [
+        u._id,
+        u.createdAt?.toISOString?.() || '',
+        u.name || '',
+        u.email || '',
+        u.role || 'user',
+        !!u.isBanned,
+        (u.notes || '').replace(/\n/g, ' ').replace(/"/g, '""')
+      ].map(v => `"${String(v)}"`).join(',');
+      res.write(line + '\n');
+    }
+    res.end();
+  } catch (e) {
+    console.error('[admin] users export error:', e);
+    res.status(500).json({ error: 'Failed to export users', detail: String(e) });
+  }
+});
+
+// Add your other user actions (toggle-ban, role, note, delete, content) here with requireAdmin
+
+// Finally, refresh / auth / delete / content etc.
+
+function setAuthCookie(res, payload) {
+  const isProdEnv = (process.env.NODE_ENV === 'production' || process.env.FORCE_SECURE_COOKIES === '1');
+  const token = jwt.sign(payload, process.env.JWT_SECRET || 'dev-change-me', { expiresIn: '7d' });
+  res.cookie('token', token, {
+    path: '/',
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: isProdEnv,
+    maxAge: 7 * 24 * 60 * 60 * 1000
+  });
+}
+
+router.post('/refresh', async (req, res) => {
+  try {
+    const token = req.cookies?.token;
+    if (!token) return res.status(401).json({ error: 'Not logged in' });
+
+    const payload = jwt.verify(token, process.env.JWT_SECRET || 'dev-change-me');
+    const user = await User.findById(payload.uid).select('role isBanned tokenVersion name email').lean();
+    if (!user) return res.status(401).json({ error: 'Account not found' });
+    if (user.isBanned) return res.status(403).json({ error: 'Account is banned' });
+
+    setAuthCookie(res, {
+      uid: String(payload.uid),
+      role: user.role || 'user',
+      tv: Number(user.tokenVersion || 0)
+    });
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[admin:refresh] error:', e);
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+});
+
+// Delete user
+router.delete('/users/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isId(id)) return res.status(400).json({ error: 'Invalid user id' });
+    await User.findByIdAndDelete(id);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[admin] delete user error:', e);
+    res.status(500).json({ error: 'Failed to delete user', detail: String(e) });
+  }
+});
+
+// Fetch user content
+router.get('/users/:id/content', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isId(id)) return res.status(400).json({ error: 'Invalid user id' });
+    const threads = await Thread.find({ author: id }).select('_id title createdAt').lean();
+    const comments = await Comment.find({ author: id }).select('_id body thread createdAt').lean();
+    res.json({ ok: true, threads, comments });
+  } catch (e) {
+    console.error('[admin] fetch user content error:', e);
+    res.status(500).json({ error: 'Failed to fetch user content', detail: String(e) });
+  }
+});
+
 module.exports = router;
