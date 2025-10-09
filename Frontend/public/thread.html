@@ -6,7 +6,6 @@
   <title>Thread</title>
   <link rel="stylesheet" href="styles.css" />
   <style>
-    /* minimal extras for the thread page */
     .container { max-width: 960px; margin: 0 auto; padding: 1rem; }
     .card { background:#fff; border:1px solid #eee; border-radius:10px; padding:1rem; }
     .row { display:flex; gap:.5rem; align-items:center; }
@@ -32,7 +31,6 @@
   <main class="container">
     <div id="topErr" class="err" aria-live="polite" style="display:none"></div>
 
-    <!-- Thread -->
     <section id="threadSection" class="card">
       <div id="threadHeader" class="row" style="justify-content:space-between">
         <div>
@@ -41,16 +39,14 @@
         </div>
         <div class="row">
           <span id="badgePinned" class="pill" style="display:none">Pinned</span>
-          <span id "badgeLocked" class="pill" style="display:none">Locked</span>
+          <span id="badgeLocked" class="pill" style="display:none">Locked</span>
         </div>
       </div>
 
-      <!-- Report button -->
       <div style="margin-top:.5rem;">
         <button id="reportThreadBtn" class="btn tiny" data-thread-id="">Report Thread</button>
       </div>
 
-      <!-- 🔒 Lock banner (hidden by default) -->
       <div id="lockedBanner" style="display:none;margin:.75rem 0;padding:.6rem .8rem;border:1px solid #f3d9d9;background:#fff5f5;color:#7c1f1f;border-radius:8px">
         🔒 This thread is locked. New comments are disabled.
       </div>
@@ -63,21 +59,17 @@
       </div>
     </section>
 
-    <!-- Comments -->
     <section id="commentsSection" class="card" style="margin-top:1rem">
       <h2 style="margin-top:0">Comments</h2>
       <div id="commentsList">Loading…</div>
 
-      <!-- Composer -->
       <div class="composer">
         <form id="replyForm">
           <div id="replyingTo" class="meta" style="display:none; margin-bottom:.35rem"></div>
           <textarea name="body" id="replyBody" placeholder="Write a comment…"></textarea>
           <input type="hidden" name="parentId" id="parentId" />
 
-          <!-- 🔒 Honeypot anti-bot field (leave empty) -->
-          <div aria-hidden="true"
-               style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden">
+          <div aria-hidden="true" style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden">
             <label for="hpWebsite">Website</label>
             <input type="text" name="website" id="hpWebsite" tabindex="-1" autocomplete="off" />
           </div>
@@ -101,13 +93,8 @@
   <!-- shared utilities -->
   <script type="module" src="nav.js"></script>
   <script type="module" src="main.js"></script>
-  <!-- reporting logic -->
   <script type="module" src="report.js"></script>
-  <script type="module">
-    import { initReportUI } from './report.js';
-    document.addEventListener('DOMContentLoaded', initReportUI);
-  </script>
-  <!-- page script -->
+  <script type="module" src="report-init.js"></script>
   <script type="module" src="thread.js"></script>
 </body>
 </html>
