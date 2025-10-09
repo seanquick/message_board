@@ -31,6 +31,7 @@
   <main class="container">
     <div id="topErr" class="err" aria-live="polite" style="display:none"></div>
 
+    <!-- Thread -->
     <section id="threadSection" class="card">
       <div id="threadHeader" class="row" style="justify-content:space-between">
         <div>
@@ -59,16 +60,19 @@
       </div>
     </section>
 
+    <!-- Comments -->
     <section id="commentsSection" class="card" style="margin-top:1rem">
       <h2 style="margin-top:0">Comments</h2>
       <div id="commentsList">Loading…</div>
 
+      <!-- Composer -->
       <div class="composer">
         <form id="replyForm">
           <div id="replyingTo" class="meta" style="display:none; margin-bottom:.35rem"></div>
           <textarea name="body" id="replyBody" placeholder="Write a comment…"></textarea>
           <input type="hidden" name="parentId" id="parentId" />
 
+          <!-- Honeypot -->
           <div aria-hidden="true" style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden">
             <label for="hpWebsite">Website</label>
             <input type="text" name="website" id="hpWebsite" tabindex="-1" autocomplete="off" />
@@ -90,11 +94,14 @@
     </section>
   </main>
 
-  <!-- shared utilities -->
+  <!-- Scripts -->
   <script type="module" src="nav.js"></script>
   <script type="module" src="main.js"></script>
   <script type="module" src="report.js"></script>
-  <script type="module" src="report-init.js"></script>
+  <script type="module">
+    import { initReportUI } from './report.js';
+    window.addEventListener('DOMContentLoaded', initReportUI);
+  </script>
   <script type="module" src="thread.js"></script>
 </body>
 </html>
