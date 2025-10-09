@@ -1,7 +1,6 @@
 // Backend/routes/report.js
-
 /**
- * Report endpoint.
+ * Report endpoint (for threads and comments)
  * POST /api/report
  * Body: { threadId?, commentId?, reason?, category? }
  */
@@ -14,9 +13,13 @@ const Thread  = require('../Models/Thread');
 const Comment = require('../Models/Comment');
 
 const { requireAuth } = require('../Middleware/auth');
-const { s: normStr, body: validate } = require('../Util/validate');
+const { s, body: validate } = require('../Util/validate');
 
 // Helpers
+function normStr(v) {
+  return (v ?? '').toString().trim();
+}
+
 function toId(maybeId) {
   if (!maybeId) return null;
   try { return new mongoose.Types.ObjectId(String(maybeId)); }
@@ -27,18 +30,15 @@ router.post(
   '/',
   requireAuth,
   validate({
-    threadId:  normStr.optional,
-    commentId: normStr.optional,
-    reason:    normStr.optional,
-    category:  normStr.optional
+    threadId:  s.optional(s.string({ max: 64 })),
+    commentId: s.optional(s.string({ max: 64 })),
+    reason:    s.optional(s.string({ min: 0, max: 1000 })),
+    category:  s.optional(s.string({ min: 0, max: 40 })),
   }),
   async (req, res) => {
     try {
-      const rawThreadId  = req.body?.threadId;
-      const rawCommentId = req.body?.commentId;
-
-      const threadId  = toId(rawThreadId);
-      const commentId = toId(rawCommentId);
+      const threadId  = toId(req.body?.threadId);
+      const commentId = toId(req.body?.commentId);
 
       if (!threadId && !commentId) {
         return res.status(400).json({ error: 'Provide threadId or commentId.' });
@@ -59,19 +59,18 @@ router.post(
         targetId = c._id;
       }
 
-      const reason   = normStr(req.body?.reason || '').slice(0, 1000);
-      const category = normStr(req.body?.category || '').slice(0, 40);
+      const reason   = normStr(req.body?.reason).slice(0, 1000);
+      const category = normStr(req.body?.category).slice(0, 40);
 
-      const doc = {
+      const report = await Report.create({
         targetType,
         targetId,
         reporterId: req.user.uid,
-        reason
-      };
-      if (category) doc.category = category;
+        category,
+        reason,
+      });
 
-      const newReport = await Report.create(doc);
-      return res.json({ ok: true, reportId: newReport._id });
+      return res.json({ ok: true, reportId: report._id });
     } catch (e) {
       console.error('[report] error:', e);
       return res.status(500).json({ error: 'Failed to submit report' });
