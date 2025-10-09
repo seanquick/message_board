@@ -41,8 +41,13 @@
         </div>
         <div class="row">
           <span id="badgePinned" class="pill" style="display:none">Pinned</span>
-          <span id="badgeLocked" class="pill" style="display:none">Locked</span>
+          <span id "badgeLocked" class="pill" style="display:none">Locked</span>
         </div>
+      </div>
+
+      <!-- Report button -->
+      <div style="margin-top:.5rem;">
+        <button id="reportThreadBtn" class="btn tiny" data-thread-id="">Report Thread</button>
       </div>
 
       <!-- 🔒 Lock banner (hidden by default) -->
@@ -70,13 +75,13 @@
           <textarea name="body" id="replyBody" placeholder="Write a comment…"></textarea>
           <input type="hidden" name="parentId" id="parentId" />
 
-              <!-- 🔒 Honeypot anti-bot field (leave empty) -->
-              <div aria-hidden="true"
-                  style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden">
-                <label for="hpWebsite">Website</label>
-                <input type="text" name="website" id="hpWebsite" tabindex="-1" autocomplete="off" />
-              </div>
-              <!-- (Backend rejects if this is filled) -->
+          <!-- 🔒 Honeypot anti-bot field (leave empty) -->
+          <div aria-hidden="true"
+               style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden">
+            <label for="hpWebsite">Website</label>
+            <input type="text" name="website" id="hpWebsite" tabindex="-1" autocomplete="off" />
+          </div>
+
           <div class="row" style="margin-top:.5rem; justify-content:space-between">
             <label class="inline">
               <input type="checkbox" id="isAnonymous" name="isAnonymous" />
@@ -96,6 +101,12 @@
   <!-- shared utilities -->
   <script type="module" src="nav.js"></script>
   <script type="module" src="main.js"></script>
+  <!-- reporting logic -->
+  <script type="module" src="report.js"></script>
+  <script type="module">
+    import { initReportUI } from './report.js';
+    document.addEventListener('DOMContentLoaded', initReportUI);
+  </script>
   <!-- page script -->
   <script type="module" src="thread.js"></script>
 </body>

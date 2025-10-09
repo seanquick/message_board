@@ -1,10 +1,9 @@
-// Backend/Routes/report.js
+// Backend/routes/report.js
+
 /**
- * Legacy report endpoint (kept for older frontends).
+ * Report endpoint.
  * POST /api/report
- * Body: { threadId? | commentId?, reason?, category? }
- * - Creates a Report for a thread OR a comment.
- * - We leave status to schema default.
+ * Body: { threadId?, commentId?, reason?, category? }
  */
 
 const router = require('express').Router();
@@ -15,10 +14,9 @@ const Thread  = require('../Models/Thread');
 const Comment = require('../Models/Comment');
 
 const { requireAuth } = require('../Middleware/auth');
-const { s, body: validate } = require('../Util/validate');
+const { s: normStr, body: validate } = require('../Util/validate');
 
 // Helpers
-function normStr(v) { return (v ?? '').toString().trim(); }
 function toId(maybeId) {
   if (!maybeId) return null;
   try { return new mongoose.Types.ObjectId(String(maybeId)); }
@@ -29,10 +27,10 @@ router.post(
   '/',
   requireAuth,
   validate({
-    threadId:  s.optional(s.string({ max: 64 })),
-    commentId: s.optional(s.string({ max: 64 })),
-    reason:    s.optional(s.string({ min: 0, max: 1000 })),
-    category:  s.optional(s.string({ min: 0, max: 40 })),
+    threadId:  normStr.optional,
+    commentId: normStr.optional,
+    reason:    normStr.optional,
+    category:  normStr.optional
   }),
   async (req, res) => {
     try {
@@ -52,28 +50,30 @@ router.post(
       if (threadId) {
         const t = await Thread.findById(threadId).select('_id').lean();
         if (!t) return res.status(404).json({ error: 'Thread not found' });
-        targetType = 'thread'; targetId = t._id;
-      } else if (commentId) {
+        targetType = 'thread';
+        targetId = t._id;
+      } else {
         const c = await Comment.findById(commentId).select('_id').lean();
         if (!c) return res.status(404).json({ error: 'Comment not found' });
-        targetType = 'comment'; targetId = c._id;
+        targetType = 'comment';
+        targetId = c._id;
       }
 
-      const reason   = normStr(req.body?.reason).slice(0, 1000);
-      const category = normStr(req.body?.category).slice(0, 40);
+      const reason   = normStr(req.body?.reason || '').slice(0, 1000);
+      const category = normStr(req.body?.category || '').slice(0, 40);
 
       const doc = {
         targetType,
         targetId,
         reporterId: req.user.uid,
-        reason,
+        reason
       };
       if (category) doc.category = category;
 
-      await Report.create(doc);
-      return res.json({ ok: true });
+      const newReport = await Report.create(doc);
+      return res.json({ ok: true, reportId: newReport._id });
     } catch (e) {
-      console.error('[legacy report] error:', e);
+      console.error('[report] error:', e);
       return res.status(500).json({ error: 'Failed to submit report' });
     }
   }
