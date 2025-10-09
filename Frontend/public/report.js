@@ -2,7 +2,6 @@
 import { api } from './main.js';
 
 async function submitReport(targetType, targetId) {
-  // Step 1: Choose category
   const categories = [
     'Vulgarity / Offensive Language',
     'Harassment / Bullying',
@@ -19,10 +18,8 @@ async function submitReport(targetType, targetId) {
   const index = parseInt(choice, 10) - 1;
   const category = categories[index] || 'Other';
 
-  // Step 2: Optional additional reason text
   const reason = prompt(`You selected "${category}".\n\nOptional: add more details below:`) || '';
 
-  // Step 3: Submit to backend
   try {
     const resp = await api('/api/report', {
       method: 'POST',
@@ -45,7 +42,6 @@ async function submitReport(targetType, targetId) {
 }
 
 export function initReportUI() {
-  // Thread-level button
   const btnThread = document.querySelector('#reportThreadBtn');
   if (btnThread) {
     const tid = btnThread.dataset.threadId || window.location.search.split('id=')[1];
@@ -53,9 +49,14 @@ export function initReportUI() {
     btnThread.addEventListener('click', () => submitReport('thread', tid));
   }
 
-  // Comment-level buttons
   document.querySelectorAll('.reportCommentBtn').forEach((btn) => {
     const cid = btn.dataset.commentId;
     btn.addEventListener('click', () => submitReport('comment', cid));
   });
 }
+
+// Export for direct use in thread.js
+export { submitReport };
+
+// Auto-initialize (safe under CSP)
+window.addEventListener('DOMContentLoaded', initReportUI);

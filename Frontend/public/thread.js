@@ -1,11 +1,12 @@
-// Frontend/public/thread.js
+// frontend/public/thread.js
+
 import { api, escapeHTML, timeAgo, q, $, qa, me, refreshMe } from './main.js';
-import { initReportUI } from './report.js';
+import { initReportUI, submitReport } from './report.js';
 
 let THREAD_ID = null;
 let THREAD = null;
 
-// ---- null-safe DOM helpers (drop-in) ----
+// Null‑safe DOM helpers
 function safeShow(selOrEl, visible = true) {
   const el = typeof selOrEl === 'string' ? document.querySelector(selOrEl) : selOrEl;
   if (el) el.style.display = visible ? '' : 'none';
@@ -19,50 +20,47 @@ function safeSetHTML(selOrEl, html = '') {
   if (el) el.innerHTML = html;
 }
 
+// Entry point
 document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
-  // Parse thread id
   const params = new URLSearchParams(location.search);
   THREAD_ID = params.get('id') || '';
-  if (!THREAD_ID) return showFatal('Missing thread id.');
+  if (!THREAD_ID) {
+    return showFatal('Missing thread id.');
+  }
 
-  // Warm up auth state
-  try { await refreshMe(); } catch {}
+  try {
+    await refreshMe();
+  } catch {}
 
-  // Scaffold containers if missing
   ensureScaffold();
 
-  // Load & render
   try {
     renderLoading();
     const { thread, comments } = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}`, { nocache: true });
-    THREAD = thread || null;
+    THREAD = thread ?? null;
     if (!THREAD) return showFatal('Thread not found.');
 
     renderThread(THREAD);
     renderCommentsTree(comments || []);
 
-    // Highlight comment if requested
     const highlight = params.get('highlight');
     if (highlight) highlightComment(highlight);
   } catch (e) {
     showFatal(e?.error || e?.message || 'Failed to load thread.');
   }
 
-  // Wire composer & actions
   bindComposer();
-  bindToolbar();  // toolbar button wiring
-  initReportUI(); // make sure report buttons are wired
+  bindToolbar();
+  initReportUI();
 }
 
-/* =========================================================================
-   Scaffold (creates containers if they don't exist)
-   ========================================================================= */
+/* ================= Scaffold ================= */
 function ensureScaffold() {
   const main = document.querySelector('main') || document.body;
 
-  // Header / thread section
+  // Thread header area
   let header = q('#threadHeader');
   if (!header) {
     header = document.createElement('section');
@@ -81,7 +79,7 @@ function ensureScaffold() {
     main.prepend(header);
   }
 
-  // Comments container
+  // Comments area
   if (!q('#comments')) {
     const sec = document.createElement('section');
     sec.className = 'card';
@@ -121,39 +119,30 @@ function ensureScaffold() {
   }
 }
 
-/* =========================================================================
-   Rendering thread
-   ========================================================================= */
+/* ================= Render Thread ================= */
 function renderLoading() {
   safeSetText('#threadTitle', 'Loading…');
   const body = q('#threadBody');
   if (body) {
-    body.innerHTML = `<div class="skeleton">
-      <div class="bar"></div><div class="bar short"></div><div class="bar"></div>
-    </div>`;
+    body.innerHTML = `<div class="skeleton"><div class="bar"></div><div class="bar short"></div><div class="bar"></div></div>`;
   }
 }
 
 function renderThread(t) {
-  // Title
   safeSetHTML('#threadTitle', escapeHTML(t.title || '(untitled)'));
 
-  // Badges
   const badges = [];
   if (t.flags?.pinned || t.isPinned || t.pinned) badges.push(pinBadge());
   if (t.flags?.locked || t.isLocked || t.locked) badges.push(lockBadge());
   safeSetHTML('#threadBadges', badges.join(''));
 
-  // Meta
   const author = escapeHTML(t.author_display || 'Unknown');
   const when = timeAgo(t.createdAt);
   const upvotes = Number(t.upvoteCount ?? t.thumbsUp ?? t.upvotes ?? t.score ?? 0);
   safeSetHTML('#threadMeta', `${author} • ${when} • ▲ ${upvotes}`);
 
-  // Body
   safeSetHTML('#threadBody', safeParagraphs(t.body ?? t.content ?? ''));
 
-  // Lock state
   const isLocked = !!(t.flags?.locked || t.isLocked || t.locked);
   const lockBanner = q('#lockBanner');
   const replyForm  = q('#replyForm');
@@ -161,7 +150,6 @@ function renderThread(t) {
   const loginHint  = q('#loginHint');
   const cancelBtn  = q('#cancelReply');
 
-  // Show login hint if not logged in
   safeShow(loginHint, !me?.uid);
 
   if (isLocked) {
@@ -191,9 +179,7 @@ function renderThread(t) {
   buildToolbar({ upvotes, isLocked });
 }
 
-/* =========================================================================
-   Toolbar (upvote, report) binding
-   ========================================================================= */
+/* ================= Toolbar Binding ================= */
 function buildToolbar({ upvotes, isLocked }) {
   const host = q('#threadToolbar');
   if (!host) return;
@@ -223,17 +209,10 @@ async function onUpvoteThread() {
 }
 
 async function onReportThread() {
-  // invoke report logic from report UI
-  // reuse the report.js logic (configured to detect thread/report)
-  const btn = q('#threadReport');
-  if (!btn) return;
-  // The initReportUI setup should wrap #threadReport to trigger report
-  btn.click();
+  submitReport('thread', THREAD_ID);
 }
 
-/* =========================================================================
-   Comments rendering & actions
-   ========================================================================= */
+/* ================= Comments Rendering & Actions ================= */
 function renderCommentsTree(nodes = []) {
   const host = q('#comments');
   if (!host) return;
@@ -243,10 +222,11 @@ function renderCommentsTree(nodes = []) {
   }
   host.innerHTML = '';
   const frag = document.createDocumentFragment();
-  for (const node of nodes) frag.appendChild(renderCommentNode(node));
+  for (const node of nodes) {
+    frag.appendChild(renderCommentNode(node));
+  }
   host.appendChild(frag);
 
-  // wire events
   host.querySelectorAll('.replyBtn').forEach(b => b.addEventListener('click', onReplyClick));
   host.querySelectorAll('.c-upvote').forEach(b => b.addEventListener('click', onUpvoteComment));
   host.querySelectorAll('.c-report').forEach(b => b.addEventListener('click', onReportComment));
@@ -293,7 +273,7 @@ function renderCommentChildHTML(child) {
   const isDeleted = !!child.isDeleted;
   const body = isDeleted ? '<em class="meta">[deleted]</em>' : escapeHTML(child.body || '');
 
-  const childLogic = `
+  return `
     <article class="comment" id="c-${id}" data-id="${id}">
       <header class="meta">${author} • ${when}</header>
       <div class="c-body">${body}</div>
@@ -308,12 +288,9 @@ function renderCommentChildHTML(child) {
       }
     </article>
   `;
-  return childLogic;
 }
 
-/* =========================================================================
-   Comment interactions
-   ========================================================================= */
+/* ================= Composer & Submission ================= */
 function bindComposer() {
   const form = q('#replyForm');
   if (!form) return;
@@ -332,17 +309,13 @@ function bindComposer() {
     try {
       const payload = { body, isAnonymous };
       if (parentId) payload.parentId = parentId;
-      await api(`/api/comments/${encodeURIComponent(THREAD_ID)}`, {
-        method: 'POST',
-        body: payload
-      });
+      await api(`/api/comments/${encodeURIComponent(THREAD_ID)}`, { method: 'POST', body: payload });
       q('#replyBody').value = '';
       clearReplyTarget();
 
-      // Refresh comments only
       const fresh = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}`, { nocache: true });
       renderCommentsTree(fresh.comments || []);
-      initReportUI(); // rewire report buttons
+      initReportUI();
     } catch (e) {
       const msg = e?.error || e?.message || 'Failed to post comment.';
       if (/locked|forbidden|banned|423/i.test(msg)) {
@@ -394,28 +367,10 @@ async function onReportComment(ev) {
   const node = ev.currentTarget.closest('.comment');
   if (!node) return;
   const id = node.dataset.id;
-  // Delegate to report UI
-  const btn = node.querySelector('.c-report');
-  if (!btn) {
-    // fallback: direct prompt
-    const reason = prompt('Reason (optional):', '') || '';
-    try {
-      await api(`/api/comments/${encodeURIComponent(id)}/report`, {
-        method: 'POST',
-        body: { reason }
-      });
-      alert('Thanks! Your report was submitted.');
-    } catch (e) {
-      alert(e?.error || e?.message || 'Failed to report comment.');
-    }
-    return;
-  }
-  btn.click();
+  submitReport('comment', id);
 }
 
-/* =========================================================================
-   Helpers
-   ========================================================================= */
+/* ================= Helpers ================= */
 function showFatal(msg) {
   const main = document.querySelector('main') || document.body;
   main.innerHTML = `<div class="err" role="alert">${escapeHTML(msg)}</div>`;
@@ -424,10 +379,7 @@ function showFatal(msg) {
 function safeParagraphs(text) {
   const t = String(text || '');
   if (!t.trim()) return '<p class="meta">(no content)</p>';
-  return t
-    .split(/\n{2,}/g)
-    .map(p => `<p>${escapeHTML(p)}</p>`)
-    .join('\n');
+  return t.split(/\n{2,}/g).map(p => `<p>${escapeHTML(p)}</p>`).join('\n');
 }
 
 function pinBadge() {
@@ -462,9 +414,4 @@ function highlightComment(cid) {
   el.classList.add('highlight');
   el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   setTimeout(() => el.classList.remove('highlight'), 2400);
-}
-
-// bindToolbar is just placeholder: actual wiring is in buildToolbar
-function bindToolbar() {
-  // nothing additional
 }
