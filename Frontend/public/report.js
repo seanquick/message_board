@@ -13,13 +13,12 @@ function createModal() {
     <div class="report-backdrop" style="
       position:fixed; inset:0; background:rgba(0,0,0,0.5);
       display:none; align-items:center; justify-content:center; z-index:9999;">
-      <div class="report-dialog card" style="
-        background:#fff; border-radius:8px; padding:1.5rem; max-width:420px;
-        width:100%; box-shadow:0 8px 28px rgba(0,0,0,0.2);">
-        <h2 style="margin-top:0;">Report Content</h2>
-
-        <label for="reportCategory" class="meta" style="margin-top:1rem; display:block;">Reason:</label>
-        <select id="reportCategory" class="input" style="width:100%; margin-top:0.25rem;">
+      <div class="report-dialog" style="
+        background:#fff; border-radius:8px; padding:1.25rem; max-width:420px;
+        box-shadow:0 4px 24px rgba(0,0,0,0.2); font-family:sans-serif;">
+        <h3 style="margin-top:0; margin-bottom:1rem; font-size:1.25rem;">Report Content</h3>
+        <label for="reportCategory" style="display:block; margin-bottom:.5rem; font-weight:500;">Reason</label>
+        <select id="reportCategory" style="width:100%; padding:.5rem; border:1px solid #ccc; border-radius:6px;">
           <option value="">-- Select a reason --</option>
           <option value="Vulgarity / Offensive Language">Vulgarity / Offensive Language</option>
           <option value="Harassment / Bullying">Harassment / Bullying</option>
@@ -28,17 +27,16 @@ function createModal() {
           <option value="Other">Other</option>
         </select>
 
-        <label for="reportReason" class="meta" style="margin-top:1rem; display:block;">Additional details (optional):</label>
-        <textarea id="reportReason" class="input" rows="4" style="width:100%; margin-top:0.25rem;"></textarea>
+        <label for="reportReason" style="display:block; margin-top:.75rem; margin-bottom:.25rem;">Details (optional)</label>
+        <textarea id="reportReason" rows="4" style="width:100%; border:1px solid #ccc; border-radius:6px; padding:.5rem;"></textarea>
 
-        <div class="row" style="justify-content:flex-end; gap:.5rem; margin-top:1.5rem;">
-          <button id="reportCancel" class="btn tiny">Cancel</button>
-          <button id="reportSubmit" class="btn tiny danger">Submit</button>
+        <div class="row" style="display:flex; justify-content:flex-end; gap:.75rem; margin-top:1.25rem;">
+          <button id="reportCancel" class="btn tiny" style="padding:.45rem .9rem;">Cancel</button>
+          <button id="reportSubmit" class="btn tiny danger" style="padding:.45rem .9rem;">Submit</button>
         </div>
       </div>
     </div>
-  `.trim();
-
+  `;
   document.body.appendChild(wrapper);
   reportModal = wrapper.querySelector('.report-backdrop');
 
@@ -46,30 +44,32 @@ function createModal() {
   wrapper.querySelector('#reportSubmit').addEventListener('click', submitModalReport);
 }
 
+export function openReportModal(targetType, targetId) {
+  createModal();
+  currentTarget = { targetType, targetId };
+  reportModal.style.display = 'flex';
+  const select = reportModal.querySelector('#reportCategory');
+  const textarea = reportModal.querySelector('#reportReason');
+  select.value = '';
+  textarea.value = '';
+}
+
 function closeModal() {
   if (reportModal) reportModal.style.display = 'none';
   currentTarget = null;
 }
 
-function openReportModal(targetType, targetId) {
-  createModal();
-  currentTarget = { targetType, targetId };
-
-  // Reset form
-  const categorySelect = reportModal.querySelector('#reportCategory');
-  const reasonInput = reportModal.querySelector('#reportReason');
-  if (categorySelect) categorySelect.value = '';
-  if (reasonInput) reasonInput.value = '';
-
-  reportModal.style.display = 'flex';
-}
-
 async function submitModalReport() {
-  const category = reportModal.querySelector('#reportCategory')?.value || 'Other';
-  const reason = reportModal.querySelector('#reportReason')?.value.trim();
+  const select = reportModal.querySelector('#reportCategory');
+  const textarea = reportModal.querySelector('#reportReason');
+  const category = select.value || 'Other';
+  const reason = textarea.value.trim();
 
   if (!currentTarget) return;
-  if (!category) return alert('⚠️ Please select a reason.');
+  if (!category) {
+    alert('⚠️ Please select a reason.');
+    return;
+  }
 
   try {
     const resp = await api('/api/report', {
@@ -83,27 +83,29 @@ async function submitModalReport() {
     });
 
     if (resp.ok) {
-      alert('✅ Report submitted. Thank you.');
+      alert('✅ Report submitted successfully.');
       closeModal();
     } else {
       alert('⚠️ Failed to submit: ' + (resp.error || 'Unknown error'));
     }
   } catch (err) {
-    alert('❌ Submission failed: ' + (err.error || err.message || 'Unknown error'));
+    alert('❌ Failed to submit: ' + (err.error || err.message || JSON.stringify(err)));
   }
 }
 
 export function initReportUI() {
   createModal();
 
-  const btnThread = document.querySelector('#reportThreadBtn');
+  // Thread report button
+  const btnThread = document.querySelector('#threadReport');
   if (btnThread) {
     const tid = btnThread.dataset.threadId || window.location.search.split('id=')[1];
     btnThread.dataset.threadId = tid;
     btnThread.addEventListener('click', () => openReportModal('thread', tid));
   }
 
-  document.querySelectorAll('.reportCommentBtn, .c-report').forEach((btn) => {
+  // Comment report buttons
+  document.querySelectorAll('.c-report, .reportCommentBtn').forEach((btn) => {
     const cid = btn.dataset.commentId || btn.closest('.comment')?.dataset.id;
     if (cid) {
       btn.addEventListener('click', () => openReportModal('comment', cid));
@@ -111,10 +113,10 @@ export function initReportUI() {
   });
 }
 
-// Optional external call
-export function submitReport(targetType, targetId) {
+// Allow thread.js to call this if needed
+export async function submitReport(targetType, targetId) {
   openReportModal(targetType, targetId);
 }
 
-// Auto-init on load (CSP-safe)
+// ✅ Auto-init on DOM ready
 window.addEventListener('DOMContentLoaded', initReportUI);
