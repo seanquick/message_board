@@ -20,7 +20,7 @@
     .comment .body { white-space:pre-wrap; }
     .children { margin-left:1rem; border-left:2px solid #f3f4f6; padding-left:.75rem; }
     .truncate { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .highlight { animation:hl 2s ease-out; background:#fff7cc; }
+    .highlight { animation:hl 2s ease-out; background: #fff7cc; }
     @keyframes hl { 0%{ background:#fff7cc; } 100%{ background:transparent; } }
     .composer { margin-top:1rem; }
     textarea { width:100%; min-height:100px; padding:.6rem; border:1px solid #e5e7eb; border-radius:8px; }
@@ -45,7 +45,8 @@
       </div>
 
       <div style="margin-top:.5rem;">
-        <button id="reportThreadBtn" class="btn tiny" data-thread-id="">Report Thread</button>
+        <!-- NOTE: changed to 'danger' to match comment Report style -->
+        <button id="reportThreadBtn" class="btn tiny danger" data-thread-id="">Report Thread</button>
       </div>
 
       <div id="lockedBanner" style="display:none;margin:.75rem 0;padding:.6rem .8rem;border:1px solid #f3d9d9;background:#fff5f5;color:#7c1f1f;border-radius:8px">
@@ -97,6 +98,8 @@
   <!-- Scripts -->
   <script type="module" src="nav.js"></script>
   <script type="module" src="main.js"></script>
+
+  <!-- report.js must be loaded before thread.js so the modal UI is available -->
   <script type="module" src="report.js"></script>
   <script type="module" src="thread.js"></script>
 </body>

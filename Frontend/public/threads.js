@@ -1,22 +1,21 @@
 // Frontend/public/threads.js
 import { api, escapeHTML, timeAgo, q, $, qa } from './main.js';
+import { openReportModal } from './report.js';
 
 document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
   try {
-    renderSkeleton(); // shows loading state
+    renderSkeleton();
     const payload = await api('/api/threads', { nocache: true });
     const threads = Array.isArray(payload?.threads) ? payload.threads : [];
 
-    // If server didn’t send isPinned (very old docs), synthesize from legacy fields
     for (const t of threads) {
       t.isPinned = !!(t.isPinned || t.pinned);
       t.isLocked = !!(t.isLocked || t.locked);
       t.upvoteCount = Number(t.upvoteCount ?? t.thumbsUp ?? t.upvotes ?? t.score ?? 0);
     }
 
-    // Prefer a table if the page has one; otherwise render cards
     const tableBody = q('#threadsTable tbody');
     if (tableBody) {
       renderTable(tableBody, threads);
@@ -29,17 +28,12 @@ async function init() {
   }
 }
 
-/* ------------------------------------------------------------------ */
-/* RENDER: Cards (default)                                             */
-/* ------------------------------------------------------------------ */
 function ensureListHost() {
   let host = q('#threadsList');
   if (!host) {
-    // Create a nice responsive grid if the page didn’t have a host already
     host = document.createElement('div');
     host.id = 'threadsList';
     host.className = 'threads-grid';
-    // Place under main content if possible
     const main = document.querySelector('main') || document.body;
     main.appendChild(host);
   }
@@ -55,12 +49,10 @@ function renderCards(host, threads) {
   host.innerHTML = '';
   for (const t of threads) {
     const url = `thread.html?id=${encodeURIComponent(String(t._id || t.id))}`;
-
+    const snippet = (t.body || '').slice(0, 220);
     const badges = [];
     if (t.isPinned) badges.push(pinBadge());
     if (t.isLocked) badges.push(lockBadge());
-
-    const snippet = (t.body || '').slice(0, 220);
 
     const card = document.createElement('article');
     card.className = 'thread-card';
@@ -74,7 +66,7 @@ function renderCards(host, threads) {
 
       <p class="snippet">${escapeHTML(snippet)}</p>
 
-      <footer class="meta row wrap">
+      <footer class="meta row wrap" style="align-items: center; gap: .5rem;">
         <span>${escapeHTML(t.author_display || 'Unknown')}</span>
         <span aria-hidden="true">•</span>
         <span>${timeAgo(t.createdAt)}</span>
@@ -83,15 +75,19 @@ function renderCards(host, threads) {
         <span aria-hidden="true">•</span>
         <span title="Comments">💬 ${Number(t.commentCount || 0)}</span>
         ${t.isLocked ? `<span class="badge lock small">Locked</span>` : ''}
+        <button class="btn tiny danger" data-thread-id="${t._id}">Report</button>
       </footer>
     `;
+
+    const btn = card.querySelector('[data-thread-id]');
+    if (btn) {
+      btn.addEventListener('click', () => openReportModal('thread', t._id));
+    }
+
     host.appendChild(card);
   }
 }
 
-/* ------------------------------------------------------------------ */
-/* RENDER: Table (if your page uses a table layout)                    */
-/* ------------------------------------------------------------------ */
 function renderTable(tbody, threads) {
   tbody.innerHTML = '';
   if (!threads.length) {
@@ -115,15 +111,21 @@ function renderTable(tbody, threads) {
       <td class="author">${escapeHTML(t.author_display || 'Unknown')}</td>
       <td class="up">${Number(t.upvoteCount || 0)}</td>
       <td class="com">${Number(t.commentCount || 0)}</td>
-      <td class="status">${t.isPinned ? '<span class="ok">Pinned</span>' : ''}</td>
+      <td class="status">
+        ${t.isPinned ? '<span class="ok">Pinned</span>' : ''}
+        <button class="btn tiny danger" data-thread-id="${t._id}">Report</button>
+      </td>
     `;
+
+    const btn = tr.querySelector('[data-thread-id]');
+    if (btn) {
+      btn.addEventListener('click', () => openReportModal('thread', t._id));
+    }
+
     tbody.appendChild(tr);
   }
 }
 
-/* ------------------------------------------------------------------ */
-/* UI Helpers                                                          */
-/* ------------------------------------------------------------------ */
 function renderSkeleton() {
   const host = q('#threadsList') || q('#threadsTable tbody') || ensureListHost();
   host.innerHTML = `

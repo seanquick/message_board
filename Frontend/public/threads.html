@@ -7,12 +7,12 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <!-- Header is injected by nav.js -->
+  <!-- Nav header injected by nav.js -->
 
   <main class="container card" role="main" aria-labelledby="pageTitle">
     <h1 id="pageTitle">Community Threads</h1>
 
-    <!-- Hero -->
+    <!-- Hero Section -->
     <section class="card" style="padding:1.25rem;background:var(--surface); position:relative; overflow:hidden;">
       <div style="position:absolute; inset:-1px; z-index:0; background: var(--grad-soft); pointer-events:none;"></div>
       <div style="position:relative; z-index:1;">
@@ -31,7 +31,7 @@
       </div>
     </section>
 
-    <!-- New Thread Composer -->
+    <!-- Create Thread Composer -->
     <section id="createBox" class="card mt-1" aria-labelledby="createTitle">
       <h3 id="createTitle">Start a new thread</h3>
       <label for="tTitle">Title</label>
@@ -53,9 +53,11 @@
       </div>
     </section>
 
-    <h2 class="mt-2">Latest</h2>
+    <h2 class="mt-2">Latest Threads</h2>
 
-    <div id="list" class="stack mt-1" aria-live="polite"></div>
+    <div id="list" class="stack mt-1" aria-live="polite">
+      <!-- threads.js will inject thread items; if a thread has a “Report” link here, it should use .btn.danger -->
+    </div>
 
     <div class="row items-center between mt-1">
       <span class="meta"></span>
@@ -63,7 +65,6 @@
     </div>
   </main>
 
-  <!-- JS modules -->
   <script type="module" src="nav.js?v=3"></script>
   <script type="module" src="main.js?v=9"></script>
   <script type="module" src="threads.js?v=42"></script>
