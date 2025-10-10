@@ -1,12 +1,10 @@
 // frontend/public/thread.js
-
 import { api, escapeHTML, timeAgo, q, $, qa, me, refreshMe } from './main.js';
-import { initReportUI, submitReport } from './report.js';
+import { openReportModal } from './report.js';
 
 let THREAD_ID = null;
 let THREAD = null;
 
-// ---- null-safe DOM helpers ----
 function safeShow(selOrEl, visible = true) {
   const el = typeof selOrEl === 'string' ? document.querySelector(selOrEl) : selOrEl;
   if (el) el.style.display = visible ? '' : 'none';
@@ -20,7 +18,6 @@ function safeSetHTML(selOrEl, html = '') {
   if (el) el.innerHTML = html;
 }
 
-// Entry
 document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
@@ -40,9 +37,6 @@ async function init() {
 
     renderThread(THREAD);
     renderCommentsTree(comments || []);
-
-    const highlight = params.get('highlight');
-    if (highlight) highlightComment(highlight);
   } catch (e) {
     showFatal(e?.error || e?.message || 'Failed to load thread.');
   }
@@ -51,7 +45,6 @@ async function init() {
   initReportUI();
 }
 
-/* Scaffold to ensure containers exist */
 function ensureScaffold() {
   const main = document.querySelector('main') || document.body;
 
@@ -111,7 +104,6 @@ function ensureScaffold() {
   }
 }
 
-/* Render functions */
 function renderLoading() {
   safeSetText('#threadTitle', 'Loading…');
   const body = q('#threadBody');
@@ -168,19 +160,26 @@ function renderThread(t) {
     if (cancelBtn) cancelBtn.removeAttribute('disabled');
   }
 
-  buildToolbar({ upvotes, isLocked });
+  buildToolbar();
 }
 
-function buildToolbar({ upvotes, isLocked }) {
+function buildToolbar() {
   const host = q('#threadToolbar');
   if (!host) return;
   const canInteract = !!me?.uid;
+  const isOwnThread = me?.uid && me.uid === THREAD.author; // or THREAD.authorId
+  const canReportThread = canInteract && !isOwnThread;
+  const reportTooltip = !me?.uid
+    ? 'Login required'
+    : isOwnThread
+      ? 'Cannot report your own thread'
+      : 'Report this thread';
 
   host.innerHTML = `
     <button id="threadUpvote" class="btn tiny" ${!canInteract ? 'disabled' : ''} title="${canInteract ? 'Upvote' : 'Login required'}">
-      ▲ Upvote <span id="threadUpCount" class="mono">${upvotes}</span>
+      ▲ Upvote <span id="threadUpCount" class="mono">${Number(THREAD.upvoteCount || 0)}</span>
     </button>
-    <button id="threadReport" class="btn tiny danger" ${!canInteract ? 'disabled' : ''} title="${canInteract ? 'Report' : 'Login required'}">
+    <button id="threadReport" class="btn tiny danger" ${canReportThread ? '' : 'disabled'} title="${reportTooltip}">
       Report
     </button>
   `;
@@ -192,18 +191,16 @@ function buildToolbar({ upvotes, isLocked }) {
 async function onUpvoteThread() {
   try {
     const res = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}/upvote`, { method: 'POST' });
-    const n = Number(res?.upvoteCount || 0);
-    safeSetText('#threadUpCount', n);
+    safeSetText('#threadUpCount', Number(res?.upvoteCount || 0));
   } catch (e) {
     alert(e?.error || e?.message || 'Failed to upvote.');
   }
 }
 
-async function onReportThread() {
-  submitReport('thread', THREAD_ID);
+function onReportThread() {
+  openReportModal('thread', THREAD_ID);
 }
 
-/* Comments rendering */
 function renderCommentsTree(nodes = []) {
   const host = q('#comments');
   if (!host) return;
@@ -213,7 +210,9 @@ function renderCommentsTree(nodes = []) {
   }
   host.innerHTML = '';
   const frag = document.createDocumentFragment();
-  for (const node of nodes) frag.appendChild(renderCommentNode(node));
+  for (const node of nodes) {
+    frag.appendChild(renderCommentNode(node));
+  }
   host.appendChild(frag);
 
   host.querySelectorAll('.replyBtn').forEach(b => b.addEventListener('click', onReplyClick));
@@ -233,11 +232,20 @@ function renderCommentNode(c) {
   const up = Number(c.upvoteCount ?? c.score ?? 0);
   const body = isDeleted ? '<em class="meta">[deleted]</em>' : escapeHTML(c.body || '');
 
+  // Determine own comment
+  const isOwnComment = me?.uid && c.authorId === me.uid;
+  const canReport = !!me?.uid && !isOwnComment;
+  const tooltip = !me?.uid
+    ? 'Login required'
+    : isOwnComment
+      ? 'Cannot report your own comment'
+      : 'Report this comment';
+
   const actions = `
     <div class="row wrap" style="gap:.5rem; margin-top:.35rem">
       <button class="btn tiny c-upvote" ${isDeleted ? 'disabled' : ''}>▲ ${up}</button>
       <button class="btn tiny replyBtn" ${isDeleted ? 'disabled' : ''}>Reply</button>
-      <button class="btn tiny danger c-report" ${isDeleted ? 'disabled' : ''}>Report</button>
+      <button class="btn tiny danger c-report" ${canReport ? '' : 'disabled'} title="${tooltip}" data-comment-id="${c._id}">Report</button>
     </div>
   `;
 
@@ -262,6 +270,15 @@ function renderCommentChildHTML(child) {
   const isDeleted = !!child.isDeleted;
   const body = isDeleted ? '<em class="meta">[deleted]</em>' : escapeHTML(child.body || '');
 
+  // same logic as parent
+  const isOwnComment = me?.uid && child.authorId === me.uid;
+  const canReport = !!me?.uid && !isOwnComment;
+  const tooltip = !me?.uid
+    ? 'Login required'
+    : isOwnComment
+      ? 'Cannot report your own comment'
+      : 'Report this comment';
+
   return `
     <article class="comment" id="c-${id}" data-id="${id}">
       <header class="meta">${author} • ${when}</header>
@@ -269,17 +286,12 @@ function renderCommentChildHTML(child) {
       <div class="row wrap" style="gap:.5rem; margin-top:.35rem">
         <button class="btn tiny c-upvote" ${isDeleted ? 'disabled' : ''}>▲ ${up}</button>
         <button class="btn tiny replyBtn" ${isDeleted ? 'disabled' : ''}>Reply</button>
-        <button class="btn tiny danger c-report" ${isDeleted ? 'disabled' : ''}>Report</button>
+        <button class="btn tiny danger c-report" ${canReport ? '' : 'disabled'} title="${tooltip}" data-comment-id="${child._id}">Report</button>
       </div>
-      ${Array.isArray(child.children) && child.children.length
-        ? `<div class="children">${child.children.map(renderCommentChildHTML).join('')}</div>`
-        : ''
-      }
     </article>
   `;
 }
 
-/* Composer & comment posting */
 function bindComposer() {
   const form = q('#replyForm');
   if (!form) return;
@@ -301,9 +313,10 @@ function bindComposer() {
       await api(`/api/comments/${encodeURIComponent(THREAD_ID)}`, { method: 'POST', body: payload });
       q('#replyBody').value = '';
       clearReplyTarget();
+
       const fresh = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}`, { nocache: true });
       renderCommentsTree(fresh.comments || []);
-      initReportUI();
+      initReportUI(); 
     } catch (e) {
       const msg = e?.error || e?.message || 'Failed to post comment.';
       if (/locked|forbidden|banned|423/i.test(msg)) {
@@ -351,14 +364,15 @@ async function onUpvoteComment(ev) {
   }
 }
 
-async function onReportComment(ev) {
-  const node = ev.currentTarget.closest('.comment');
-  if (!node) return;
-  const id = node.dataset.id;
-  submitReport('comment', id);
+function onReportComment(ev) {
+  const btn = ev.currentTarget.closest('button.c-report');
+  if (!btn) return;
+  const cid = btn.dataset.commentId;
+  openReportModal('comment', cid);
 }
 
 /* Helpers */
+
 function showFatal(msg) {
   const main = document.querySelector('main') || document.body;
   main.innerHTML = `<div class="err" role="alert">${escapeHTML(msg)}</div>`;
@@ -371,35 +385,12 @@ function safeParagraphs(text) {
 }
 
 function pinBadge() {
-  return `
-    <span class="badge pin" title="Pinned" style="margin-left:.5rem">
-      <svg viewBox="0 0 24 24" aria-hidden="true" style="width:.9em;height:.9em">
-        <path d="M14 2l-2 2 2 5-4 4-3-3-2 2 7 7 2-2-3-3 4-4 5 2 2-2-8-8z" fill="currentColor"/>
-      </svg>
-      Pinned
-    </span>
-  `;
+  return `<span class="badge pin" title="Pinned">📌</span>`;
 }
-
 function lockBadge() {
-  return `
-    <span class="badge lock" title="Locked" style="margin-left:.3rem">
-      <svg viewBox="0 0 24 24" aria-hidden="true" style="width:.9em;height:.9em">
-        <path d="M12 1a5 5 0 00-5 5v3H6a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2v-8a2 2 0 00-2-2h-1V6a5 5 0 00-5-5zm-3 8V6a3 3 0 116 0v3H9z" fill="currentColor"/>
-      </svg>
-      Locked
-    </span>
-  `;
+  return `<span class="badge lock" title="Locked">🔒</span>`;
 }
 
 function escapeAttr(s) {
   return String(s).replace(/"/g, '&quot;').replace(/</g, '&lt;');
-}
-
-function highlightComment(cid) {
-  const el = q(`#c-${CSS.escape(String(cid))}`);
-  if (!el) return;
-  el.classList.add('highlight');
-  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  setTimeout(() => el.classList.remove('highlight'), 2400);
 }
