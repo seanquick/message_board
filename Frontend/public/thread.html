@@ -5,27 +5,6 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Thread</title>
   <link rel="stylesheet" href="styles.css" />
-  <style>
-    .container { max-width: 960px; margin: 0 auto; padding: 1rem; }
-    .card { background:#fff; border:1px solid #eee; border-radius:10px; padding:1rem; }
-    .row { display:flex; gap:.5rem; align-items:center; }
-    .meta { color:#6b7280; font-size:.9rem; }
-    .pill { padding:.15rem .45rem; border-radius:999px; font-size:.8rem; background:#eef; color:#334; display:inline-block; }
-    .ok { color:#15803d; } .danger { color:#b91c1c; }
-    .btn { padding:.35rem .6rem; border:1px solid #ddd; background:#f9fafb; border-radius:6px; cursor:pointer; }
-    .btn.tiny { padding:.2rem .45rem; font-size:.85rem; }
-    .btn.primary { background:#111827; color:#fff; border-color:#111827; }
-    .btn[disabled], button[disabled], textarea[disabled] { opacity:.6; cursor:not-allowed; }
-    .comment { border-top:1px solid #eee; padding-top:.75rem; margin-top:.75rem; }
-    .comment .body { white-space:pre-wrap; }
-    .children { margin-left:1rem; border-left:2px solid #f3f4f6; padding-left:.75rem; }
-    .truncate { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .highlight { animation:hl 2s ease-out; background: #fff7cc; }
-    @keyframes hl { 0%{ background:#fff7cc; } 100%{ background:transparent; } }
-    .composer { margin-top:1rem; }
-    textarea { width:100%; min-height:100px; padding:.6rem; border:1px solid #e5e7eb; border-radius:8px; }
-    label.inline { display:flex; align-items:center; gap:.35rem; }
-  </style>
 </head>
 <body>
   <main class="container">
@@ -44,11 +23,6 @@
         </div>
       </div>
 
-      <div style="margin-top:.5rem;">
-        <!-- NOTE: changed to 'danger' to match comment Report style -->
-        <button id="reportThreadBtn" class="btn tiny danger" data-thread-id="">Report Thread</button>
-      </div>
-
       <div id="lockedBanner" style="display:none;margin:.75rem 0;padding:.6rem .8rem;border:1px solid #f3d9d9;background:#fff5f5;color:#7c1f1f;border-radius:8px">
         🔒 This thread is locked. New comments are disabled.
       </div>
@@ -58,6 +32,7 @@
       <div class="row" style="margin-top:.75rem; gap:.5rem">
         <button id="threadUpvote" class="btn tiny">⬆️ Upvote (<span id="threadUpvoteCount">0</span>)</button>
         <a id="backToThreads" class="btn tiny" href="threads.html">← Back</a>
+        <button id="reportThreadBtn" class="btn tiny danger" data-thread-id="">Report Thread</button>
       </div>
     </section>
 
@@ -98,9 +73,11 @@
   <!-- Scripts -->
   <script type="module" src="nav.js"></script>
   <script type="module" src="main.js"></script>
-
-  <!-- report.js must be loaded before thread.js so the modal UI is available -->
   <script type="module" src="report.js"></script>
+  <script type="module">
+    import { initReportUI } from './report.js';
+    window.addEventListener('DOMContentLoaded', initReportUI);
+  </script>
   <script type="module" src="thread.js"></script>
 </body>
 </html>
