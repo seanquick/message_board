@@ -1,6 +1,7 @@
 // frontend/public/thread.js
+
 import { api, escapeHTML, timeAgo, q, $, qa, me, refreshMe } from './main.js';
-import { openReportModal } from './report.js';
+import { initReportUI, openReportModal } from './report.js';
 
 let THREAD_ID = null;
 let THREAD = null;
@@ -166,20 +167,21 @@ function renderThread(t) {
 function buildToolbar() {
   const host = q('#threadToolbar');
   if (!host) return;
-  const canInteract = !!me?.uid;
-  const isOwnThread = me?.uid && me.uid === THREAD.author; // or THREAD.authorId
-  const canReportThread = canInteract && !isOwnThread;
-  const reportTooltip = !me?.uid
+
+  const loggedIn = !!me?.uid;
+  // Author ID: ensure THREAD has an author id field (e.g. THREAD.author or THREAD.authorId)
+  const isOwn = loggedIn && (me.uid === THREAD.author || me.uid === THREAD.authorId);
+  const canReport = loggedIn && !isOwn;
+
+  const tooltip = !loggedIn
     ? 'Login required'
-    : isOwnThread
-      ? 'Cannot report your own thread'
-      : 'Report this thread';
+    : (isOwn ? 'Cannot report your own thread' : 'Report this thread');
 
   host.innerHTML = `
-    <button id="threadUpvote" class="btn tiny" ${!canInteract ? 'disabled' : ''} title="${canInteract ? 'Upvote' : 'Login required'}">
+    <button id="threadUpvote" class="btn tiny" ${!loggedIn ? 'disabled' : ''} title="${loggedIn ? 'Upvote' : 'Login required'}">
       ▲ Upvote <span id="threadUpCount" class="mono">${Number(THREAD.upvoteCount || 0)}</span>
     </button>
-    <button id="threadReport" class="btn tiny danger" ${canReportThread ? '' : 'disabled'} title="${reportTooltip}">
+    <button id="threadReport" class="btn tiny danger" ${canReport ? '' : 'disabled'} title="${tooltip}">
       Report
     </button>
   `;
@@ -210,8 +212,8 @@ function renderCommentsTree(nodes = []) {
   }
   host.innerHTML = '';
   const frag = document.createDocumentFragment();
-  for (const node of nodes) {
-    frag.appendChild(renderCommentNode(node));
+  for (const n of nodes) {
+    frag.appendChild(renderCommentNode(n));
   }
   host.appendChild(frag);
 
@@ -232,20 +234,20 @@ function renderCommentNode(c) {
   const up = Number(c.upvoteCount ?? c.score ?? 0);
   const body = isDeleted ? '<em class="meta">[deleted]</em>' : escapeHTML(c.body || '');
 
-  // Determine own comment
-  const isOwnComment = me?.uid && c.authorId === me.uid;
-  const canReport = !!me?.uid && !isOwnComment;
-  const tooltip = !me?.uid
+  const loggedIn = !!me?.uid;
+  const isOwnComment = loggedIn && (c.authorId === me.uid);
+  const canReport = loggedIn && !isOwnComment;
+  const tooltip = !loggedIn
     ? 'Login required'
-    : isOwnComment
-      ? 'Cannot report your own comment'
-      : 'Report this comment';
+    : (isOwnComment ? 'Cannot report your own comment' : 'Report this comment');
 
   const actions = `
     <div class="row wrap" style="gap:.5rem; margin-top:.35rem">
       <button class="btn tiny c-upvote" ${isDeleted ? 'disabled' : ''}>▲ ${up}</button>
       <button class="btn tiny replyBtn" ${isDeleted ? 'disabled' : ''}>Reply</button>
-      <button class="btn tiny danger c-report" ${canReport ? '' : 'disabled'} title="${tooltip}" data-comment-id="${c._id}">Report</button>
+      <button class="btn tiny danger c-report" ${canReport ? '' : 'disabled'} title="${tooltip}" data-comment-id="${c._id}">
+        Report
+      </button>
     </div>
   `;
 
@@ -270,14 +272,12 @@ function renderCommentChildHTML(child) {
   const isDeleted = !!child.isDeleted;
   const body = isDeleted ? '<em class="meta">[deleted]</em>' : escapeHTML(child.body || '');
 
-  // same logic as parent
-  const isOwnComment = me?.uid && child.authorId === me.uid;
-  const canReport = !!me?.uid && !isOwnComment;
-  const tooltip = !me?.uid
+  const loggedIn = !!me?.uid;
+  const isOwnComment = loggedIn && (child.authorId === me.uid);
+  const canReport = loggedIn && !isOwnComment;
+  const tooltip = !loggedIn
     ? 'Login required'
-    : isOwnComment
-      ? 'Cannot report your own comment'
-      : 'Report this comment';
+    : (isOwnComment ? 'Cannot report your own comment' : 'Report this comment');
 
   return `
     <article class="comment" id="c-${id}" data-id="${id}">
@@ -286,7 +286,9 @@ function renderCommentChildHTML(child) {
       <div class="row wrap" style="gap:.5rem; margin-top:.35rem">
         <button class="btn tiny c-upvote" ${isDeleted ? 'disabled' : ''}>▲ ${up}</button>
         <button class="btn tiny replyBtn" ${isDeleted ? 'disabled' : ''}>Reply</button>
-        <button class="btn tiny danger c-report" ${canReport ? '' : 'disabled'} title="${tooltip}" data-comment-id="${child._id}">Report</button>
+        <button class="btn tiny danger c-report" ${canReport ? '' : 'disabled'} title="${tooltip}" data-comment-id="${child._id}">
+          Report
+        </button>
       </div>
     </article>
   `;
@@ -316,7 +318,7 @@ function bindComposer() {
 
       const fresh = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}`, { nocache: true });
       renderCommentsTree(fresh.comments || []);
-      initReportUI(); 
+      initReportUI();
     } catch (e) {
       const msg = e?.error || e?.message || 'Failed to post comment.';
       if (/locked|forbidden|banned|423/i.test(msg)) {
@@ -370,8 +372,6 @@ function onReportComment(ev) {
   const cid = btn.dataset.commentId;
   openReportModal('comment', cid);
 }
-
-/* Helpers */
 
 function showFatal(msg) {
   const main = document.querySelector('main') || document.body;

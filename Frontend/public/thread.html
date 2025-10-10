@@ -3,16 +3,72 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Thread View</title>
+  <title>Thread</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <!-- Nav is injected -->
-  <main class="container" role="main">
-    <!-- Thread content is injected by thread.js -->
+  <!-- Navigation injected via nav.js -->
+
+  <main class="container">
+    <div id="topErr" class="err" aria-live="polite" style="display:none"></div>
+
+    <section id="threadSection" class="card">
+      <div id="threadHeader" class="row" style="justify-content:space-between">
+        <div>
+          <h1 id="threadTitle" style="margin:.1rem 0 .4rem 0; font-size:1.5rem">Loading…</h1>
+          <div class="meta" id="threadMeta">—</div>
+        </div>
+        <div class="row">
+          <span id="badgePinned" class="pill" style="display:none">Pinned</span>
+          <span id="badgeLocked" class="pill" style="display:none">Locked</span>
+        </div>
+      </div>
+
+      <div id="lockedBanner" style="display:none;margin:.75rem 0;padding:.6rem .8rem;border:1px solid #f3d9d9;background:#fff5f5;color:#7c1f1f;border-radius:8px">
+        🔒 This thread is locked. New comments are disabled.
+      </div>
+
+      <article id="threadBody" class="mono" style="white-space:pre-wrap; margin-top:.75rem">—</article>
+
+      <div class="row" style="margin-top:.75rem; gap:.5rem">
+        <button id="threadUpvote" class="btn tiny">⬆️ Upvote (<span id="threadUpCount">0</span>)</button>
+        <a id="backToThreads" class="btn tiny" href="threads.html">← Back</a>
+        <button id="reportThreadBtn" class="btn tiny danger" data-thread-id="">Report Thread</button>
+      </div>
+    </section>
+
+    <section id="commentsSection" class="card" style="margin-top:1rem">
+      <h2 style="margin-top:0">Comments</h2>
+      <div id="commentsList">Loading…</div>
+
+      <div class="composer">
+        <form id="replyForm">
+          <div id="replyingTo" class="meta" style="display:none; margin-bottom:.35rem"></div>
+          <textarea name="body" id="replyBody" placeholder="Write a comment…"></textarea>
+          <input type="hidden" name="parentId" id="parentId" />
+
+          <div aria-hidden="true" style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden">
+            <label for="hpWebsite">Website</label>
+            <input type="text" name="website" id="hpWebsite" tabindex="-1" autocomplete="off" />
+          </div>
+
+          <div class="row" style="margin-top:.5rem; justify-content:space-between">
+            <label class="inline">
+              <input type="checkbox" id="isAnonymous" name="isAnonymous" />
+              <span>Post as Anonymous</span>
+            </label>
+            <div class="row" style="gap:.5rem">
+              <button type="button" id="cancelReply" class="btn tiny" style="display:none">Cancel reply</button>
+              <button type="submit" class="btn tiny primary">Post comment</button>
+            </div>
+          </div>
+        </form>
+        <div id="loginHint" class="meta" style="display:none; margin-top:.5rem">Please log in to comment.</div>
+      </div>
+    </section>
   </main>
 
-  <!-- Modules -->
+  <!-- Scripts: import modules in correct order -->
   <script type="module" src="nav.js"></script>
   <script type="module" src="main.js"></script>
   <script type="module" src="report.js"></script>
