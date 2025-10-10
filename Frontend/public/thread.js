@@ -6,7 +6,7 @@ import { initReportUI, submitReport } from './report.js';
 let THREAD_ID = null;
 let THREAD = null;
 
-// Null‑safe DOM helpers
+// ---- null-safe DOM helpers ----
 function safeShow(selOrEl, visible = true) {
   const el = typeof selOrEl === 'string' ? document.querySelector(selOrEl) : selOrEl;
   if (el) el.style.display = visible ? '' : 'none';
@@ -20,19 +20,15 @@ function safeSetHTML(selOrEl, html = '') {
   if (el) el.innerHTML = html;
 }
 
-// Entry point
+// Entry
 document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
   const params = new URLSearchParams(location.search);
   THREAD_ID = params.get('id') || '';
-  if (!THREAD_ID) {
-    return showFatal('Missing thread id.');
-  }
+  if (!THREAD_ID) return showFatal('Missing thread id.');
 
-  try {
-    await refreshMe();
-  } catch {}
+  try { await refreshMe(); } catch {}
 
   ensureScaffold();
 
@@ -52,15 +48,13 @@ async function init() {
   }
 
   bindComposer();
-  bindToolbar();
   initReportUI();
 }
 
-/* ================= Scaffold ================= */
+/* Scaffold to ensure containers exist */
 function ensureScaffold() {
   const main = document.querySelector('main') || document.body;
 
-  // Thread header area
   let header = q('#threadHeader');
   if (!header) {
     header = document.createElement('section');
@@ -79,7 +73,6 @@ function ensureScaffold() {
     main.prepend(header);
   }
 
-  // Comments area
   if (!q('#comments')) {
     const sec = document.createElement('section');
     sec.className = 'card';
@@ -90,7 +83,6 @@ function ensureScaffold() {
     main.appendChild(sec);
   }
 
-  // Composer (comment form)
   if (!q('#replyForm')) {
     const sec = document.createElement('section');
     sec.className = 'card';
@@ -119,7 +111,7 @@ function ensureScaffold() {
   }
 }
 
-/* ================= Render Thread ================= */
+/* Render functions */
 function renderLoading() {
   safeSetText('#threadTitle', 'Loading…');
   const body = q('#threadBody');
@@ -145,10 +137,10 @@ function renderThread(t) {
 
   const isLocked = !!(t.flags?.locked || t.isLocked || t.locked);
   const lockBanner = q('#lockBanner');
-  const replyForm  = q('#replyForm');
-  const replyBody  = q('#replyBody');
-  const loginHint  = q('#loginHint');
-  const cancelBtn  = q('#cancelReply');
+  const replyForm = q('#replyForm');
+  const replyBody = q('#replyBody');
+  const loginHint = q('#loginHint');
+  const cancelBtn = q('#cancelReply');
 
   safeShow(loginHint, !me?.uid);
 
@@ -179,7 +171,6 @@ function renderThread(t) {
   buildToolbar({ upvotes, isLocked });
 }
 
-/* ================= Toolbar Binding ================= */
 function buildToolbar({ upvotes, isLocked }) {
   const host = q('#threadToolbar');
   if (!host) return;
@@ -212,7 +203,7 @@ async function onReportThread() {
   submitReport('thread', THREAD_ID);
 }
 
-/* ================= Comments Rendering & Actions ================= */
+/* Comments rendering */
 function renderCommentsTree(nodes = []) {
   const host = q('#comments');
   if (!host) return;
@@ -222,9 +213,7 @@ function renderCommentsTree(nodes = []) {
   }
   host.innerHTML = '';
   const frag = document.createDocumentFragment();
-  for (const node of nodes) {
-    frag.appendChild(renderCommentNode(node));
-  }
+  for (const node of nodes) frag.appendChild(renderCommentNode(node));
   host.appendChild(frag);
 
   host.querySelectorAll('.replyBtn').forEach(b => b.addEventListener('click', onReplyClick));
@@ -290,7 +279,7 @@ function renderCommentChildHTML(child) {
   `;
 }
 
-/* ================= Composer & Submission ================= */
+/* Composer & comment posting */
 function bindComposer() {
   const form = q('#replyForm');
   if (!form) return;
@@ -304,7 +293,7 @@ function bindComposer() {
     const isAnonymous = !!q('#isAnonymous')?.checked;
 
     if (!me?.uid) return alert('Please log in to comment.');
-    if (!body)     return alert('Comment cannot be empty.');
+    if (!body) return alert('Comment cannot be empty.');
 
     try {
       const payload = { body, isAnonymous };
@@ -312,7 +301,6 @@ function bindComposer() {
       await api(`/api/comments/${encodeURIComponent(THREAD_ID)}`, { method: 'POST', body: payload });
       q('#replyBody').value = '';
       clearReplyTarget();
-
       const fresh = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}`, { nocache: true });
       renderCommentsTree(fresh.comments || []);
       initReportUI();
@@ -370,7 +358,7 @@ async function onReportComment(ev) {
   submitReport('comment', id);
 }
 
-/* ================= Helpers ================= */
+/* Helpers */
 function showFatal(msg) {
   const main = document.querySelector('main') || document.body;
   main.innerHTML = `<div class="err" role="alert">${escapeHTML(msg)}</div>`;
