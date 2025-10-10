@@ -373,3 +373,45 @@ tr.subRow td { background: #fcfdfc; }
   color: gray;
 }
 
+/* 23) Input Class for consistency (used in modal forms) */
+.input {
+  width: 100%;
+  height: var(--input-h);
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--r-sm);
+  padding: .6rem .75rem;
+  font: inherit;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.input:focus {
+  outline: none;
+  border-color: var(--brand-300);
+  box-shadow: var(--ring);
+}
+textarea.input {
+  resize: vertical;
+  min-height: 100px;
+  height: auto;
+}
+
+/* 24) Report Modal Styles */
+.report-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.report-dialog {
+  background: var(--surface);
+  border-radius: var(--r-md);
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 440px;
+  box-shadow: var(--shadow-2);
+}
