@@ -1,6 +1,6 @@
 // frontend/public/thread.js
 
-import { api, escapeHTML, timeAgo, q, $, qa, me, refreshMe } from './main.js';
+import { api, escapeHTML, timeAgo, q, $, me, refreshMe } from './main.js';
 import { initReportUI, openReportModal } from './report.js';
 
 let THREAD_ID = null;
@@ -49,39 +49,30 @@ async function init() {
 function ensureScaffold() {
   const main = document.querySelector('main') || document.body;
 
-  let header = q('#threadHeader');
-  if (!header) {
-    header = document.createElement('section');
+  if (!q('#threadHeader')) {
+    const header = document.createElement('section');
     header.id = 'threadHeader';
     header.className = 'card';
     header.innerHTML = `
       <header class="toolbar between">
-        <h1 id="threadTitle" class="minw-0"></h1>
-        <div id="threadBadges" class="row items-center" style="gap:.4rem"></div>
+        <h1 id="threadTitle"></h1>
+        <div id="threadBadges" class="row"></div>
       </header>
       <div id="threadMeta" class="meta" style="margin-top:.25rem"></div>
-      <div id="threadBody" class="mt-1"></div>
-      <div id="lockBanner" class="lockBanner" style="display:none"></div>
+      <div id="threadBody" style="margin-top:.75rem"></div>
+      <div id="lockBanner" style="display:none; margin-top:.75rem"></div>
       <div id="threadToolbar" class="row" style="gap:.5rem; margin-top:.75rem"></div>
     `;
     main.prepend(header);
   }
 
-  if (!q('#comments')) {
+  if (!q('#commentsSection')) {
     const sec = document.createElement('section');
+    sec.id = 'commentsSection';
     sec.className = 'card';
     sec.innerHTML = `
-      <h2 style="margin-top:0">Comments</h2>
+      <h2>Comments</h2>
       <div id="comments"></div>
-    `;
-    main.appendChild(sec);
-  }
-
-  if (!q('#replyForm')) {
-    const sec = document.createElement('section');
-    sec.className = 'card';
-    sec.innerHTML = `
-      <h3 style="margin-top:0">Add a comment</h3>
       <div class="composer">
         <form id="replyForm">
           <div id="replyingTo" class="meta" style="display:none; margin-bottom:.35rem"></div>
@@ -128,39 +119,6 @@ function renderThread(t) {
 
   safeSetHTML('#threadBody', safeParagraphs(t.body ?? t.content ?? ''));
 
-  const isLocked = !!(t.flags?.locked || t.isLocked || t.locked);
-  const lockBanner = q('#lockBanner');
-  const replyForm = q('#replyForm');
-  const replyBody = q('#replyBody');
-  const loginHint = q('#loginHint');
-  const cancelBtn = q('#cancelReply');
-
-  safeShow(loginHint, !me?.uid);
-
-  if (isLocked) {
-    if (lockBanner) {
-      lockBanner.innerHTML = `
-        <div class="row items-center" style="gap:.4rem;color:#334155;background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:.5rem .75rem;">
-          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1a5 5 0 00-5 5v3H6a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2v-8a2 2 0 00-2-2h-1V6a5 5 0 00-5-5zm-3 8V6a3 3 0 116 0v3H9z" fill="#334155"/></svg>
-          <strong>Thread locked.</strong>
-          <span class="meta">New comments are disabled.</span>
-        </div>
-      `;
-    }
-    safeShow(lockBanner, true);
-    replyForm?.classList.add('disabled');
-    if (replyBody) {
-      replyBody.setAttribute('disabled', 'true');
-      replyBody.placeholder = 'Thread is locked.';
-    }
-    if (cancelBtn) cancelBtn.setAttribute('disabled', 'true');
-  } else {
-    safeShow(lockBanner, false);
-    replyForm?.classList.remove('disabled');
-    if (replyBody) replyBody.removeAttribute('disabled');
-    if (cancelBtn) cancelBtn.removeAttribute('disabled');
-  }
-
   buildToolbar();
 }
 
@@ -169,7 +127,7 @@ function buildToolbar() {
   if (!host) return;
 
   const loggedIn = !!me?.uid;
-  // Author ID: ensure THREAD has an author id field (e.g. THREAD.author or THREAD.authorId)
+  // THREAD.authorId or THREAD.author should be supplied by your API
   const isOwn = loggedIn && (me.uid === THREAD.author || me.uid === THREAD.authorId);
   const canReport = loggedIn && !isOwn;
 
@@ -181,13 +139,17 @@ function buildToolbar() {
     <button id="threadUpvote" class="btn tiny" ${!loggedIn ? 'disabled' : ''} title="${loggedIn ? 'Upvote' : 'Login required'}">
       ▲ Upvote <span id="threadUpCount" class="mono">${Number(THREAD.upvoteCount || 0)}</span>
     </button>
-    <button id="threadReport" class="btn tiny danger" ${canReport ? '' : 'disabled'} title="${tooltip}">
-      Report
+    <button id="reportThreadBtn" class="btn tiny danger" ${canReport ? '' : 'disabled'} title="${tooltip}" data-thread-id="${THREAD._id}">
+      Report Thread
     </button>
   `;
 
   $('#threadUpvote')?.addEventListener('click', onUpvoteThread);
-  $('#threadReport')?.addEventListener('click', onReportThread);
+  $('#reportThreadBtn')?.addEventListener('click', () => {
+    if (canReport) {
+      openReportModal('thread', THREAD_ID);
+    }
+  });
 }
 
 async function onUpvoteThread() {
@@ -199,27 +161,30 @@ async function onUpvoteThread() {
   }
 }
 
-function onReportThread() {
-  openReportModal('thread', THREAD_ID);
-}
-
 function renderCommentsTree(nodes = []) {
   const host = q('#comments');
   if (!host) return;
   if (!nodes.length) {
     host.innerHTML = `<div class="empty">No comments yet.</div>`;
-    return;
+  } else {
+    host.innerHTML = '';
+    for (const c of nodes) {
+      host.appendChild(renderCommentNode(c));
+    }
   }
-  host.innerHTML = '';
-  const frag = document.createDocumentFragment();
-  for (const n of nodes) {
-    frag.appendChild(renderCommentNode(n));
-  }
-  host.appendChild(frag);
 
   host.querySelectorAll('.replyBtn').forEach(b => b.addEventListener('click', onReplyClick));
   host.querySelectorAll('.c-upvote').forEach(b => b.addEventListener('click', onUpvoteComment));
-  host.querySelectorAll('.c-report').forEach(b => b.addEventListener('click', onReportComment));
+  host.querySelectorAll('.c-report').forEach(b => {
+    b.addEventListener('click', ev => {
+      const btn = ev.currentTarget;
+      const cid = btn.dataset.commentId;
+      // check disabling logic
+      if (!btn.disabled) {
+        openReportModal('comment', cid);
+      }
+    });
+  });
 }
 
 function renderCommentNode(c) {
@@ -237,6 +202,7 @@ function renderCommentNode(c) {
   const loggedIn = !!me?.uid;
   const isOwnComment = loggedIn && (c.authorId === me.uid);
   const canReport = loggedIn && !isOwnComment;
+
   const tooltip = !loggedIn
     ? 'Login required'
     : (isOwnComment ? 'Cannot report your own comment' : 'Report this comment');
@@ -245,9 +211,7 @@ function renderCommentNode(c) {
     <div class="row wrap" style="gap:.5rem; margin-top:.35rem">
       <button class="btn tiny c-upvote" ${isDeleted ? 'disabled' : ''}>▲ ${up}</button>
       <button class="btn tiny replyBtn" ${isDeleted ? 'disabled' : ''}>Reply</button>
-      <button class="btn tiny danger c-report" ${canReport ? '' : 'disabled'} title="${tooltip}" data-comment-id="${c._id}">
-        Report
-      </button>
+      <button class="btn tiny danger c-report" ${canReport ? '' : 'disabled'} title="${tooltip}" data-comment-id="${c._id}">Report</button>
     </div>
   `;
 
@@ -286,9 +250,7 @@ function renderCommentChildHTML(child) {
       <div class="row wrap" style="gap:.5rem; margin-top:.35rem">
         <button class="btn tiny c-upvote" ${isDeleted ? 'disabled' : ''}>▲ ${up}</button>
         <button class="btn tiny replyBtn" ${isDeleted ? 'disabled' : ''}>Reply</button>
-        <button class="btn tiny danger c-report" ${canReport ? '' : 'disabled'} title="${tooltip}" data-comment-id="${child._id}">
-          Report
-        </button>
+        <button class="btn tiny danger c-report" ${canReport ? '' : 'disabled'} title="${tooltip}" data-comment-id="${child._id}">Report</button>
       </div>
     </article>
   `;
@@ -300,7 +262,7 @@ function bindComposer() {
 
   $('#cancelReply')?.addEventListener('click', clearReplyTarget);
 
-  form.addEventListener('submit', async (ev) => {
+  form.addEventListener('submit', async ev => {
     ev.preventDefault();
     const body = (q('#replyBody')?.value || '').trim();
     const parentId = (q('#parentId')?.value || '').trim();
@@ -330,47 +292,8 @@ function bindComposer() {
   });
 }
 
-function onReplyClick(ev) {
-  const node = ev.currentTarget.closest('.comment');
-  if (!node) return;
-  const id = node.dataset.id;
-  const byline = node.querySelector('header.meta')?.textContent || '';
-  const pid = q('#parentId'); if (pid) pid.value = id;
-  const rto = q('#replyingTo');
-  if (rto) {
-    rto.textContent = `Replying to: ${byline}`;
-    safeShow(rto, true);
-  }
-  safeShow('#cancelReply', true);
-  q('#replyBody')?.focus({ preventScroll: false });
-  q('#replyForm')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-}
-
-function clearReplyTarget() {
-  const pid = q('#parentId'); if (pid) pid.value = '';
-  safeSetText('#replyingTo', '');
-  safeShow('#replyingTo', false);
-  safeShow('#cancelReply', false);
-}
-
-async function onUpvoteComment(ev) {
-  const node = ev.currentTarget.closest('.comment');
-  if (!node) return;
-  const id = node.dataset.id;
-  try {
-    const res = await api(`/api/comments/${encodeURIComponent(id)}/upvote`, { method: 'POST' });
-    const btn = node.querySelector('.c-upvote');
-    if (btn) btn.textContent = `▲ ${Number(res?.upvoteCount || 0)}`;
-  } catch (e) {
-    alert(e?.error || e?.message || 'Failed to upvote comment.');
-  }
-}
-
-function onReportComment(ev) {
-  const btn = ev.currentTarget.closest('button.c-report');
-  if (!btn) return;
-  const cid = btn.dataset.commentId;
-  openReportModal('comment', cid);
+function escapeAttr(s) {
+  return String(s).replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }
 
 function showFatal(msg) {
@@ -389,8 +312,4 @@ function pinBadge() {
 }
 function lockBadge() {
   return `<span class="badge lock" title="Locked">🔒</span>`;
-}
-
-function escapeAttr(s) {
-  return String(s).replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }
