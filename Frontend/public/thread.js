@@ -26,19 +26,27 @@ async function init() {
   THREAD_ID = params.get('id') || '';
   if (!THREAD_ID) return showFatal('Missing thread id.');
 
-  try { await refreshMe(); } catch {}
+  try {
+    await refreshMe();
+    console.log('me after refresh:', me);
+  } catch (err) {
+    console.warn('refreshMe failed', err);
+  }
 
   ensureScaffold();
 
   try {
     renderLoading();
-    const { thread, comments } = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}`, { nocache: true });
-    THREAD = thread ?? null;
+    const resp = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}`, { nocache: true });
+    console.log('thread API response:', resp);
+    THREAD = resp.thread ?? null;
+    const comments = resp.comments ?? [];
     if (!THREAD) return showFatal('Thread not found.');
 
     renderThread(THREAD);
-    renderCommentsTree(comments || []);
+    renderCommentsTree(comments);
   } catch (e) {
+    console.error('error loading thread:', e);
     showFatal(e?.error || e?.message || 'Failed to load thread.');
   }
 
@@ -66,7 +74,7 @@ function ensureScaffold() {
     main.prepend(header);
   }
 
-  if (!q('#commentsSection')) {
+  if (!q('#comments')) {
     const sec = document.createElement('section');
     sec.id = 'commentsSection';
     sec.className = 'card';
@@ -127,7 +135,6 @@ function buildToolbar() {
   if (!host) return;
 
   const loggedIn = !!me?.uid;
-  // THREAD.authorId or THREAD.author should be supplied by your API
   const isOwn = loggedIn && (me.uid === THREAD.author || me.uid === THREAD.authorId);
   const canReport = loggedIn && !isOwn;
 
@@ -148,29 +155,25 @@ function buildToolbar() {
   $('#reportThreadBtn')?.addEventListener('click', () => {
     if (canReport) {
       openReportModal('thread', THREAD_ID);
+    } else {
+      console.log('Report disabled:', tooltip);
     }
   });
 }
 
-async function onUpvoteThread() {
-  try {
-    const res = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}/upvote`, { method: 'POST' });
-    safeSetText('#threadUpCount', Number(res?.upvoteCount || 0));
-  } catch (e) {
-    alert(e?.error || e?.message || 'Failed to upvote.');
-  }
-}
-
 function renderCommentsTree(nodes = []) {
   const host = q('#comments');
-  if (!host) return;
+  if (!host) {
+    console.warn('No #comments element in DOM');
+    return;
+  }
   if (!nodes.length) {
     host.innerHTML = `<div class="empty">No comments yet.</div>`;
-  } else {
-    host.innerHTML = '';
-    for (const c of nodes) {
-      host.appendChild(renderCommentNode(c));
-    }
+    return;
+  }
+  host.innerHTML = '';
+  for (const c of nodes) {
+    host.appendChild(renderCommentNode(c));
   }
 
   host.querySelectorAll('.replyBtn').forEach(b => b.addEventListener('click', onReplyClick));
@@ -179,9 +182,10 @@ function renderCommentsTree(nodes = []) {
     b.addEventListener('click', ev => {
       const btn = ev.currentTarget;
       const cid = btn.dataset.commentId;
-      // check disabling logic
-      if (!btn.disabled) {
+      if (!btn.disabled && cid) {
         openReportModal('comment', cid);
+      } else {
+        console.log('Comment report disabled:', btn.title);
       }
     });
   });
@@ -239,6 +243,7 @@ function renderCommentChildHTML(child) {
   const loggedIn = !!me?.uid;
   const isOwnComment = loggedIn && (child.authorId === me.uid);
   const canReport = loggedIn && !isOwnComment;
+
   const tooltip = !loggedIn
     ? 'Login required'
     : (isOwnComment ? 'Cannot report your own comment' : 'Report this comment');
@@ -278,8 +283,9 @@ function bindComposer() {
       q('#replyBody').value = '';
       clearReplyTarget();
 
-      const fresh = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}`, { nocache: true });
-      renderCommentsTree(fresh.comments || []);
+      const r = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}`, { nocache: true });
+      const newComments = r.comments ?? [];
+      renderCommentsTree(newComments);
       initReportUI();
     } catch (e) {
       const msg = e?.error || e?.message || 'Failed to post comment.';
