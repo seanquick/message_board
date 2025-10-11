@@ -6,7 +6,7 @@ import { initReportUI, openReportModal } from './report.js';
 let THREAD_ID = null;
 let THREAD = null;
 
-/* ---------- Utility Helpers ---------- */
+/* --- Helpers --- */
 function safeShow(selOrEl, visible = true) {
   const el = typeof selOrEl === 'string' ? document.querySelector(selOrEl) : selOrEl;
   if (el) el.style.display = visible ? '' : 'none';
@@ -20,7 +20,7 @@ function safeSetHTML(selOrEl, html = '') {
   if (el) el.innerHTML = html;
 }
 
-/* ---------- Entry ---------- */
+/* --- Entry Point --- */
 document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
@@ -56,7 +56,7 @@ async function init() {
   initReportUI();
 }
 
-/* ---------- Page Scaffold ---------- */
+/* --- Scaffold Markup --- */
 function ensureScaffold() {
   const main = document.querySelector('main') || document.body;
 
@@ -107,7 +107,7 @@ function ensureScaffold() {
   }
 }
 
-/* ---------- Render Thread ---------- */
+/* --- Thread Rendering --- */
 function renderLoading() {
   safeSetText('#threadTitle', 'Loading…');
   const body = q('#threadBody');
@@ -134,7 +134,7 @@ function renderThread(t) {
   buildToolbar();
 }
 
-/* ---------- Toolbar ---------- */
+/* --- Toolbar with Report / Upvote --- */
 function buildToolbar() {
   const host = q('#threadToolbar');
   if (!host) return;
@@ -175,7 +175,25 @@ async function onUpvoteThread() {
   }
 }
 
-/* ---------- Comments ---------- */
+/* --- Comment Upvotes — Missing Function Added --- */
+function onUpvoteComment(ev) {
+  const btn = ev.currentTarget;
+  const commentId = btn.closest('.comment')?.dataset.id;
+  if (!commentId) return;
+
+  api(`/api/comments/${encodeURIComponent(commentId)}/upvote`, {
+    method: 'POST'
+  }).then((res) => {
+    if (res?.ok && typeof res.upvoteCount === 'number') {
+      btn.innerHTML = `▲ ${res.upvoteCount}`;
+    }
+  }).catch(err => {
+    console.error('Upvote comment failed', err);
+    alert('Failed to upvote comment.');
+  });
+}
+
+/* --- Comments Rendering & Actions --- */
 function renderCommentsTree(nodes = []) {
   const host = q('#comments');
   if (!host) {
@@ -277,13 +295,13 @@ function renderCommentChildHTML(child) {
   `;
 }
 
-/* ---------- Replies / Composer ---------- */
+/* --- Reply / Composer Logic --- */
 function onReplyClick(ev) {
   const btn = ev.currentTarget;
   const commentId = btn.closest('.comment')?.dataset.id;
   if (commentId) {
     q('#parentId').value = commentId;
-    q('#replyingTo').textContent = 'Replying to comment...';
+    q('#replyingTo').textContent = 'Replying to comment…';
     q('#replyingTo').style.display = '';
     q('#cancelReply').style.display = '';
     q('#replyBody')?.focus();
@@ -334,7 +352,7 @@ function bindComposer() {
   });
 }
 
-/* ---------- Helpers ---------- */
+/* --- Utilities & Rendering Helpers --- */
 function escapeAttr(s) {
   return String(s).replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }
