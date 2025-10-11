@@ -3,65 +3,39 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Community Threads</title>
+  <title>Thread</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <!-- Navigation -->
   <main class="container card" role="main">
-    <h1 id="pageTitle">Community Threads</h1>
-    <section class="card" style="padding:1.25rem;background:var(--surface); position:relative; overflow:hidden;">
-      <div style="position:absolute; inset:-1px; z-index:0; background: var(--grad-soft); pointer-events:none;"></div>
-      <div style="position:relative; z-index:1;">
-        <div class="row" style="justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap">
-          <div class="minw-0" style="flex:1 1 420px">
-            <h1 style="margin-bottom:.25rem">Willow Oak Haven</h1>
-            <p class="meta" style="max-width:56ch">
-              A calm place to discuss, learn, and upvote great ideas. Be kind. Stay curious.
-            </p>
-          </div>
-          <div class="row" style="gap:.5rem; flex:0 0 auto">
-            <button class="btn primary" id="heroStartThread">Start a thread</button>
-            <a class="btn ghost" href="guidelines.html">Guidelines</a>
-          </div>
+    <article id="threadBox" class="card"></article>
+
+    <section class="card mt-2" id="commentsSection">
+      <h2>Comments</h2>
+      <div id="commentsLoading" class="meta">Loading...</div>
+
+      <form id="commentForm" style="margin-top:1rem; display:none;">
+        <textarea id="cBody" placeholder="Write a comment…" required></textarea>
+
+        <label class="row items-center gap-05 mt-05">
+          <input type="checkbox" id="cAnon" />
+          Post as Anonymous
+        </label>
+
+        <div class="row items-center between mt-05">
+          <div id="cErr" class="err" style="display:none"></div>
+          <button type="submit" class="btn primary">Post comment</button>
         </div>
-      </div>
+      </form>
+
+      <div id="commentsList" class="mt-2"></div>
     </section>
-
-    <section id="createBox" class="card mt-1" aria-labelledby="createTitle">
-      <h3 id="createTitle">Start a new thread</h3>
-      <label for="tTitle">Title</label>
-      <input id="tTitle" placeholder="Title (min 3 characters)" />
-
-      <input type="text" name="website" id="hpWebsiteNew" autocomplete="off" tabindex="-1" style="display:none" />
-
-      <label for="tBody">Body</label>
-      <textarea id="tBody" placeholder="Write the details of your post (min 10 characters)…"></textarea>
-
-      <label class="row items-center gap-05 mt-05" for="tAnon">
-        <input type="checkbox" id="tAnon" />
-        Post as Anonymous
-      </label>
-
-      <div class="row items-center between mt-05">
-        <div id="tErr" class="err" style="display:none"></div>
-        <button id="tCreate" class="btn">Create</button>
-      </div>
-    </section>
-
-    <h2 class="mt-2">Latest</h2>
-    <div id="list" class="stack mt-1" aria-live="polite"></div>
-    <div class="row items-center between mt-1">
-      <span class="meta"></span>
-      <button id="refresh" class="btn ghost">Refresh</button>
-    </div>
   </main>
 
-  <!-- Modules in correct order -->
+  <!-- Scripts in load order -->
   <script type="module" src="nav.js"></script>
   <script type="module" src="main.js"></script>
   <script type="module" src="report.js"></script>
-  <script type="module" src="threads.js"></script>
-  <script type="module" src="account.js"></script>
+  <script type="module" src="thread.js"></script>
 </body>
 </html>

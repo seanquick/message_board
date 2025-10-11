@@ -4,6 +4,7 @@ import { api } from './main.js';
 let reportModal = null;
 let currentTarget = null;
 
+// Create the modal DOM (once)
 function createModal() {
   if (reportModal) return;
 
@@ -44,21 +45,22 @@ function createModal() {
   wrapper.querySelector('#reportSubmit').addEventListener('click', submitModalReport);
 }
 
+// Open the modal for given target
 export function openReportModal(targetType, targetId) {
   createModal();
   currentTarget = { targetType, targetId };
   reportModal.style.display = 'flex';
-  const select = reportModal.querySelector('#reportCategory');
-  const textarea = reportModal.querySelector('#reportReason');
-  select.value = '';
-  textarea.value = '';
+  reportModal.querySelector('#reportCategory').value = '';
+  reportModal.querySelector('#reportReason').value = '';
 }
 
+// Hide modal
 function closeModal() {
   if (reportModal) reportModal.style.display = 'none';
   currentTarget = null;
 }
 
+// Submit report
 async function submitModalReport() {
   const select = reportModal.querySelector('#reportCategory');
   const textarea = reportModal.querySelector('#reportReason');
@@ -93,30 +95,34 @@ async function submitModalReport() {
   }
 }
 
+// Attach listeners for buttons
 export function initReportUI() {
   createModal();
 
-  // Thread report button
-  const btnThread = document.querySelector('#threadReport');
-  if (btnThread) {
-    const tid = btnThread.dataset.threadId || window.location.search.split('id=')[1];
-    btnThread.dataset.threadId = tid;
-    btnThread.addEventListener('click', () => openReportModal('thread', tid));
+  const threadBtn = document.querySelector('#threadReport');
+  if (threadBtn) {
+    const tid = threadBtn.dataset.threadId || window.location.search.split('id=')[1];
+    threadBtn.dataset.threadId = tid;
+    threadBtn.addEventListener('click', () => openReportModal('thread', tid));
   }
 
-  // Comment report buttons
-  document.querySelectorAll('.c-report, .reportCommentBtn').forEach((btn) => {
+  document.querySelectorAll('.reportCommentBtn, .c-report').forEach((btn) => {
     const cid = btn.dataset.commentId || btn.closest('.comment')?.dataset.id;
-    if (cid) {
+    if (cid && !btn.dataset.bound) {
+      btn.dataset.bound = 'true'; // prevent duplicate listeners
       btn.addEventListener('click', () => openReportModal('comment', cid));
+    }
+
+    if (btn.disabled && btn.title === 'Login Required') {
+      btn.title = 'You cannot report your own post.';
     }
   });
 }
 
-// Allow thread.js to call this if needed
-export async function submitReport(targetType, targetId) {
+// Fallback call from other scripts
+export function submitReport(targetType, targetId) {
   openReportModal(targetType, targetId);
 }
 
-// ✅ Auto-init on DOM ready
+// Init on DOM ready
 window.addEventListener('DOMContentLoaded', initReportUI);

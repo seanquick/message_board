@@ -1,5 +1,5 @@
 // Frontend/public/threads.js
-import { api, escapeHTML, timeAgo, q, $, qa } from './main.js';
+import { api, escapeHTML, timeAgo, q } from './main.js';
 import { openReportModal } from './report.js';
 
 document.addEventListener('DOMContentLoaded', init);
@@ -75,17 +75,24 @@ function renderCards(host, threads) {
         <span aria-hidden="true">•</span>
         <span title="Comments">💬 ${Number(t.commentCount || 0)}</span>
         ${t.isLocked ? `<span class="badge lock small">Locked</span>` : ''}
-        <button class="btn tiny danger" data-thread-id="${t._id}">Report</button>
+        <button class="btn tiny danger report-thread" data-thread-id="${t._id}">Report</button>
       </footer>
     `;
 
-    const btn = card.querySelector('[data-thread-id]');
-    if (btn) {
-      btn.addEventListener('click', () => openReportModal('thread', t._id));
-    }
-
+    // Append the card before wiring event listeners
     host.appendChild(card);
   }
+
+  // Wire up report thread buttons
+  document.querySelectorAll('.report-thread').forEach(btn => {
+    btn.addEventListener('click', ev => {
+      ev.preventDefault();
+      const tid = btn.dataset.threadId;
+      if (tid) {
+        openReportModal('thread', tid);
+      }
+    });
+  });
 }
 
 function renderTable(tbody, threads) {
@@ -96,14 +103,12 @@ function renderTable(tbody, threads) {
   }
 
   for (const t of threads) {
-    const url = `thread.html?id=${encodeURIComponent(String(t._id || t.id))}`;
-    const title = escapeHTML(t.title || '(untitled)');
+    const url = `thread.html?id=${encodeURIComponent(String(t._1 || t._id || t.id))}`;
     const titleHtml = `
-      <a class="thread-link" href="${url}">${title}</a>
+      <a class="thread-link" href="${url}">${escapeHTML(t.title || '(untitled)')}</a>
       ${t.isPinned ? pinBadge() : ''}
       ${t.isLocked ? `<span class="badge lock small">Locked</span>` : ''}
     `;
-
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="when">${timeAgo(t.createdAt)}</td>
@@ -113,17 +118,20 @@ function renderTable(tbody, threads) {
       <td class="com">${Number(t.commentCount || 0)}</td>
       <td class="status">
         ${t.isPinned ? '<span class="ok">Pinned</span>' : ''}
-        <button class="btn tiny danger" data-thread-id="${t._id}">Report</button>
+        <button class="btn tiny danger report-thread" data-thread-id="${t._id}">Report</button>
       </td>
     `;
-
-    const btn = tr.querySelector('[data-thread-id]');
-    if (btn) {
-      btn.addEventListener('click', () => openReportModal('thread', t._id));
-    }
-
     tbody.appendChild(tr);
   }
+
+  // Wire up report buttons in table
+  document.querySelectorAll('.report-thread').forEach(btn => {
+    btn.addEventListener('click', ev => {
+      ev.preventDefault();
+      const tid = btn.dataset.threadId;
+      if (tid) openReportModal('thread', tid);
+    });
+  });
 }
 
 function renderSkeleton() {
