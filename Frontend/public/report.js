@@ -1,22 +1,23 @@
-// Frontend/public/report.js
+// frontend/public/report.js
 import { api } from './main.js';
 
 let reportModal = null;
 let currentTarget = null;
 
-// Create the modal DOM (once)
 function createModal() {
   if (reportModal) return;
 
   const wrapper = document.createElement('div');
-  wrapper.id = 'reportModal';
+  wrapper.id = 'reportModalWrapper';
   wrapper.innerHTML = `
     <div class="report-backdrop" style="
-      position:fixed; inset:0; background:rgba(0,0,0,0.5);
-      display:none; align-items:center; justify-content:center; z-index:9999;">
+      position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+      display: none; align-items: center; justify-content: center; z-index: 9999;
+    ">
       <div class="report-dialog" style="
-        background:#fff; border-radius:8px; padding:1.25rem; max-width:420px;
-        box-shadow:0 4px 24px rgba(0,0,0,0.2); font-family:sans-serif;">
+        background: #fff; border-radius: 8px; padding: 1.25rem; max-width: 420px;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.2); font-family: sans-serif;
+      ">
         <h3 style="margin-top:0; margin-bottom:1rem; font-size:1.25rem;">Report Content</h3>
         <label for="reportCategory" style="display:block; margin-bottom:.5rem; font-weight:500;">Reason</label>
         <select id="reportCategory" style="width:100%; padding:.5rem; border:1px solid #ccc; border-radius:6px;">
@@ -41,33 +42,44 @@ function createModal() {
   document.body.appendChild(wrapper);
   reportModal = wrapper.querySelector('.report-backdrop');
 
-  wrapper.querySelector('#reportCancel').addEventListener('click', closeModal);
-  wrapper.querySelector('#reportSubmit').addEventListener('click', submitModalReport);
+  // Cancel and Submit
+  wrapper.querySelector('#reportCancel').addEventListener('click', (ev) => {
+    ev.preventDefault();
+    closeModal();
+  });
+  wrapper.querySelector('#reportSubmit').addEventListener('click', (ev) => {
+    ev.preventDefault();
+    submitModalReport();
+  });
 }
 
-// Open the modal for given target
+// Open modal
 export function openReportModal(targetType, targetId) {
   createModal();
   currentTarget = { targetType, targetId };
-  reportModal.style.display = 'flex';
-  reportModal.querySelector('#reportCategory').value = '';
-  reportModal.querySelector('#reportReason').value = '';
+  if (reportModal) {
+    reportModal.style.display = 'flex';
+    const sel = reportModal.querySelector('#reportCategory');
+    const ta = reportModal.querySelector('#reportReason');
+    if (sel) sel.value = '';
+    if (ta) ta.value = '';
+  }
 }
 
-// Hide modal
+// Close modal
 function closeModal() {
   if (reportModal) reportModal.style.display = 'none';
   currentTarget = null;
 }
 
-// Submit report
+// Submit
 async function submitModalReport() {
-  const select = reportModal.querySelector('#reportCategory');
-  const textarea = reportModal.querySelector('#reportReason');
-  const category = select.value || 'Other';
-  const reason = textarea.value.trim();
-
   if (!currentTarget) return;
+  const sel = reportModal.querySelector('#reportCategory');
+  const ta = reportModal.querySelector('#reportReason');
+  const category = sel?.value || 'Other';
+  const reason = ta?.value.trim() || '';
+
   if (!category) {
     alert('⚠️ Please select a reason.');
     return;
@@ -83,46 +95,51 @@ async function submitModalReport() {
         reason,
       },
     });
-
     if (resp.ok) {
-      alert('✅ Report submitted successfully.');
+      alert('✅ Report submitted.');
       closeModal();
     } else {
-      alert('⚠️ Failed to submit: ' + (resp.error || 'Unknown error'));
+      alert('⚠️ Failed: ' + (resp.error || 'Unknown'));
     }
   } catch (err) {
-    alert('❌ Failed to submit: ' + (err.error || err.message || JSON.stringify(err)));
+    console.error('submitReport error:', err);
+    alert('❌ Error submitting report.');
   }
 }
 
-// Attach listeners for buttons
+// Wire report UI
 export function initReportUI() {
   createModal();
 
-  const threadBtn = document.querySelector('#threadReport');
-  if (threadBtn) {
-    const tid = threadBtn.dataset.threadId || window.location.search.split('id=')[1];
-    threadBtn.dataset.threadId = tid;
-    threadBtn.addEventListener('click', () => openReportModal('thread', tid));
+  // Thread-level
+  const btnThread = document.querySelector('#reportThreadBtn');
+  if (btnThread) {
+    const tid = btnThread.dataset.threadId || window.location.search.split('id=')[1];
+    btnThread.dataset.threadId = tid;
+    btnThread.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      openReportModal('thread', tid);
+    });
   }
 
-  document.querySelectorAll('.reportCommentBtn, .c-report').forEach((btn) => {
-    const cid = btn.dataset.commentId || btn.closest('.comment')?.dataset.id;
-    if (cid && !btn.dataset.bound) {
-      btn.dataset.bound = 'true'; // prevent duplicate listeners
-      btn.addEventListener('click', () => openReportModal('comment', cid));
-    }
+  // Comment-level
+  document.querySelectorAll('.c-report, .reportCommentBtn').forEach((btn) => {
+    // avoid multiple bindings
+    if (btn.dataset.reportBound) return;
+    btn.dataset.reportBound = 'true';
 
-    if (btn.disabled && btn.title === 'Login Required') {
-      btn.title = 'You cannot report your own post.';
-    }
+    const cid = btn.dataset.commentId || btn.closest('.comment')?.dataset.id;
+    btn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      if (cid) openReportModal('comment', cid);
+    });
   });
 }
 
-// Fallback call from other scripts
+// Fallback
 export function submitReport(targetType, targetId) {
   openReportModal(targetType, targetId);
 }
 
-// Init on DOM ready
+// Auto-init
 window.addEventListener('DOMContentLoaded', initReportUI);
