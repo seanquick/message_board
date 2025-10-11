@@ -6,6 +6,7 @@ import { initReportUI, openReportModal } from './report.js';
 let THREAD_ID = null;
 let THREAD = null;
 
+/* ---------- Utility Helpers ---------- */
 function safeShow(selOrEl, visible = true) {
   const el = typeof selOrEl === 'string' ? document.querySelector(selOrEl) : selOrEl;
   if (el) el.style.display = visible ? '' : 'none';
@@ -19,6 +20,7 @@ function safeSetHTML(selOrEl, html = '') {
   if (el) el.innerHTML = html;
 }
 
+/* ---------- Entry ---------- */
 document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
@@ -54,6 +56,7 @@ async function init() {
   initReportUI();
 }
 
+/* ---------- Page Scaffold ---------- */
 function ensureScaffold() {
   const main = document.querySelector('main') || document.body;
 
@@ -104,6 +107,7 @@ function ensureScaffold() {
   }
 }
 
+/* ---------- Render Thread ---------- */
 function renderLoading() {
   safeSetText('#threadTitle', 'Loading…');
   const body = q('#threadBody');
@@ -130,12 +134,13 @@ function renderThread(t) {
   buildToolbar();
 }
 
+/* ---------- Toolbar ---------- */
 function buildToolbar() {
   const host = q('#threadToolbar');
   if (!host) return;
 
-  const loggedIn = !!me?.uid;
-  const isOwn = loggedIn && (me.uid === THREAD.author || me.uid === THREAD.authorId);
+  const loggedIn = !!me?.id;
+  const isOwn = loggedIn && (me.id === THREAD.author || me.id === THREAD.authorId);
   const canReport = loggedIn && !isOwn;
 
   const tooltip = !loggedIn
@@ -161,6 +166,16 @@ function buildToolbar() {
   });
 }
 
+async function onUpvoteThread() {
+  try {
+    const res = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}/upvote`, { method: 'POST' });
+    safeSetText('#threadUpCount', Number(res?.upvoteCount || 0));
+  } catch (e) {
+    alert(e?.error || e?.message || 'Failed to upvote.');
+  }
+}
+
+/* ---------- Comments ---------- */
 function renderCommentsTree(nodes = []) {
   const host = q('#comments');
   if (!host) {
@@ -171,6 +186,7 @@ function renderCommentsTree(nodes = []) {
     host.innerHTML = `<div class="empty">No comments yet.</div>`;
     return;
   }
+
   host.innerHTML = '';
   for (const c of nodes) {
     host.appendChild(renderCommentNode(c));
@@ -203,8 +219,8 @@ function renderCommentNode(c) {
   const up = Number(c.upvoteCount ?? c.score ?? 0);
   const body = isDeleted ? '<em class="meta">[deleted]</em>' : escapeHTML(c.body || '');
 
-  const loggedIn = !!me?.uid;
-  const isOwnComment = loggedIn && (c.authorId === me.uid);
+  const loggedIn = !!me?.id;
+  const isOwnComment = loggedIn && (c.authorId === me.id);
   const canReport = loggedIn && !isOwnComment;
 
   const tooltip = !loggedIn
@@ -240,8 +256,8 @@ function renderCommentChildHTML(child) {
   const isDeleted = !!child.isDeleted;
   const body = isDeleted ? '<em class="meta">[deleted]</em>' : escapeHTML(child.body || '');
 
-  const loggedIn = !!me?.uid;
-  const isOwnComment = loggedIn && (child.authorId === me.uid);
+  const loggedIn = !!me?.id;
+  const isOwnComment = loggedIn && (child.authorId === me.id);
   const canReport = loggedIn && !isOwnComment;
 
   const tooltip = !loggedIn
@@ -261,6 +277,26 @@ function renderCommentChildHTML(child) {
   `;
 }
 
+/* ---------- Replies / Composer ---------- */
+function onReplyClick(ev) {
+  const btn = ev.currentTarget;
+  const commentId = btn.closest('.comment')?.dataset.id;
+  if (commentId) {
+    q('#parentId').value = commentId;
+    q('#replyingTo').textContent = 'Replying to comment...';
+    q('#replyingTo').style.display = '';
+    q('#cancelReply').style.display = '';
+    q('#replyBody')?.focus();
+  }
+}
+
+function clearReplyTarget() {
+  q('#parentId').value = '';
+  q('#replyingTo').textContent = '';
+  q('#replyingTo').style.display = 'none';
+  q('#cancelReply').style.display = 'none';
+}
+
 function bindComposer() {
   const form = q('#replyForm');
   if (!form) return;
@@ -273,7 +309,7 @@ function bindComposer() {
     const parentId = (q('#parentId')?.value || '').trim();
     const isAnonymous = !!q('#isAnonymous')?.checked;
 
-    if (!me?.uid) return alert('Please log in to comment.');
+    if (!me?.id) return alert('Please log in to comment.');
     if (!body) return alert('Comment cannot be empty.');
 
     try {
@@ -298,21 +334,19 @@ function bindComposer() {
   });
 }
 
+/* ---------- Helpers ---------- */
 function escapeAttr(s) {
   return String(s).replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }
-
 function showFatal(msg) {
   const main = document.querySelector('main') || document.body;
   main.innerHTML = `<div class="err" role="alert">${escapeHTML(msg)}</div>`;
 }
-
 function safeParagraphs(text) {
   const t = String(text || '');
   if (!t.trim()) return '<p class="meta">(no content)</p>';
   return t.split(/\n{2,}/g).map(p => `<p>${escapeHTML(p)}</p>`).join('\n');
 }
-
 function pinBadge() {
   return `<span class="badge pin" title="Pinned">📌</span>`;
 }
