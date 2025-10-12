@@ -38,9 +38,12 @@ export async function api(url, opts = {}) {
   const isHtml = ct.includes('text/html');
   const text = await res.text();
 
-  // Handle unexpected HTML responses (e.g., login page)
-  if (isHtml && text.includes('<title>Sign in')) {
-    console.warn('🔒 Session expired or not logged in – redirecting to login.');
+  // Handle unexpected HTML responses (e.g., login page returned from API)
+  if (isHtml && (
+    text.includes('<title>Sign in') ||
+    text.includes('form') && text.includes('password') && text.includes('email')
+  )) {
+    console.warn('🔒 Login page received instead of data – redirecting to login.');
     window.location.href = '/login.html';
     return {};
   }
