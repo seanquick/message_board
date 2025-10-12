@@ -1,4 +1,4 @@
-// Frontend/public/admin.js
+// frontend/public/admin.js
 
 import { api, escapeHTML, timeAgo, q, $, qa, refreshMe, me as meVar } from './main.js';
 
@@ -26,20 +26,6 @@ function formatDate(d = new Date()) {
   } catch {
     return d.toISOString();
   }
-}
-
-function fillTemplate(str, ctx = {}) {
-  const base = {
-    admin: meUser?.name || meUser?.email || 'admin',
-    date: formatDate(new Date()),
-    targetType: ctx.targetType || '',
-    threadId: ctx.threadId || '',
-    commentId: ctx.commentId || '',
-    category: ctx.category || '',
-    action: ctx.action || 'Resolved',
-  };
-  const s1 = str.replace(/\{commentId\?\}/g, base.commentId ? base.commentId : '');
-  return s1.replace(/\{(\w+)\}/g, (_m, key) => String(base[key] ?? ''));
 }
 
 function ensureTbody(selector) {
@@ -80,13 +66,12 @@ function renderErrorRow(tableSelector, msg, colspan = 5) {
   tbody.innerHTML = `<tr><td colspan="${colspan}" class="err">${escapeHTML(msg)}</td></tr>`;
 }
 
-/* Global state (for pagination etc) */
 const state = {
   users: { page: 1, limit: 50, total: 0 },
   comments: { page: 1, limit: 50, total: 0 },
 };
 
-/* --- Metrics --- */
+// --- METRICS ---
 async function loadMetrics() {
   try {
     const { metrics } = await api(`/api/admin/metrics?t=${Date.now()}`);
@@ -99,18 +84,302 @@ async function loadMetrics() {
   }
 }
 
-/* --- USERS Section (unchanged) --- */
-// ... your existing code for loadUsers, onToggleBan, onSetRole, onEditUserNote, onDeleteUser, onUserLinkClick, showUserContentModal ...
-// (I will not repeat that here — keep your existing, working code.)
+// --- USERS Section ---
+async function loadUsers() {
+  const tbody = ensureTbody('#usersTable');
+  if (!tbody) {
+    console.error('No usersTable in DOM');
+    return;
+  }
 
-/* --- THREADS Section (unchanged) --- */
-// ... your existing loadThreads, etc ...
+  try {
+    const searchEl = q('#uSearch') || q('#userSearch');
+    const qstr = (searchEl?.value || '').trim();
+    const params = new URLSearchParams();
+    if (qstr) params.set('q', qstr);
+    params.set('page', String(state.users.page));
+    params.set('limit', String(state.users.limit));
+    params.set('t', String(Date.now()));
 
-/* --- COMMENTS Section (unchanged) --- */
-// ... your existing loadComments, etc ...
+    const payload = await api(`/api/admin/users?${params.toString()}`, { nocache: true });
 
-/* --- REPORTS Section: full new implementation --- */
+    const users = Array.isArray(payload) ? payload :
+      Array.isArray(payload?.users) ? payload.users :
+      Array.isArray(payload?.data) ? payload.data : [];
 
+    state.users.total = Number(payload?.total ?? users.length ?? 0);
+    const pages = pagesFor(state.users);
+    updatePagerUI('users', pages);
+
+    tbody.innerHTML = '';
+    if (!users.length) {
+      tbody.innerHTML = '<tr><td colspan="7">No users found.</td></tr>';
+      return;
+    }
+    for (const u of users) {
+      const tr = document.createElement('tr');
+      tr.dataset.id = u._id;
+      const nameLink = u.name
+        ? `<a href="#" class="user-link" data-uid="${u._id}">${escapeHTML(u.name)}</a>`
+        : `<a href="#" class="user-link" data-uid="${u._id}">${escapeHTML(u.email)}</a>`;
+      tr.innerHTML = `
+        <td>${nameLink}<br><span class="meta">${escapeHTML(u.email)}</span></td>
+        <td>${escapeHTML(u.role || 'user')}</td>
+        <td>${u.isBanned ? '<span class="danger">Banned</span>' : '<span class="ok">Active</span>'}</td>
+        <td>${timeAgo(u.createdAt || Date.now())}</td>
+        <td class="truncate">${escapeHTML(u.notes || '')}</td>
+        <td class="row gap-05">
+          <button class="btn tiny editNote">Edit Note</button>
+          <button class="btn tiny toggleBan">${u.isBanned ? 'Unban' : 'Ban'}</button>
+          <button class="btn tiny setRole" data-role="${u.role === 'admin' ? 'user' : 'admin'}">
+            ${u.role === 'admin' ? 'Revoke Admin' : 'Make Admin'}
+          </button>
+          <button class="btn tiny deleteUser" style="color:red">Delete</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    tbody.querySelectorAll('.editNote').forEach(btn => btn.addEventListener('click', onEditUserNote));
+    tbody.querySelectorAll('.toggleBan').forEach(btn => btn.addEventListener('click', onToggleBan));
+    tbody.querySelectorAll('.setRole').forEach(btn => btn.addEventListener('click', onSetRole));
+    tbody.querySelectorAll('.deleteUser').forEach(btn => btn.addEventListener('click', onDeleteUser));
+    tbody.querySelectorAll('.user-link').forEach(a => a.addEventListener('click', onUserLinkClick));
+
+  } catch (e) {
+    showErr(`Failed to load users: ${e?.error || e?.message}`);
+  }
+}
+
+async function onToggleBan(ev) {
+  const tr = ev.currentTarget.closest('tr');
+  const id = tr?.dataset.id;
+  if (!id) return;
+  if (!confirm('Toggle ban for this user?')) return;
+  try {
+    const res = await api(`/api/admin/users/${id}/toggle-ban`, { method: 'POST' });
+    const statusCell = tr.children[2];
+    const btn = tr.querySelector('.toggleBan');
+    if (res.isBanned) {
+      statusCell.innerHTML = '<span class="danger">Banned</span>';
+      btn.textContent = 'Unban';
+    } else {
+      statusCell.innerHTML = '<span class="ok">Active</span>';
+      btn.textContent = 'Ban';
+    }
+  } catch (e) {
+    showErr(e?.message || 'Failed to toggle ban');
+  }
+}
+
+async function onSetRole(ev) {
+  const tr = ev.currentTarget.closest('tr');
+  const id = tr?.dataset.id;
+  const next = ev.currentTarget.getAttribute('data-role');
+  if (!id || !next) return;
+  if (!confirm(`Set role to "${next}"?`)) return;
+  try {
+    const res = await api(`/api/admin/users/${id}/role`, { method: 'POST', body: { role: next } });
+    tr.children[1].textContent = res.role;
+    ev.currentTarget.setAttribute('data-role', res.role === 'admin' ? 'user' : 'admin');
+    ev.currentTarget.textContent = res.role === 'admin' ? 'Revoke Admin' : 'Make Admin';
+  } catch (e) {
+    showErr(e?.message || 'Failed to set role');
+  }
+}
+
+async function onEditUserNote(ev) {
+  const tr = ev.currentTarget.closest('tr');
+  if (!tr) return;
+  const id = tr.dataset.id;
+  showModEditor(tr, {
+    title: 'Edit user note',
+    placeholder: 'Private admin note…',
+    confirmLabel: 'Save note',
+    onConfirm: async (note) => {
+      const final = note || '';
+      try {
+        const res = await api(`/api/admin/users/${id}/note`, { method: 'POST', body: { note: final } });
+        if (tr.children[4]) tr.children[4].textContent = final;
+      } catch (e) {
+        showErr(e?.message || 'Failed to save note');
+      }
+    }
+  });
+}
+
+async function onDeleteUser(ev) {
+  ev.stopPropagation();
+  const tr = ev.currentTarget.closest('tr');
+  const id = tr?.dataset.id;
+  if (!id) return;
+  if (!confirm('Are you sure you want to delete this user?')) return;
+  try {
+    await api(`/api/admin/users/${id}`, { method: 'DELETE' });
+    tr.remove();
+  } catch (e) {
+    showErr(e?.error || e?.message || 'Failed to delete user');
+  }
+}
+
+async function onUserLinkClick(ev) {
+  ev.preventDefault();
+  const a = ev.currentTarget;
+  const uid = a.dataset.uid;
+  if (!uid) return;
+  try {
+    const payload = await api(`/api/admin/users/${uid}/content`);
+    showUserContentModal(uid, payload.threads || [], payload.comments || []);
+  } catch (e) {
+    showErr(`Failed to fetch user content: ${e?.error || e?.message}`);
+  }
+}
+
+function showUserContentModal(uid, threads, comments) {
+  const modal = document.createElement('div');
+  modal.className = 'user-content-modal';
+  modal.style = 'position:fixed;top:10%;left:10%;width:80%;height:80%;background:white;overflow:auto;z-index:10000;padding:1rem;border:1px solid #ccc';
+  modal.innerHTML = `
+    <button class="close-modal" style="position:absolute;top:1rem;right:1rem">Close</button>
+    <h2>User: ${escapeHTML(uid)}</h2>
+    <h3>Threads (${threads.length})</h3>
+    ${threads.map(t => `<div><a href="thread.html?id=${encodeURIComponent(t._id)}" target="_blank">${escapeHTML(t.title || '(untitled)')}</a></div>`).join('')}
+    <h3>Comments (${comments.length})</h3>
+    ${comments.map(c => `<div>${escapeHTML(c.body || '')} <em>(thread: ${escapeHTML(String(c.thread))})</em></div>`).join('')}
+  `;
+  document.body.appendChild(modal);
+  modal.querySelector('.close-modal')?.addEventListener('click', () => modal.remove());
+}
+
+// --- THREADS Section ---
+async function loadThreads() {
+  const tbody = ensureTbody('#threadsTable');
+  if (!tbody) return;
+  try {
+    const includeDeleted = q('#tIncludeDeleted')?.checked;
+    const params = new URLSearchParams();
+    params.set('t', String(Date.now()));
+    if (includeDeleted) params.set('includeDeleted', '1');
+    const url = `/api/admin/search?type=threads&${params.toString()}`;
+    console.log('loadThreads fetch url:', url);
+    const resp = await api(url, { nocache: true });
+    console.log('loadThreads response:', resp);
+    const { results } = resp;
+    tbody.innerHTML = '';
+    if (!Array.isArray(results) || !results.length) {
+      tbody.innerHTML = '<tr><td colspan="7">No threads found.</td></tr>';
+      return;
+    }
+    for (const t of results) {
+      const tr = document.createElement('tr');
+      tr.dataset.id = t._id;
+      tr.innerHTML = `
+        <td>${new Date(t.createdAt).toLocaleString()}</td>
+        <td>${escapeHTML(t.title || '(no title)')}</td>
+        <td>${escapeHTML(t.author || t.authorId || '')}</td>
+        <td>${t.upvoteCount ?? t.upvotes ?? 0}</td>
+        <td>${t.commentCount ?? ''}</td>
+        <td>${escapeHTML(t.status || '')}</td>
+        <td class="row gap-05">
+          <button class="btn tiny pinBtn">Pin/Unpin</button>
+          <button class="btn tiny lockBtn">Lock/Unlock</button>
+          <button class="btn tiny deleteThread">Delete/Restore</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    }
+    tbody.querySelectorAll('.pinBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
+      const tr = ev.currentTarget.closest('tr');
+      const tid = tr.dataset.id;
+      const isNowPinned = !(tr.dataset.pinned === 'true');
+      const note = prompt('Note (optional):');
+      try {
+        await api(`/api/admin/threads/${tid}/pin`, { method: 'POST', body: { pinned: isNowPinned, note } });
+        loadThreads();
+      } catch (e) {
+        showErr(`Failed to pin/unpin: ${e?.error || e?.message}`);
+      }
+    }));
+    tbody.querySelectorAll('.lockBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
+      const tr = ev.currentTarget.closest('tr');
+      const tid = tr.dataset.id;
+      const isNowLocked = !(tr.dataset.locked === 'true');
+      const note = prompt('Note (optional):');
+      try {
+        await api(`/api/admin/threads/${tid}/lock`, { method: 'POST', body: { locked: isNowLocked, note } });
+        loadThreads();
+      } catch (e) {
+        showErr(`Failed to lock/unlock: ${e?.error || e?.message}`);
+      }
+    }));
+    tbody.querySelectorAll('.deleteThread').forEach(btn => btn.addEventListener('click', async (ev) => {
+      const tr = ev.currentTarget.closest('tr');
+      const tid = tr.dataset.id;
+      const isDeleted = !(tr.dataset.deleted === 'true');
+      const note = prompt('Note (optional):');
+      try {
+        await api(`/api/admin/threads/${tid}/delete`, { method: 'POST', body: { deleted: isDeleted, reason: note } });
+        loadThreads();
+      } catch (e) {
+        showErr(`Failed to delete/restore: ${e?.error || e?.message}`);
+      }
+    }));
+  } catch (e) {
+    renderErrorRow('#threadsTable', `Error loading threads: ${e?.error || e?.message}`, 7);
+  }
+}
+
+// --- COMMENTS Section ---
+async function loadComments() {
+  const tbody = ensureTbody('#commentsTable');
+  if (!tbody) return;
+  try {
+    const includeDeleted = q('#cIncludeDeleted')?.checked;
+    const params = new URLSearchParams();
+    params.set('t', String(Date.now()));
+    if (includeDeleted) params.set('includeDeleted', '1');
+    const url = `/api/admin/search?type=comments&${params.toString()}`;
+    console.log('loadComments fetch url:', url);
+    const resp = await api(url, { nocache: true });
+    console.log('loadComments response:', resp);
+    const { results } = resp;
+    tbody.innerHTML = '';
+    if (!Array.isArray(results) || !results.length) {
+      tbody.innerHTML = '<tr><td colspan="7">No comments found.</td></tr>';
+      return;
+    }
+    for (const c of results) {
+      const tr = document.createElement('tr');
+      tr.dataset.id = c._id;
+      tr.innerHTML = `
+        <td>${new Date(c.createdAt).toLocaleString()}</td>
+        <td>${escapeHTML(c.snippet || '')}</td>
+        <td>${escapeHTML(c.author || c.authorId || '')}</td>
+        <td>${escapeHTML(c.thread || '')}</td>
+        <td>${c.upvoteCount ?? 0}</td>
+        <td>${escapeHTML(c.isDeleted ? 'Deleted' : '')}</td>
+        <td><button class="btn tiny delRestoreComment">Delete/Restore</button></td>
+      `;
+      tbody.appendChild(tr);
+    }
+    tbody.querySelectorAll('.delRestoreComment').forEach(btn => btn.addEventListener('click', async (ev) => {
+      const tr = ev.currentTarget.closest('tr');
+      const cid = tr.dataset.id;
+      const toDeleted = !(tr.dataset.deleted === 'true');
+      const reason = prompt('Reason (optional):');
+      try {
+        await api(`/api/admin/comments/${cid}/delete`, { method: 'POST', body: { deleted: toDeleted, reason } });
+        loadComments();
+      } catch (e) {
+        showErr(`Failed comment delete/restore: ${e?.error || e?.message}`);
+      }
+    }));
+  } catch (e) {
+    renderErrorRow('#commentsTable', `Error loading comments: ${e?.error || e?.message}`, 7);
+  }
+}
+
+// --- REPORTS Section ---
 async function loadReports() {
   const tbody = ensureTbody('#reportsTable');
   if (!tbody) return;
@@ -151,19 +420,15 @@ async function loadReports() {
       tbody.appendChild(tr);
     }
 
-    // Attach view listeners
     tbody.querySelectorAll('.viewReport').forEach(btn => {
       btn.addEventListener('click', ev => {
         ev.stopPropagation();
         const tr = btn.closest('tr');
         const id = tr?.dataset.id;
-        if (id) {
-          openReportDetail(id);
-        }
+        if (id) openReportDetail(id);
       });
     });
 
-    // Attach resolve listeners
     tbody.querySelectorAll('.resolveOne').forEach(btn => {
       btn.addEventListener('click', async ev => {
         ev.stopPropagation();
@@ -283,11 +548,51 @@ function exportReportsCSV() {
   window.location.href = `/api/admin/reports/export.csv?t=${Date.now()}`;
 }
 
-/* --- Global Search (unchanged) --- */
-// ... your existing doSearch logic, etc ...
+// --- SEARCH (unchanged) ---
+async function doSearch() {
+  const qstr = (q('#sQ')?.value || '').trim();
+  const type = (q('#sType')?.value || 'all').toLowerCase();
+  const status = (q('#sStatus')?.value || '').toLowerCase();
+  const from = q('#sFrom')?.value;
+  const to = q('#sTo')?.value;
+  const minUp = q('#sMinUp')?.value;
+  const category = q('#sCategory')?.value;
+
+  const params = new URLSearchParams();
+  params.set('t', String(Date.now()));
+  if (qstr) params.set('q', qstr);
+  if (type) params.set('type', type);
+  if (status) params.set('status', status);
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  if (minUp) params.set('minUp', minUp);
+  if (category) params.set('category', category);
+
+  const resp = await api(`/api/admin/search?${params.toString()}`, { nocache: true });
+  const { results } = resp;
+
+  const tbody = ensureTbody('#searchTable');
+  tbody.innerHTML = '';
+  if (!Array.isArray(results) || !results.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">No results</td></tr>';
+    return;
+  }
+  for (const r of results) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${new Date(r.createdAt).toLocaleString()}</td>
+      <td>${escapeHTML(r.type || '')}</td>
+      <td>${escapeHTML(r.title || '')}</td>
+      <td>${escapeHTML(r.snippet || '')}</td>
+      <td>${escapeHTML(String(r.upvotes || ''))}</td>
+      <td>${escapeHTML(r.link || '')}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
 
 function startEventStream() {
-  // your SSE logic or no-op
+  // optionally implement SSE
 }
 
 async function init() {
@@ -296,23 +601,10 @@ async function init() {
     await refreshMe();
     meUser = meVar;
 
-    // ping / admin auth check logic (unchanged)
-    try {
-      await api(`/api/admin/ping?t=${Date.now()}`);
-    } catch (e) {
-      // logic you have for token refresh etc...
-      throw e;
-    }
+    await api(`/api/admin/ping?t=${Date.now()}`);
 
-    // Attach event listeners (existing + new)
-    q('#uRefresh')?.addEventListener('click', () => {
-      state.users.page = 1;
-      loadUsers();
-    });
-    q('#uSearch')?.addEventListener('input', debounce(() => {
-      state.users.page = 1;
-      loadUsers();
-    }));
+    q('#uRefresh')?.addEventListener('click', () => { state.users.page = 1; loadUsers(); });
+    q('#uSearch')?.addEventListener('input', debounce(() => { state.users.page = 1; loadUsers(); }));
 
     q('#tRefresh')?.addEventListener('click', loadThreads);
     q('#tIncludeDeleted')?.addEventListener('change', loadThreads);
@@ -344,8 +636,6 @@ async function init() {
     q('#sQ')?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') doSearch();
     });
-
-    // startEventStream(); // optional
 
     loadMetrics().catch(console.error);
     loadThreads().catch(console.error);
