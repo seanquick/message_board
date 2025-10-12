@@ -199,6 +199,70 @@ router.get('/reports', requireAdmin, async (req, res) => {
   }
 });
 
+// ===== Resolve a report =====
+router.post('/reports/:reportId/resolve', requireAdmin, async (req, res) => {
+  try {
+    const rid = req.params.reportId;
+    const { resolutionNote } = req.body;
+
+    if (!mongoose.isValidObjectId(rid)) {
+      return res.status(400).json({ error: 'Invalid report ID' });
+    }
+
+    // Find the report
+    const report = await Report.findById(rid);
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found' });
+    }
+
+    // Mark resolved
+    report.status = 'resolved';
+    if (typeof resolutionNote === 'string') {
+      report.resolutionNote = resolutionNote.trim();
+    }
+    report.resolvedAt = new Date();
+    report.resolvedBy = req.user?.uid;  // or whichever field holds admin ID
+
+    await report.save();
+
+    return res.json({ ok: true, report: report.toObject() });
+  } catch (e) {
+    console.error('[admin] resolve report error:', e);
+    return res.status(500).json({ error: 'Failed to resolve report', detail: String(e) });
+  }
+});
+
+// Also optionally allow bulk resolve (if your UI supports)
+router.post('/reports/resolve', requireAdmin, async (req, res) => {
+  try {
+    const { reportIds, resolutionNote } = req.body;
+    if (!Array.isArray(reportIds) || reportIds.length === 0) {
+      return res.status(400).json({ error: 'No report IDs provided' });
+    }
+
+    const validIds = reportIds.filter(id => mongoose.isValidObjectId(id));
+    const update = {
+      status: 'resolved',
+      resolvedAt: new Date(),
+      resolvedBy: req.user?.uid
+    };
+    if (typeof resolutionNote === 'string') {
+      update.resolutionNote = resolutionNote.trim();
+    }
+
+    const result = await Report.updateMany(
+      { _id: { $in: validIds } },
+      { $set: update }
+    );
+
+    return res.json({ ok: true, modified: result.nModified });
+  } catch (e) {
+    console.error('[admin] bulk resolve error:', e);
+    return res.status(500).json({ error: 'Failed to bulk resolve reports', detail: String(e) });
+  }
+});
+
+
 // ===== USERS =====
 router.get('/users', requireAdmin, async (req, res) => {
   try {
