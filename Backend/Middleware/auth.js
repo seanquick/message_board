@@ -35,8 +35,7 @@ async function tryAuth(req, _res, next) {
     if (!uid) return next();
 
     const user = await User.findById(uid).select('name email role isBanned tokenVersion').lean();
-    if (!user) return next();
-    if (user.isBanned) return next();
+    if (!user || user.isBanned) return next();
 
     const tokenVersion = Number(payload?.tv ?? 0);
     const currentTV = Number(user.tokenVersion ?? 0);
@@ -50,7 +49,7 @@ async function tryAuth(req, _res, next) {
       tokenVersion: currentTV,
       cookie: { set: setAuthCookie, clear: clearAuthCookie },
     };
-    return next();
+    next();
   } catch {
     return next();
   }
@@ -59,27 +58,25 @@ async function tryAuth(req, _res, next) {
 async function requireAuth(req, res, next) {
   try {
     const raw = req.cookies?.token;
-    if (!raw) return res.status(401).json({ error: 'Not authenticated' });
+    if (!raw) return sendAuthFailure(req, res);
 
     let payload;
     try {
       payload = jwt.verify(raw, JWT_SECRET);
     } catch {
-      return res.status(401).json({ error: 'Invalid or expired token' });
+      return sendAuthFailure(req, res);
     }
 
     const uid = payload?.uid;
-    if (!uid) return res.status(401).json({ error: 'Invalid token payload' });
+    if (!uid) return sendAuthFailure(req, res);
 
     const user = await User.findById(uid).select('name email role isBanned tokenVersion').lean();
-    if (!user) return res.status(401).json({ error: 'User not found' });
+    if (!user) return sendAuthFailure(req, res);
     if (user.isBanned) return res.status(403).json({ error: 'Account banned' });
 
     const tokenVersion = Number(payload?.tv ?? 0);
     const currentTV = Number(user.tokenVersion ?? 0);
-    if (tokenVersion !== currentTV) {
-      return res.status(401).json({ error: 'Session revoked' });
-    }
+    if (tokenVersion !== currentTV) return sendAuthFailure(req, res);
 
     req.user = {
       uid: String(uid),
@@ -89,7 +86,7 @@ async function requireAuth(req, res, next) {
       tokenVersion: currentTV,
       cookie: { set: setAuthCookie, clear: clearAuthCookie },
     };
-    return next();
+    next();
   } catch (e) {
     console.error('[auth] requireAuth error:', e);
     return res.status(500).json({ error: 'Auth check failed' });
@@ -99,10 +96,22 @@ async function requireAuth(req, res, next) {
 async function requireAdmin(req, res, next) {
   return requireAuth(req, res, () => {
     if ((req.user?.role || 'user') !== 'admin') {
-      return res.status(403).json({ error: 'Admin only' });
+      return sendAuthFailure(req, res, true); // true = isAdminCheck
     }
     next();
   });
+}
+
+// 🧠 This sends 401 JSON for /api/* and redirects for frontend
+function sendAuthFailure(req, res, isAdmin = false) {
+  const isApi = req.originalUrl.startsWith('/api/');
+  const message = isAdmin ? 'Admin only' : 'Not authenticated';
+
+  if (isApi) {
+    return res.status(401).json({ error: message });
+  } else {
+    return res.redirect('/login.html');
+  }
 }
 
 module.exports = {
