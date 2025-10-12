@@ -2,22 +2,26 @@
 
 const router = require('express').Router();
 const mongoose = require('mongoose');
-const jwt = require('jsonwebtoken');
 
 const User = require('../Models/User');
 const Thread = require('../Models/Thread');
 const Comment = require('../Models/Comment');
 const Report = require('../Models/Report');
+
 const Notification = (() => { try { return require('../Models/Notification'); } catch { return null; } })();
 const ModLog = (() => { try { return require('../Models/ModLog'); } catch { return null; } })();
 
 const { requireAdmin } = require('../Middleware/auth');
-const { enumValues } = (() => {
-  try { return require('../Util/enum').enumValues; }
-  catch { return () => []; }
-})();
 
-// Helpers
+// Proper fallback
+let enumValues = () => [];
+try {
+  const enumUtil = require('../Util/enum');
+  if (typeof enumUtil.enumValues === 'function') {
+    enumValues = enumUtil.enumValues;
+  }
+} catch {}
+
 const toBool = v => v === true || v === 'true' || v === '1' || v === 1;
 const notDeleted = (field = 'isDeleted') => ({
   $or: [{ [field]: false }, { [field]: { $exists: false } }]
@@ -31,7 +35,7 @@ const iRange = (v, min, max, def) => {
   return Math.max(min, Math.min(max, n));
 };
 
-// No cache headers
+// Disable caching
 router.use((req, res, next) => {
   res.set({
     'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
@@ -42,13 +46,13 @@ router.use((req, res, next) => {
   next();
 });
 
-// SSE endpoints
+// SSE stream
 const _clients = new Set();
 function sseWrite(res, type, data) {
   try {
     res.write(`event: ${type}\n`);
     res.write(`data: ${JSON.stringify(data || {})}\n\n`);
-  } catch (e) { /* ignore */ }
+  } catch {}
 }
 function broadcast(type, data) {
   for (const res of _clients) sseWrite(res, type, data);
@@ -70,10 +74,9 @@ router.get('/ping', requireAdmin, (req, res) => {
   res.json({ ok: true, admin: true, uid: req.user?.uid });
 });
 
-// ===== METRICS (safe version) =====
+// ===== METRICS =====
 router.get('/metrics', requireAdmin, async (_req, res) => {
   try {
-    // Compute filters for reports
     const sVals = enumValues(Report, 'status') || [];
     const openVals = sVals.filter(v => /open|new|pending|unresolved/i.test(String(v)));
     const openFilter = openVals.length
@@ -81,63 +84,42 @@ router.get('/metrics', requireAdmin, async (_req, res) => {
       : { $or: [{ status: { $exists: false } }, { status: null }, { status: 'open' }] };
 
     let usersCount = 0, threadsCount = 0, commentsCount = 0, reportsCount = 0;
+    try { usersCount = await User.countDocuments(); } catch (e) {}
+    try { threadsCount = await Thread.countDocuments(); } catch (e) {}
+    try { commentsCount = await Comment.countDocuments(); } catch (e) {}
+    try { reportsCount = await Report.countDocuments(openFilter); } catch (e) {}
 
-    // Each count wrapped to avoid crash
-    try { usersCount = await User.countDocuments({}); } catch (e) { console.error('metrics: count users failed', e); }
-    try { threadsCount = await Thread.countDocuments({}); } catch (e) { console.error('metrics: count threads failed', e); }
-    try { commentsCount = await Comment.countDocuments({}); } catch (e) { console.error('metrics: count comments failed', e); }
-    try { reportsCount = await Report.countDocuments(openFilter); } catch (e) { console.error('metrics: count reports failed', e); }
-
-    return res.json({
-      metrics: {
-        users: usersCount,
-        threads: threadsCount,
-        comments: commentsCount,
-        reports: reportsCount
-      }
-    });
+    res.json({ metrics: { users: usersCount, threads: threadsCount, comments: commentsCount, reports: reportsCount } });
   } catch (e) {
-    console.error('[admin] metrics overall error:', e);
     res.status(500).json({ error: 'Failed to load metrics', detail: String(e) });
   }
 });
 
-// ===== SEARCH threads / comments =====
+// ===== SEARCH =====
 router.get('/search', requireAdmin, async (req, res) => {
   try {
     const type = (req.query.type || '').toLowerCase();
     const includeDeleted = toBool(req.query.includeDeleted);
-
     let results = [];
 
     if (type === 'threads') {
       const filter = includeDeleted ? {} : notDeleted('isDeleted');
-      results = await Thread.find(filter)
-        .sort({ createdAt: -1 })
-        .limit(100)
-        .select('_id title author createdAt isDeleted isPinned pinned isLocked locked upvoteCount commentCount')
-        .lean();
+      results = await Thread.find(filter).sort({ createdAt: -1 }).limit(100)
+        .select('_id title author createdAt isDeleted isPinned pinned isLocked locked upvoteCount commentCount').lean();
     } else if (type === 'comments') {
       const filter = includeDeleted ? {} : notDeleted('isDeleted');
-      results = await Comment.find(filter)
-        .sort({ createdAt: -1 })
-        .limit(100)
-        .select('_id thread author createdAt body isDeleted upvoteCount')
-        .lean();
-      results = results.map(c => ({
-        ...c,
-        snippet: (c.body || '').slice(0, 120)
-      }));
+      results = await Comment.find(filter).sort({ createdAt: -1 }).limit(100)
+        .select('_id thread author createdAt body isDeleted upvoteCount').lean();
+      results = results.map(c => ({ ...c, snippet: (c.body || '').slice(0, 120) }));
     }
 
     res.json({ results });
   } catch (e) {
-    console.error('[admin] search error:', e);
     res.status(500).json({ error: 'Search failed', detail: String(e) });
   }
 });
 
-// ===== REPORTS list =====
+// ===== REPORTS =====
 router.get('/reports', requireAdmin, async (req, res) => {
   try {
     const status = String(req.query.status || 'open').toLowerCase();
@@ -147,18 +129,10 @@ router.get('/reports', requireAdmin, async (req, res) => {
 
     let filter;
     if (status === 'all') filter = {};
-    else if (status === 'resolved') {
-      filter = resolvedVals.length ? { status: { $in: resolvedVals } } : { status: 'resolved' };
-    } else {
-      filter = openVals.length
-        ? { status: { $in: openVals } }
-        : { $or: [{ status: 'open' }, { status: null }, { status: { $exists: false } }] };
-    }
+    else if (status === 'resolved') filter = resolvedVals.length ? { status: { $in: resolvedVals } } : { status: 'resolved' };
+    else filter = openVals.length ? { status: { $in: openVals } } : { $or: [{ status: 'open' }, { status: null }, { status: { $exists: false } }] };
 
-    const reports = await Report.find(filter)
-      .sort({ createdAt: -1 })
-      .limit(400)
-      .lean();
+    const reports = await Report.find(filter).sort({ createdAt: -1 }).limit(400).lean();
 
     const threadIds = reports.filter(r => r.targetType === 'thread').map(r => r.targetId).filter(Boolean);
     const commentIds = reports.filter(r => r.targetType === 'comment').map(r => r.targetId).filter(Boolean);
@@ -184,11 +158,7 @@ router.get('/reports', requireAdmin, async (req, res) => {
           snippet = `${t.title || '(untitled)'} — ${(t.body ?? t.content ?? '').slice(0, 180)}`;
           threadId = t._id;
           targetOwnerId = t.author || null;
-          threadFlags = {
-            isDeleted: !!t.isDeleted,
-            pinned: !!(t.isPinned || t.pinned),
-            locked: !!(t.isLocked || t.locked)
-          };
+          threadFlags = { isDeleted: !!t.isDeleted, pinned: !!(t.isPinned || t.pinned), locked: !!(t.isLocked || t.locked) };
         }
       } else if (r.targetType === 'comment') {
         const c = cMap.get(String(r.targetId));
@@ -229,7 +199,7 @@ router.get('/reports', requireAdmin, async (req, res) => {
   }
 });
 
-// ===== USERS and user-related actions =====
+// ===== USERS =====
 router.get('/users', requireAdmin, async (req, res) => {
   try {
     const qstr = s(req.query.q, 200);
@@ -247,20 +217,14 @@ router.get('/users', requireAdmin, async (req, res) => {
     }
 
     const [users, total] = await Promise.all([
-      User.find(filter).select('name email role isBanned createdAt notes').sort({ createdAt: -1 })
-        .skip((page - 1) * limit).limit(limit).lean(),
+      User.find(filter).select('name email role isBanned createdAt notes').sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
       User.countDocuments(filter)
     ]);
 
     res.json({ users, total });
   } catch (e) {
-    console.error('[admin] users error:', e);
     res.status(500).json({ error: 'Failed to load users', detail: String(e) });
   }
 });
 
-// You can include your other user routes (export CSV, toggle ban, set role, note, delete, content) below,
-// all wrapped with requireAdmin similarly.
-
-// Finally, export router
 module.exports = router;
