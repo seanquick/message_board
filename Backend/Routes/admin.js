@@ -13,7 +13,7 @@ const ModLog = (() => { try { return require('../Models/ModLog'); } catch { retu
 
 const { requireAdmin } = require('../Middleware/auth');
 
-// Proper fallback
+// Proper fallback for enumValues
 let enumValues = () => [];
 try {
   const enumUtil = require('../Util/enum');
@@ -22,6 +22,7 @@ try {
   }
 } catch {}
 
+// Helpers
 const toBool = v => v === true || v === 'true' || v === '1' || v === 1;
 const notDeleted = (field = 'isDeleted') => ({
   $or: [{ [field]: false }, { [field]: { $exists: false } }]
@@ -91,6 +92,7 @@ router.get('/metrics', requireAdmin, async (_req, res) => {
 
     res.json({ metrics: { users: usersCount, threads: threadsCount, comments: commentsCount, reports: reportsCount } });
   } catch (e) {
+    console.error('[admin] metrics error:', e);
     res.status(500).json({ error: 'Failed to load metrics', detail: String(e) });
   }
 });
@@ -104,17 +106,27 @@ router.get('/search', requireAdmin, async (req, res) => {
 
     if (type === 'threads') {
       const filter = includeDeleted ? {} : notDeleted('isDeleted');
-      results = await Thread.find(filter).sort({ createdAt: -1 }).limit(100)
-        .select('_id title author createdAt isDeleted isPinned pinned isLocked locked upvoteCount commentCount').lean();
+      results = await Thread.find(filter)
+        .sort({ createdAt: -1 })
+        .limit(100)
+        .select('_id title author createdAt isDeleted isPinned pinned isLocked locked upvoteCount commentCount')
+        .lean();
     } else if (type === 'comments') {
       const filter = includeDeleted ? {} : notDeleted('isDeleted');
-      results = await Comment.find(filter).sort({ createdAt: -1 }).limit(100)
-        .select('_id thread author createdAt body isDeleted upvoteCount').lean();
-      results = results.map(c => ({ ...c, snippet: (c.body || '').slice(0, 120) }));
+      results = await Comment.find(filter)
+        .sort({ createdAt: -1 })
+        .limit(100)
+        .select('_id thread author createdAt body isDeleted upvoteCount')
+        .lean();
+      results = results.map(c => ({
+        ...c,
+        snippet: (c.body || '').slice(0, 120)
+      }));
     }
 
     res.json({ results });
   } catch (e) {
+    console.error('[admin] search error:', e);
     res.status(500).json({ error: 'Search failed', detail: String(e) });
   }
 });
@@ -129,19 +141,33 @@ router.get('/reports', requireAdmin, async (req, res) => {
 
     let filter;
     if (status === 'all') filter = {};
-    else if (status === 'resolved') filter = resolvedVals.length ? { status: { $in: resolvedVals } } : { status: 'resolved' };
-    else filter = openVals.length ? { status: { $in: openVals } } : { $or: [{ status: 'open' }, { status: null }, { status: { $exists: false } }] };
+    else if (status === 'resolved') {
+      filter = resolvedVals.length ? { status: { $in: resolvedVals } } : { status: 'resolved' };
+    } else {
+      filter = openVals.length
+        ? { status: { $in: openVals } }
+        : { $or: [{ status: 'open' }, { status: null }, { status: { $exists: false } }] };
+    }
 
-    const reports = await Report.find(filter).sort({ createdAt: -1 }).limit(400).lean();
+    const reports = await Report.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(400)
+      .lean();
 
     const threadIds = reports.filter(r => r.targetType === 'thread').map(r => r.targetId).filter(Boolean);
     const commentIds = reports.filter(r => r.targetType === 'comment').map(r => r.targetId).filter(Boolean);
     const reporterIds = reports.map(r => r.reporterId).filter(Boolean);
 
     const [threads, comments, users] = await Promise.all([
-      Thread.find({ _id: { $in: threadIds } }).select('title body content author isDeleted isPinned pinned isLocked locked').lean(),
-      Comment.find({ _id: { $in: commentIds } }).select('body author thread isDeleted').lean(),
-      User.find({ _id: { $in: reporterIds } }).select('name email').lean()
+      Thread.find({ _id: { $in: threadIds } })
+        .select('title body content author isDeleted isPinned pinned isLocked locked')
+        .lean(),
+      Comment.find({ _id: { $in: commentIds } })
+        .select('body author thread isDeleted')
+        .lean(),
+      User.find({ _id: { $in: reporterIds } })
+        .select('name email')
+        .lean()
     ]);
 
     const tMap = new Map(threads.map(t => [String(t._id), t]));
@@ -158,7 +184,11 @@ router.get('/reports', requireAdmin, async (req, res) => {
           snippet = `${t.title || '(untitled)'} — ${(t.body ?? t.content ?? '').slice(0, 180)}`;
           threadId = t._id;
           targetOwnerId = t.author || null;
-          threadFlags = { isDeleted: !!t.isDeleted, pinned: !!(t.isPinned || t.pinned), locked: !!(t.isLocked || t.locked) };
+          threadFlags = {
+            isDeleted: !!t.isDeleted,
+            pinned: !!(t.isPinned || t.pinned),
+            locked: !!(t.isLocked || t.locked)
+          };
         }
       } else if (r.targetType === 'comment') {
         const c = cMap.get(String(r.targetId));
@@ -209,19 +239,17 @@ router.post('/reports/:reportId/resolve', requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Invalid report ID' });
     }
 
-    // Find the report
     const report = await Report.findById(rid);
     if (!report) {
       return res.status(404).json({ error: 'Report not found' });
     }
 
-    // Mark resolved
     report.status = 'resolved';
     if (typeof resolutionNote === 'string') {
       report.resolutionNote = resolutionNote.trim();
     }
     report.resolvedAt = new Date();
-    report.resolvedBy = req.user?.uid;  // or whichever field holds admin ID
+    report.resolvedBy = req.user?.uid;
 
     await report.save();
 
@@ -232,7 +260,7 @@ router.post('/reports/:reportId/resolve', requireAdmin, async (req, res) => {
   }
 });
 
-// Also optionally allow bulk resolve (if your UI supports)
+// Bulk resolve
 router.post('/reports/resolve', requireAdmin, async (req, res) => {
   try {
     const { reportIds, resolutionNote } = req.body;
@@ -262,7 +290,6 @@ router.post('/reports/resolve', requireAdmin, async (req, res) => {
   }
 });
 
-
 // ===== USERS =====
 router.get('/users', requireAdmin, async (req, res) => {
   try {
@@ -281,12 +308,18 @@ router.get('/users', requireAdmin, async (req, res) => {
     }
 
     const [users, total] = await Promise.all([
-      User.find(filter).select('name email role isBanned createdAt notes').sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+      User.find(filter)
+        .select('name email role isBanned createdAt notes')
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
       User.countDocuments(filter)
     ]);
 
     res.json({ users, total });
   } catch (e) {
+    console.error('[admin] users error:', e);
     res.status(500).json({ error: 'Failed to load users', detail: String(e) });
   }
 });
