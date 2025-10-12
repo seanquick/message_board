@@ -20,14 +20,6 @@ function debounce(fn, ms = 300) {
   };
 }
 
-function formatDate(d = new Date()) {
-  try {
-    return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(d);
-  } catch {
-    return d.toISOString();
-  }
-}
-
 function ensureTbody(selector) {
   const tbl = q(selector);
   if (!tbl) return null;
@@ -261,9 +253,7 @@ async function loadThreads() {
     params.set('t', String(Date.now()));
     if (includeDeleted) params.set('includeDeleted', '1');
     const url = `/api/admin/search?type=threads&${params.toString()}`;
-    console.log('loadThreads fetch url:', url);
     const resp = await api(url, { nocache: true });
-    console.log('loadThreads response:', resp);
     const { results } = resp;
     tbody.innerHTML = '';
     if (!Array.isArray(results) || !results.length) {
@@ -316,7 +306,7 @@ async function loadThreads() {
       const tr = ev.currentTarget.closest('tr');
       const tid = tr.dataset.id;
       const isDeleted = !(tr.dataset.deleted === 'true');
-      const note = prompt('Note (optional):');
+      const note = prompt('Reason (optional):');
       try {
         await api(`/api/admin/threads/${tid}/delete`, { method: 'POST', body: { deleted: isDeleted, reason: note } });
         loadThreads();
@@ -339,9 +329,7 @@ async function loadComments() {
     params.set('t', String(Date.now()));
     if (includeDeleted) params.set('includeDeleted', '1');
     const url = `/api/admin/search?type=comments&${params.toString()}`;
-    console.log('loadComments fetch url:', url);
     const resp = await api(url, { nocache: true });
-    console.log('loadComments response:', resp);
     const { results } = resp;
     tbody.innerHTML = '';
     if (!Array.isArray(results) || !results.length) {
@@ -391,9 +379,7 @@ async function loadReports() {
     params.set('status', status);
     const path = group ? 'reports/grouped' : 'reports';
     const url = `/api/admin/${path}?${params.toString()}`;
-    console.log('loadReports fetch url:', url);
     const resp = await api(url, { nocache: true });
-    console.log('loadReports response:', resp);
     const list = resp[group ? 'groups' : 'reports'];
     tbody.innerHTML = '';
     if (!Array.isArray(list) || !list.length) {
@@ -402,6 +388,7 @@ async function loadReports() {
     }
     for (const r of list) {
       const tr = document.createElement('tr');
+      // In grouped mode, r.ids might be an array of actual report ids
       tr.dataset.id = r._id || (r.ids ? r.ids[0] : '');
       const reporterName = r.reporter?.name || r.reporter?.email || '(unknown)';
       tr.innerHTML = `
@@ -420,6 +407,7 @@ async function loadReports() {
       tbody.appendChild(tr);
     }
 
+    // Bind “View” buttons
     tbody.querySelectorAll('.viewReport').forEach(btn => {
       btn.addEventListener('click', ev => {
         ev.stopPropagation();
@@ -429,6 +417,7 @@ async function loadReports() {
       });
     });
 
+    // Bind “Resolve” buttons
     tbody.querySelectorAll('.resolveOne').forEach(btn => {
       btn.addEventListener('click', async ev => {
         ev.stopPropagation();
@@ -463,12 +452,17 @@ async function openReportDetail(reportId) {
       return;
     }
     let original = null;
+    let originalMeta = null;
+
     if (report.targetType === 'thread') {
       original = await api(`/api/threads/${report.targetId}`);
+      originalMeta = original.thread ?? original; // depending on your API shape
     } else if (report.targetType === 'comment') {
       original = await api(`/api/comments/${report.targetId}`);
+      originalMeta = original.comment ?? original;
     }
-    showReportDetailModal(report, original);
+
+    showReportDetailModal(report, originalMeta);
   } catch (e) {
     console.error('openReportDetail error', e);
     showErr(`Failed to load report detail: ${e?.error || e?.message}`);
@@ -476,55 +470,84 @@ async function openReportDetail(reportId) {
 }
 
 function showReportDetailModal(report, original) {
-  let mod = q('#adminReportModal');
-  if (!mod) {
-    mod = document.createElement('div');
-    mod.id = 'adminReportModal';
-    mod.innerHTML = `
-      <div class="report-backdrop" style="
-        position:fixed; inset:0; background:rgba(0,0,0,0.5);
-        display:none; align-items:center; justify-content:center; z-index:9999;
-      ">
-        <div class="report-dialog" style="
-          background:#fff; border-radius:8px; padding:1rem; max-width:680px;
-          box-shadow:0 4px 16px rgba(0,0,0,0.2);
-        ">
-          <header><h3>Report Detail</h3></header>
-          <section id="reportDetailBody" style="margin-top:1rem; max-height:60vh; overflow:auto;"></section>
-          <div style="text-align:right; margin-top:1rem;">
-            <button id="adminReportClose" class="btn tiny">Close</button>
-          </div>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(mod);
+  const modal = q('#adminReportModal');
+  if (!modal) {
+    console.error('Modal container not found in DOM');
+    return;
+  }
+  const backdrop = modal.querySelector('.report-backdrop');
+  const body = modal.querySelector('#reportDetailBody');
+  const btnClose = modal.querySelector('#adminReportClose');
+  if (!backdrop || !body || !btnClose) {
+    console.error('Modal structure invalid');
+    return;
   }
 
-  const backdrop = mod.querySelector('.report-backdrop');
-  const body = mod.querySelector('#reportDetailBody');
-  const btnClose = mod.querySelector('#adminReportClose');
-  if (!backdrop || !body || !btnClose) return;
-
+  // Show backdrop
   backdrop.style.display = 'flex';
-  btnClose.onclick = () => { backdrop.style.display = 'none'; };
 
+  // Close button
+  btnClose.onclick = () => {
+    backdrop.style.display = 'none';
+  };
+
+  // Fill content
   const reporterName = report.reporter?.name || report.reporter?.email || '(unknown)';
-  const when = new Date(report.createdAt).toLocaleString();
+  const createdAt = new Date(report.createdAt).toLocaleString();
+  const updatedAt = report.updatedAt ? new Date(report.updatedAt).toLocaleString() : null;
   const category = escapeHTML(report.category || '');
   const details = escapeHTML(report.details || '');
+  const status = escapeHTML(report.status || '');
+  const resolutionNote = escapeHTML(report.resolutionNote || '');
+
+  let originalHtml = '';
+  if (original) {
+    // Try to include title or snippet if present
+    const titleOrSnippet = original.title ? original.title :
+                            original.snippet ? original.snippet :
+                            original.body || original.content || '(no content)';
+    // Link to thread page if thread
+    if (report.targetType === 'thread') {
+      originalHtml += `<p><strong>Thread title:</strong> <a href="thread.html?id=${encodeURIComponent(original._id)}" target="_blank">${escapeHTML(titleOrSnippet)}</a></p>`;
+      if (original.author) {
+        originalHtml += `<p><strong>Author:</strong> ${escapeHTML(original.author)}</p>`;
+      }
+      originalHtml += `<div style="padding:.75rem; border:1px solid #ccc; border-radius:4px; margin-top:.5rem;">
+        <pre style="white-space:pre-wrap;">${escapeHTML(original.body || original.content || '')}</pre>
+      </div>`;
+    } else if (report.targetType === 'comment') {
+      // For comment, show snippet, author, and parent thread link if available
+      if (original.author) {
+        originalHtml += `<p><strong>Author:</strong> ${escapeHTML(original.author)}</p>`;
+      }
+      if (original.thread) {
+        // If your comment object includes a thread ID or title
+        originalHtml += `<p><strong>Thread:</strong> <a href="thread.html?id=${encodeURIComponent(original.thread)}" target="_blank">${escapeHTML(String(original.thread))}</a></p>`;
+      }
+      originalHtml += `<div style="padding:.75rem; border:1px solid #ccc; border-radius:4px; margin-top:.5rem;">
+        <pre style="white-space:pre-wrap;">${escapeHTML(original.body || original.content || '')}</pre>
+      </div>`;
+    } else {
+      originalHtml = `<em>(Original content unavailable or unknown type)</em>`;
+    }
+  } else {
+    originalHtml = `<em>(Original content not found)</em>`;
+  }
 
   body.innerHTML = `
     <p><strong>Reporter:</strong> ${reporterName}</p>
-    <p><strong>Date:</strong> ${when}</p>
+    <p><strong>Created At:</strong> ${createdAt}</p>
+    ${updatedAt ? `<p><strong>Last Updated:</strong> ${updatedAt}</p>` : ''}
     <p><strong>Category:</strong> ${category}</p>
-    <p><strong>Details:</strong> ${details}</p>
+    <p><strong>Details:</strong></p>
+    <div style="padding:.5rem; border:1px solid #ddd; border-radius:4px; background:#f9f9f9;">
+      <pre style="white-space:pre-wrap;">${details}</pre>
+    </div>
+    <p><strong>Status:</strong> ${status}</p>
+    ${resolutionNote ? `<p><strong>Resolution Note:</strong> ${resolutionNote}</p>` : ''}
     <hr/>
     <h4>Original ${escapeHTML(report.targetType)}</h4>
-    <div style="padding:.75rem; border:1px solid #ccc; border-radius:4px;">
-      ${ original
-        ? `<pre style="white-space:pre-wrap;">${escapeHTML(original.body || original.content || '')}</pre>`
-        : `<em>(original content not found)</em>` }
-    </div>
+    ${originalHtml}
   `;
 }
 
@@ -548,7 +571,7 @@ function exportReportsCSV() {
   window.location.href = `/api/admin/reports/export.csv?t=${Date.now()}`;
 }
 
-// --- SEARCH (unchanged) ---
+// --- SEARCH ---
 async function doSearch() {
   const qstr = (q('#sQ')?.value || '').trim();
   const type = (q('#sType')?.value || 'all').toLowerCase();
