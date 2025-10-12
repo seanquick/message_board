@@ -5,7 +5,7 @@ const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 export async function api(url, opts = {}) {
   const { method = 'GET', body, headers = {}, nocache = false } = opts;
-  const finalHeaders = { 'Content-Type': 'application/json', ...headers };
+  const finalHeaders = { ...JSON_HEADERS, ...headers };
 
   const upper = String(method).toUpperCase();
   if (!['GET', 'HEAD', 'OPTIONS'].includes(upper)) {
@@ -25,6 +25,7 @@ export async function api(url, opts = {}) {
 
   let res = await doFetch();
 
+  // Try silent session refresh if unauthorized
   if (res.status === 401 && url.startsWith('/api/admin/')) {
     const refreshed = await tryRefreshSession();
     if (refreshed) {
@@ -33,12 +34,24 @@ export async function api(url, opts = {}) {
   }
 
   const ct = res.headers.get('content-type') || '';
-  const data = ct.includes('application/json') ? await res.json() : await res.text();
+  const isJson = ct.includes('application/json');
+  const isHtml = ct.includes('text/html');
+  const text = await res.text();
+
+  // Handle unexpected HTML responses (e.g., login page)
+  if (isHtml && text.includes('<title>Sign in')) {
+    console.warn('🔒 Session expired or not logged in – redirecting to login.');
+    window.location.href = '/login.html';
+    return {};
+  }
+
+  const data = isJson ? JSON.parse(text) : text;
 
   if (!res.ok) {
     const err = (typeof data === 'object' && data) ? data : { error: String(data || 'Request failed') };
     throw err;
   }
+
   return data;
 }
 
