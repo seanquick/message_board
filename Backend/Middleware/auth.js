@@ -1,4 +1,6 @@
 // Backend/Middleware/auth.js
+console.log('[requireAdmin] req.originalUrl =', req.originalUrl, 'req.user =', req.user);
+
 const jwt = require('jsonwebtoken');
 const User = require('../Models/User');
 
