@@ -387,9 +387,14 @@ async function loadReports() {
       return;
     }
     for (const r of list) {
-      const tr = document.createElement('tr');
-      // In grouped mode, r.ids might be an array of actual report ids
-      tr.dataset.id = r._id || (r.ids ? r.ids[0] : '');
+        const tr = document.createElement('tr');
+        
+        // ✅ DEBUGGING: Log the assigned ID
+        const reportId = r._id || (r.ids && r.ids.length ? r.ids[0] : '');
+        console.log('Assigned report row ID:', reportId, r);
+
+        tr.dataset.id = reportId;
+
       const reporterName = r.reporter?.name || r.reporter?.email || '(unknown)';
       tr.innerHTML = `
         <td><input type="checkbox" class="rSelect" data-id="${r._id}"></td>
