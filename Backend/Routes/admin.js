@@ -324,4 +324,26 @@ router.get('/users', requireAdmin, async (req, res) => {
   }
 });
 
+// ===== SINGLE REPORT VIEW =====
+router.get('/reports/:id', requireAdmin, async (req, res) => {
+  try {
+    const reportId = req.params.id;
+
+    if (!mongoose.isValidObjectId(reportId)) {
+      return res.status(400).json({ error: 'Invalid report ID' });
+    }
+
+    const report = await Report.findById(reportId).lean();
+
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found' });
+    }
+
+    res.json({ report });
+  } catch (e) {
+    console.error('[admin] single report view error:', e);
+    res.status(500).json({ error: 'Failed to load report', detail: String(e) });
+  }
+});
+
 module.exports = router;
