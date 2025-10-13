@@ -232,6 +232,42 @@ router.get('/reports', requireAdmin, async (req, res) => {
   }
 });
 
+// ===== GET SINGLE REPORT =====
+router.get('/reports/:reportId', requireAdmin, async (req, res) => {
+  try {
+    const rid = req.params.reportId;
+    if (!mongoose.isValidObjectId(rid)) {
+      return res.status(400).json({ error: 'Invalid report ID' });
+    }
+
+    const report = await Report.findById(rid).lean();
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found' });
+    }
+
+    // Populate reporter and target (thread/comment)
+    const [reporter, thread, comment] = await Promise.all([
+      report.reporterId ? User.findById(report.reporterId).select('name email').lean() : null,
+      report.targetType === 'thread' && report.targetId ? Thread.findById(report.targetId).select('title body author').lean() : null,
+      report.targetType === 'comment' && report.targetId ? Comment.findById(report.targetId).select('body author thread').lean() : null
+    ]);
+
+    // Attach readable info
+    report.reporter = reporter || null;
+    report.original = thread || comment || null;
+
+    if (report.original && report.original.author) {
+      const authorInfo = await User.findById(report.original.author).select('name email').lean();
+      report.original.author = authorInfo || report.original.author;
+    }
+
+    res.json({ report });
+  } catch (e) {
+    console.error('[admin] get single report error:', e);
+    res.status(500).json({ error: 'Failed to load report', detail: String(e) });
+  }
+});
+
 // ===== Resolve a report =====
 router.post('/reports/:reportId/resolve', requireAdmin, async (req, res) => {
   try {
