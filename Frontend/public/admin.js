@@ -450,20 +450,26 @@ async function loadReports() {
 
 async function openReportDetail(reportId) {
   try {
-    const resp = await api(`/api/admin/reports/${reportId}?t=${Date.now()}`);
+    // Prevent redirect to login if HTML login page is returned
+    const resp = await api(`/api/admin/reports/${reportId}?t=${Date.now()}`, {
+      nocache: true,
+      skipHtmlRedirect: true
+    });
+
     const report = resp.report;
     if (!report) {
       showErr('Report not found');
       return;
     }
+
     let original = null;
     let originalMeta = null;
 
     if (report.targetType === 'thread') {
-      original = await api(`/api/threads/${report.targetId}`);
-      originalMeta = original.thread ?? original; // depending on your API shape
+      original = await api(`/api/threads/${report.targetId}`, { skipHtmlRedirect: true });
+      originalMeta = original.thread ?? original;
     } else if (report.targetType === 'comment') {
-      original = await api(`/api/comments/${report.targetId}`);
+      original = await api(`/api/comments/${report.targetId}`, { skipHtmlRedirect: true });
       originalMeta = original.comment ?? original;
     }
 
@@ -473,6 +479,8 @@ async function openReportDetail(reportId) {
     showErr(`Failed to load report detail: ${e?.error || e?.message}`);
   }
 }
+
+
 
 function showReportDetailModal(report, original) {
   const modal = q('#adminReportModal');

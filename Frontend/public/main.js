@@ -4,7 +4,14 @@
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 export async function api(url, opts = {}) {
-  const { method = 'GET', body, headers = {}, nocache = false } = opts;
+  const {
+    method = 'GET',
+    body,
+    headers = {},
+    nocache = false,
+    skipHtmlRedirect = false  // new option
+  } = opts;
+
   const finalHeaders = { ...JSON_HEADERS, ...headers };
 
   const upper = String(method).toUpperCase();
@@ -25,7 +32,6 @@ export async function api(url, opts = {}) {
 
   let res = await doFetch();
 
-  // Try silent session refresh if unauthorized
   if (res.status === 401 && url.startsWith('/api/admin/')) {
     const refreshed = await tryRefreshSession();
     if (refreshed) {
@@ -38,12 +44,12 @@ export async function api(url, opts = {}) {
   const isHtml = ct.includes('text/html');
   const text = await res.text();
 
-  // Handle unexpected HTML responses (e.g., login page returned from API)
-  if (isHtml && (
+  // Only do redirect logic if skipHtmlRedirect is false
+  if (!skipHtmlRedirect && isHtml && (
     text.includes('<title>Sign in') ||
-    text.includes('form') && text.includes('password') && text.includes('email')
+    (text.includes('input') && text.includes('password') && text.includes('email'))
   )) {
-    console.warn('🔒 Login page received instead of data – redirecting to login.');
+    console.warn('🔒 Detected login HTML in api response — redirecting to login.');
     window.location.href = '/login.html';
     return {};
   }
@@ -54,7 +60,6 @@ export async function api(url, opts = {}) {
     const err = (typeof data === 'object' && data) ? data : { error: String(data || 'Request failed') };
     throw err;
   }
-
   return data;
 }
 
@@ -86,8 +91,8 @@ export async function refreshMe() {
 }
 
 /* ---------------- Tiny DOM helpers ---------------- */
-export const $  = id => document.getElementById(id);
-export const q  = sel => document.querySelector(sel);
+export const $ = id => document.getElementById(id);
+export const q = sel => document.querySelector(sel);
 export const qa = sel => Array.from(document.querySelectorAll(sel));
 
 export function escapeHTML(s = '') {
