@@ -231,7 +231,7 @@ router.get('/reports', requireAdmin, async (req, res) => {
   }
 });
 
-// ===== GET SINGLE REPORT (enhanced) =====
+// ===== GET SINGLE REPORT (robust version) =====
 router.get('/reports/:reportId', requireAdmin, async (req, res) => {
   try {
     const rid = req.params.reportId;
@@ -244,32 +244,46 @@ router.get('/reports/:reportId', requireAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Report not found' });
     }
 
-    // Populate reporter and target
-    const [reporter, thread, comment] = await Promise.all([
-      report.reporterId ? User.findById(report.reporterId).select('name email').lean() : null,
-      report.targetType === 'thread' && report.targetId ? Thread.findById(report.targetId).select('title body author').lean() : null,
-      report.targetType === 'comment' && report.targetId ? Comment.findById(report.targetId).select('body author thread').lean() : null
-    ]);
+    // Reporter
+    let reporter = null;
+    if (report.reporterId && mongoose.isValidObjectId(report.reporterId)) {
+      reporter = await User.findById(report.reporterId).select('name email').lean();
+    }
 
-    // Attach readable info
-    report.reporter = reporter || null;
-    report.original = thread || comment || null;
+    // Original content (thread or comment)
+    let original = null;
+    if (report.targetType === 'thread' && report.targetId && mongoose.isValidObjectId(report.targetId)) {
+      original = await Thread.findById(report.targetId)
+        .select('title body author')
+        .lean();
+    } else if (report.targetType === 'comment' && report.targetId && mongoose.isValidObjectId(report.targetId)) {
+      original = await Comment.findById(report.targetId)
+        .select('body author thread')
+        .lean();
+    }
 
-    // Populate author details
-    if (report.original) {
-      const authorId = report.original.author || report.original.authorId || null;
-      if (authorId && mongoose.isValidObjectId(authorId)) {
-        const authorInfo = await User.findById(authorId).select('name email').lean();
-        report.original.author = authorInfo || report.original.author;
+    // Populate author details for original if possible
+    if (original) {
+      const authId = original.author || original.authorId;
+      if (authId && mongoose.isValidObjectId(authId)) {
+        const authorDoc = await User.findById(authId).select('name email').lean();
+        if (authorDoc) {
+          original.author = authorDoc;
+        }
       }
     }
 
-    res.json({ report });
+    // Attach to report
+    report.reporter = reporter;
+    report.original = original;
+
+    return res.json({ report });
   } catch (e) {
     console.error('[admin] get single report error:', e);
-    res.status(500).json({ error: 'Failed to load report', detail: String(e) });
+    return res.status(500).json({ error: 'Failed to load report', detail: String(e) });
   }
 });
+
 
 // ===== Resolve a report =====
 router.post('/reports/:reportId/resolve', requireAdmin, async (req, res) => {
