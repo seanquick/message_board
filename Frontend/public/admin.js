@@ -523,11 +523,14 @@ function showReportDetailModal(report, original) {
 
     // Original author name (if available)
     let origAuthor = '(unknown)';
-    if (original.author && typeof original.author === 'object') {
-      origAuthor = original.author.name || original.author.email || original.author._id || '(unknown)';
-    } else if (typeof original.author === 'string') {
-      origAuthor = original.author;
-    }
+      if (original.adminAuthor && typeof original.adminAuthor === 'object') {
+        // Use adminAuthor if it exists
+        origAuthor = original.adminAuthor.name || original.adminAuthor.email || String(original.adminAuthor.id || '');
+      } else if (original.author && typeof original.author === 'object') {
+        origAuthor = original.author.name || original.author.email || String(original.author._id || '');
+      } else if (typeof original.author === 'string') {
+        origAuthor = original.author;
+      }
 
     if (report.targetType === 'thread') {
       originalHtml += `<p><strong>Thread title:</strong> <a href="thread.html?id=${encodeURIComponent(original._id)}" target="_blank">${escapeHTML(titleOrSnippet)}</a></p>`;
