@@ -488,50 +488,48 @@ function showReportDetailModal(report, original) {
     return;
   }
 
-  // Show backdrop
   backdrop.style.display = 'flex';
+  btnClose.onclick = () => { backdrop.style.display = 'none'; };
 
-  // Close button
-  btnClose.onclick = () => {
-    backdrop.style.display = 'none';
-  };
-
-  // Fill content
+  // Reporter info
   const reporterName = report.reporter?.name || report.reporter?.email || '(unknown)';
+
+  // Created / updated dates
   const createdAt = new Date(report.createdAt).toLocaleString();
   const updatedAt = report.updatedAt ? new Date(report.updatedAt).toLocaleString() : null;
+
+  // Other metadata
   const category = escapeHTML(report.category || '');
   const details = escapeHTML(report.details || '');
   const status = escapeHTML(report.status || '');
   const resolutionNote = escapeHTML(report.resolutionNote || '');
 
+  // Original content block
   let originalHtml = '';
   if (original) {
-    // Try to include title or snippet if present
-    const titleOrSnippet = original.title ? original.title :
-                            original.snippet ? original.snippet :
-                            original.body || original.content || '(no content)';
-    // Link to thread page if thread
+    const titleOrSnippet = original.title
+      ? original.title
+      : original.snippet
+      ? original.snippet
+      : original.body || original.content || '(no content)';
+
+    // Original author name (if available)
+    const origAuthor = original.author || original.authorName || '(unknown)';
+
     if (report.targetType === 'thread') {
       originalHtml += `<p><strong>Thread title:</strong> <a href="thread.html?id=${encodeURIComponent(original._id)}" target="_blank">${escapeHTML(titleOrSnippet)}</a></p>`;
-      if (original.author) {
-        originalHtml += `<p><strong>Author:</strong> ${escapeHTML(original.author)}</p>`;
-      }
+      originalHtml += `<p><strong>Author:</strong> ${escapeHTML(origAuthor)}</p>`;
       originalHtml += `<div style="padding:.75rem; border:1px solid #ccc; border-radius:4px; margin-top:.5rem;">
-        <pre style="white-space:pre-wrap;">${escapeHTML(original.body || original.content || '')}</pre>
-      </div>`;
+          <pre style="white-space:pre-wrap;">${escapeHTML(original.body || original.content || '')}</pre>
+        </div>`;
     } else if (report.targetType === 'comment') {
-      // For comment, show snippet, author, and parent thread link if available
-      if (original.author) {
-        originalHtml += `<p><strong>Author:</strong> ${escapeHTML(original.author)}</p>`;
-      }
+      originalHtml += `<p><strong>Author:</strong> ${escapeHTML(origAuthor)}</p>`;
       if (original.thread) {
-        // If your comment object includes a thread ID or title
         originalHtml += `<p><strong>Thread:</strong> <a href="thread.html?id=${encodeURIComponent(original.thread)}" target="_blank">${escapeHTML(String(original.thread))}</a></p>`;
       }
       originalHtml += `<div style="padding:.75rem; border:1px solid #ccc; border-radius:4px; margin-top:.5rem;">
-        <pre style="white-space:pre-wrap;">${escapeHTML(original.body || original.content || '')}</pre>
-      </div>`;
+          <pre style="white-space:pre-wrap;">${escapeHTML(original.body || original.content || '')}</pre>
+        </div>`;
     } else {
       originalHtml = `<em>(Original content unavailable or unknown type)</em>`;
     }
@@ -539,8 +537,13 @@ function showReportDetailModal(report, original) {
     originalHtml = `<em>(Original content not found)</em>`;
   }
 
+  // Resolve button (if still open)
+  const resolveBtnHtml = (report.status !== 'resolved' && report.status !== 'closed')
+    ? `<button id="modalResolveBtn" class="btn tiny" style="margin-top: 1rem;">Resolve</button>`
+    : '';
+
   body.innerHTML = `
-    <p><strong>Reporter:</strong> ${reporterName}</p>
+    <p><strong>Reporter:</strong> ${escapeHTML(reporterName)}</p>
     <p><strong>Created At:</strong> ${createdAt}</p>
     ${updatedAt ? `<p><strong>Last Updated:</strong> ${updatedAt}</p>` : ''}
     <p><strong>Category:</strong> ${category}</p>
@@ -553,8 +556,32 @@ function showReportDetailModal(report, original) {
     <hr/>
     <h4>Original ${escapeHTML(report.targetType)}</h4>
     ${originalHtml}
+    ${resolveBtnHtml}
   `;
+
+  // Bind resolve button if present
+  const modalResolveBtn = modal.querySelector('#modalResolveBtn');
+  if (modalResolveBtn) {
+    modalResolveBtn.onclick = async () => {
+      const note = prompt('Resolution note (optional):');
+      try {
+        const res = await api(`/api/admin/reports/${report._id}/resolve`, {
+          method: 'POST',
+          body: { resolutionNote: note || '' }
+        });
+        if (res.ok || res.report) {
+          backdrop.style.display = 'none';
+          loadReports();  // reload the reports list
+        } else {
+          showErr(`Resolve failed: ${res.error || 'Unknown'}`);
+        }
+      } catch (e) {
+        showErr(`Resolve error: ${e?.error || e?.message || e}`);
+      }
+    };
+  }
 }
+
 
 async function bulkResolveSelected() {
   const cbs = qa('#reportsTable tbody .rSelect:checked');
