@@ -85,10 +85,10 @@ router.get('/metrics', requireAdmin, async (_req, res) => {
       : { $or: [{ status: { $exists: false } }, { status: null }, { status: 'open' }] };
 
     let usersCount = 0, threadsCount = 0, commentsCount = 0, reportsCount = 0;
-    try { usersCount = await User.countDocuments(); } catch (e) {}
-    try { threadsCount = await Thread.countDocuments(); } catch (e) {}
-    try { commentsCount = await Comment.countDocuments(); } catch (e) {}
-    try { reportsCount = await Report.countDocuments(openFilter); } catch (e) {}
+    try { usersCount = await User.countDocuments(); } catch {}
+    try { threadsCount = await Thread.countDocuments(); } catch {}
+    try { commentsCount = await Comment.countDocuments(); } catch {}
+    try { reportsCount = await Report.countDocuments(openFilter); } catch {}
 
     res.json({ metrics: { users: usersCount, threads: threadsCount, comments: commentsCount, reports: reportsCount } });
   } catch (e) {
@@ -131,7 +131,7 @@ router.get('/search', requireAdmin, async (req, res) => {
   }
 });
 
-// ===== REPORTS =====
+// ===== REPORTS LIST =====
 router.get('/reports', requireAdmin, async (req, res) => {
   try {
     const status = String(req.query.status || 'open').toLowerCase();
@@ -163,7 +163,6 @@ router.get('/reports', requireAdmin, async (req, res) => {
         .select('title body content author isDeleted isPinned pinned isLocked locked')
         .populate('author', 'name email')
         .lean(),
-
       Comment.find({ _id: { $in: commentIds } })
         .select('body author thread isDeleted')
         .populate('author', 'name email')
@@ -232,7 +231,7 @@ router.get('/reports', requireAdmin, async (req, res) => {
   }
 });
 
-// ===== GET SINGLE REPORT =====
+// ===== GET SINGLE REPORT (enhanced) =====
 router.get('/reports/:reportId', requireAdmin, async (req, res) => {
   try {
     const rid = req.params.reportId;
@@ -245,7 +244,7 @@ router.get('/reports/:reportId', requireAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Report not found' });
     }
 
-    // Populate reporter and target (thread/comment)
+    // Populate reporter and target
     const [reporter, thread, comment] = await Promise.all([
       report.reporterId ? User.findById(report.reporterId).select('name email').lean() : null,
       report.targetType === 'thread' && report.targetId ? Thread.findById(report.targetId).select('title body author').lean() : null,
@@ -256,9 +255,13 @@ router.get('/reports/:reportId', requireAdmin, async (req, res) => {
     report.reporter = reporter || null;
     report.original = thread || comment || null;
 
-    if (report.original && report.original.author) {
-      const authorInfo = await User.findById(report.original.author).select('name email').lean();
-      report.original.author = authorInfo || report.original.author;
+    // Populate author details
+    if (report.original) {
+      const authorId = report.original.author || report.original.authorId || null;
+      if (authorId && mongoose.isValidObjectId(authorId)) {
+        const authorInfo = await User.findById(authorId).select('name email').lean();
+        report.original.author = authorInfo || report.original.author;
+      }
     }
 
     res.json({ report });
@@ -299,7 +302,7 @@ router.post('/reports/:reportId/resolve', requireAdmin, async (req, res) => {
   }
 });
 
-// Bulk resolve
+// ===== Bulk Resolve =====
 router.post('/reports/resolve', requireAdmin, async (req, res) => {
   try {
     const { reportIds, resolutionNote } = req.body;
@@ -360,28 +363,6 @@ router.get('/users', requireAdmin, async (req, res) => {
   } catch (e) {
     console.error('[admin] users error:', e);
     res.status(500).json({ error: 'Failed to load users', detail: String(e) });
-  }
-});
-
-// ===== SINGLE REPORT VIEW =====
-router.get('/reports/:id', requireAdmin, async (req, res) => {
-  try {
-    const reportId = req.params.id;
-
-    if (!mongoose.isValidObjectId(reportId)) {
-      return res.status(400).json({ error: 'Invalid report ID' });
-    }
-
-    const report = await Report.findById(reportId).lean();
-
-    if (!report) {
-      return res.status(404).json({ error: 'Report not found' });
-    }
-
-    res.json({ report });
-  } catch (e) {
-    console.error('[admin] single report view error:', e);
-    res.status(500).json({ error: 'Failed to load report', detail: String(e) });
   }
 });
 
