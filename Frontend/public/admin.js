@@ -492,7 +492,7 @@ function showReportDetailModal(report, original) {
   btnClose.onclick = () => { backdrop.style.display = 'none'; };
 
   // Reporter info
-  const reporterName = report.reporter?.name || report.reporter?.email || '(unknown)';
+  const reporterName = report.reporter?.name || report.reporter?.email || report.reporterId || '(unknown)';
 
   // Created / updated dates
   const createdAt = new Date(report.createdAt).toLocaleString();
@@ -514,7 +514,12 @@ function showReportDetailModal(report, original) {
       : original.body || original.content || '(no content)';
 
     // Original author name (if available)
-    const origAuthor = original.author || original.authorName || '(unknown)';
+    let origAuthor = '(unknown)';
+    if (original.author && typeof original.author === 'object') {
+      origAuthor = original.author.name || original.author.email || original.author._id || '(unknown)';
+    } else if (typeof original.author === 'string') {
+      origAuthor = original.author;
+    }
 
     if (report.targetType === 'thread') {
       originalHtml += `<p><strong>Thread title:</strong> <a href="thread.html?id=${encodeURIComponent(original._id)}" target="_blank">${escapeHTML(titleOrSnippet)}</a></p>`;
@@ -581,6 +586,7 @@ function showReportDetailModal(report, original) {
     };
   }
 }
+
 
 
 async function bulkResolveSelected() {

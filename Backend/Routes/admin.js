@@ -161,9 +161,12 @@ router.get('/reports', requireAdmin, async (req, res) => {
     const [threads, comments, users] = await Promise.all([
       Thread.find({ _id: { $in: threadIds } })
         .select('title body content author isDeleted isPinned pinned isLocked locked')
+        .populate('author', 'name email')
         .lean(),
+
       Comment.find({ _id: { $in: commentIds } })
         .select('body author thread isDeleted')
+        .populate('author', 'name email')
         .lean(),
       User.find({ _id: { $in: reporterIds } })
         .select('name email')
