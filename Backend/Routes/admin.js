@@ -436,28 +436,117 @@ router.get('/comments/export.csv', requireAdmin, async (req, res) => {
   }
 });
 
-// Export Users
+// ===== EXPORT REPORTS (CSV) =====
+router.get('/reports/export.csv', requireAdmin, async (req, res) => {
+  try {
+    // You can filter by status etc if you want
+    const reports = await Report.find().lean();
+
+    // Optionally populate reporter and maybe target fields
+    // For simplicity, export basic report fields
+    const rows = reports.map(r => ({
+      id: String(r._id),
+      reporterId: r.reporterId || '',
+      targetType: r.targetType || '',
+      targetId: r.targetId || '',
+      category: r.category || '',
+      details: r.details || '',
+      status: r.status || '',
+      createdAt: r.createdAt ? r.createdAt.toISOString() : '',
+      resolvedAt: r.resolvedAt ? r.resolvedAt.toISOString() : '',
+      resolutionNote: r.resolutionNote || ''
+    }));
+
+    if (rows.length === 0) {
+      // no rows, return empty CSV header
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="reports_export.csv"');
+      return res.send('id,reporterId,targetType,targetId,category,details,status,createdAt,resolvedAt,resolutionNote\n');
+    }
+
+    const header = Object.keys(rows[0]).join(',');
+    const lines = rows.map(r =>
+      Object.values(r).map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
+    );
+    const csv = [header, ...lines].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="reports_export.csv"');
+    return res.send(csv);
+  } catch (e) {
+    console.error('[admin] export reports error:', e);
+    return res.status(500).json({ error: 'Failed to export reports', detail: String(e) });
+  }
+});
+
+// ===== EXPORT COMMENTS (CSV) =====
+router.get('/comments/export.csv', requireAdmin, async (req, res) => {
+  try {
+    // fetch all comments, possibly populate author
+    const comments = await Comment.find().lean();
+
+    const rows = comments.map(c => ({
+      id: String(c._id),
+      thread: String(c.thread || ''),
+      authorId: c.author || '',
+      body: c.body || '',
+      createdAt: c.createdAt ? c.createdAt.toISOString() : '',
+      isDeleted: c.isDeleted ? 'true' : 'false'
+    }));
+
+    if (rows.length === 0) {
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="comments_export.csv"');
+      return res.send('id,thread,authorId,body,createdAt,isDeleted\n');
+    }
+
+    const header = Object.keys(rows[0]).join(',');
+    const lines = rows.map(r =>
+      Object.values(r).map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
+    );
+    const csv = [header, ...lines].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="comments_export.csv"');
+    return res.send(csv);
+  } catch (e) {
+    console.error('[admin] export comments error:', e);
+    return res.status(500).json({ error: 'Failed to export comments', detail: String(e) });
+  }
+});
+
+// ===== EXPORT USERS (CSV) =====
 router.get('/users/export.csv', requireAdmin, async (req, res) => {
   try {
     const users = await User.find().lean();
+
     const rows = users.map(u => ({
-      id: u._id,
-      name: u.name,
-      email: u.email,
-      role: u.role,
-      isBanned: u.isBanned,
-      createdAt: u.createdAt
+      id: String(u._id),
+      name: u.name || '',
+      email: u.email || '',
+      role: u.role || '',
+      isBanned: u.isBanned ? 'true' : 'false',
+      createdAt: u.createdAt ? u.createdAt.toISOString() : ''
     }));
-    const header = Object.keys(rows[0] || {}).join(',');
-    const lines = rows.map(r => Object.values(r).map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
+
+    if (rows.length === 0) {
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="users_export.csv"');
+      return res.send('id,name,email,role,isBanned,createdAt\n');
+    }
+
+    const header = Object.keys(rows[0]).join(',');
+    const lines = rows.map(r =>
+      Object.values(r).map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
+    );
     const csv = [header, ...lines].join('\n');
 
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="users_export.csv"');
-    res.send(csv);
+    return res.send(csv);
   } catch (e) {
     console.error('[admin] export users error:', e);
-    res.status(500).json({ error: 'Failed to export users', detail: String(e) });
+    return res.status(500).json({ error: 'Failed to export users', detail: String(e) });
   }
 });
 
