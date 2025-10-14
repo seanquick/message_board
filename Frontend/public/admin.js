@@ -616,6 +616,14 @@ async function bulkResolveSelected() {
   }
 }
 
+function exportCommentsCSV() {
+  window.location.href = `/api/admin/comments/export.csv?t=${Date.now()}`;
+}
+
+function exportUsersCSV() {
+  window.location.href = `/api/admin/users/export.csv?t=${Date.now()}`;
+}
+
 function exportReportsCSV() {
   window.location.href = `/api/admin/reports/export.csv?t=${Date.now()}`;
 }
@@ -688,7 +696,11 @@ async function init() {
     q('#rGroup')?.addEventListener('change', loadReports);
     q('#rFilter')?.addEventListener('change', loadReports);
     q('#rBulkResolve')?.addEventListener('click', bulkResolveSelected);
+    
     q('#rExport')?.addEventListener('click', exportReportsCSV);
+    q('#cExport')?.addEventListener('click', exportCommentsCSV);
+    q('#uExport')?.addEventListener('click', exportUsersCSV);
+
     q('#rSelectAll')?.addEventListener('change', () => {
       const checked = q('#rSelectAll')?.checked;
       qa('#reportsTable tbody .rSelect').forEach(cb => { cb.checked = !!checked; });
