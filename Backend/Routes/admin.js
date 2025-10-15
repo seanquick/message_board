@@ -141,27 +141,68 @@ router.get('/search', requireAdmin, async (req, res) => {
 // so that `export.csv` is not mistaken for a report ID
 
 // Export Reports CSV
-// ===== EXPORT REPORTS (CSV with reporter info) =====
+// ===== EXPORT REPORTS (CSV with reporter + target owner info) =====
 router.get('/reports/export.csv', requireAdmin, async (req, res) => {
   try {
-    const reports = await Report.find()
-      .populate('reporterId', 'name email')
-      .lean();
+    const reports = await Report.find().lean();
 
-    const rows = reports.map(r => ({
-      id: String(r._id),
-      reporterId: r.reporterId?._id || '',
-      reporterName: r.reporterId?.name || '',
-      reporterEmail: r.reporterId?.email || '',
-      targetType: r.targetType || '',
-      targetId: r.targetId || '',
-      category: r.category || '',
-      details: r.details || '',
-      status: r.status || '',
-      createdAt: r.createdAt ? r.createdAt.toISOString() : '',
-      resolvedAt: r.resolvedAt ? r.resolvedAt.toISOString() : '',
-      resolutionNote: r.resolutionNote || ''
-    }));
+    const reporterIds = reports.map(r => r.reporterId).filter(Boolean);
+    const targetOwnerIds = [];
+
+    const commentTargetIds = reports
+      .filter(r => r.targetType === 'comment')
+      .map(r => r.targetId)
+      .filter(Boolean);
+
+    const threadTargetIds = reports
+      .filter(r => r.targetType === 'thread')
+      .map(r => r.targetId)
+      .filter(Boolean);
+
+    const [reporters, comments, threads] = await Promise.all([
+      User.find({ _id: { $in: reporterIds } }).select('_id name email').lean(),
+      Comment.find({ _id: { $in: commentTargetIds } }).select('_id author').lean(),
+      Thread.find({ _id: { $in: threadTargetIds } }).select('_id author').lean()
+    ]);
+
+    const authorIds = [...comments, ...threads].map(t => t.author).filter(Boolean);
+    const users = await User.find({ _id: { $in: authorIds } }).select('_id name email').lean();
+
+    const userMap = new Map(users.map(u => [String(u._id), u]));
+    const reporterMap = new Map(reporters.map(u => [String(u._id), u]));
+    const commentMap = new Map(comments.map(c => [String(c._id), c]));
+    const threadMap = new Map(threads.map(t => [String(t._id), t]));
+
+    const rows = reports.map(r => {
+      const reporter = reporterMap.get(String(r.reporterId)) || {};
+      let targetOwner = {};
+
+      if (r.targetType === 'comment') {
+        const comment = commentMap.get(String(r.targetId));
+        if (comment) targetOwner = userMap.get(String(comment.author)) || {};
+      } else if (r.targetType === 'thread') {
+        const thread = threadMap.get(String(r.targetId));
+        if (thread) targetOwner = userMap.get(String(thread.author)) || {};
+      }
+
+      return {
+        id: String(r._id),
+        reporterId: r.reporterId || '',
+        reporterName: reporter.name || '',
+        reporterEmail: reporter.email || '',
+        targetType: r.targetType || '',
+        targetId: r.targetId || '',
+        targetOwnerId: targetOwner._id || '',
+        targetOwnerName: targetOwner.name || '',
+        targetOwnerEmail: targetOwner.email || '',
+        category: r.category || '',
+        details: r.details || '',
+        status: r.status || '',
+        createdAt: r.createdAt ? r.createdAt.toISOString() : '',
+        resolvedAt: r.resolvedAt ? r.resolvedAt.toISOString() : '',
+        resolutionNote: r.resolutionNote || ''
+      };
+    });
 
     const header = Object.keys(rows[0] || {}).join(',');
     const lines = rows.map(r =>
@@ -177,6 +218,8 @@ router.get('/reports/export.csv', requireAdmin, async (req, res) => {
     return res.status(500).json({ error: 'Failed to export reports', detail: String(e) });
   }
 });
+
+
 
 
 // ===== EXPORT COMMENTS (CSV with author info) =====
