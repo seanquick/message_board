@@ -16,7 +16,7 @@ const tests = [
     id: 'csrf',
     label: 'CSRF Token Mint (/api/auth/csrf)',
     async run() {
-      const r = await apiFetch('/api/auth/csrf');
+      const r = await apiFetch('/api/auth/csrf', { skipHtmlRedirect: true });
       if (!r.ok) throw new Error('CSRF endpoint failed');
       const j = await r.json();
       if (!j.csrfToken) throw new Error('Missing token');
@@ -26,7 +26,7 @@ const tests = [
     id: 'threads',
     label: 'List Threads (/api/threads)',
     async run() {
-      const r = await apiFetch('/api/threads');
+      const r = await apiFetch('/api/threads', { skipHtmlRedirect: true });
       if (!r.ok) throw new Error('Threads fetch failed');
       const j = await r.json();
       if (!Array.isArray(j)) throw new Error('Expected array');
@@ -36,7 +36,7 @@ const tests = [
     id: 'export',
     label: 'Export Threads JSON',
     async run() {
-      const r = await apiFetch('/api/admin/export/threads?format=json');
+      const r = await apiFetch('/api/admin/export/threads?format=json', { skipHtmlRedirect: true });
       if (!r.ok) throw new Error('Export failed');
       const text = await r.text();
       if (!text.startsWith('[')) throw new Error('Malformed JSON');
@@ -46,7 +46,7 @@ const tests = [
     id: 'auth-refresh',
     label: 'Silent Auth Refresh (/api/auth/refresh)',
     async run() {
-      const r = await apiFetch('/api/auth/refresh', { method: 'POST' });
+      const r = await apiFetch('/api/auth/refresh', { method: 'POST', skipHtmlRedirect: true });
       if (!r.ok) throw new Error('Refresh failed');
     },
   },
