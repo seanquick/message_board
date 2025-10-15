@@ -53,4 +53,17 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', () => triggerExportResource(resource, 'csv'));
     container.appendChild(btn);
   });
+
+  document.getElementById('rExport')?.addEventListener('click', () => {
+  triggerExportResource('reports', 'csv');
+});
+
+document.getElementById('cExport')?.addEventListener('click', () => {
+  triggerExportResource('comments', 'csv');
+});
+
+document.getElementById('uExport')?.addEventListener('click', () => {
+  triggerExportResource('users', 'csv');
+});
+
 });
