@@ -13,7 +13,7 @@ const ModLog = (() => { try { return require('../Models/ModLog'); } catch { retu
 
 const { requireAdmin } = require('../Middleware/auth');
 
-// Proper fallback for enumValues
+// Helpers
 let enumValues = () => [];
 try {
   const enumUtil = require('../Util/enum');
@@ -22,13 +22,10 @@ try {
   }
 } catch {}
 
-// Helpers
 const toBool = v => v === true || v === 'true' || v === '1' || v === 1;
 const notDeleted = (field = 'isDeleted') => ({
   $or: [{ [field]: false }, { [field]: { $exists: false } }]
 });
-const isId = v => mongoose.isValidObjectId(v);
-const toId = v => isId(v) ? new mongoose.Types.ObjectId(v) : null;
 const s = (v, max = 1000) => String(v ?? '').trim().slice(0, max);
 const iRange = (v, min, max, def) => {
   let n = Number.parseInt(v, 10);
@@ -36,7 +33,7 @@ const iRange = (v, min, max, def) => {
   return Math.max(min, Math.min(max, n));
 };
 
-// Disable caching
+// Disable caching globally for admin routes
 router.use((req, res, next) => {
   res.set({
     'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
@@ -47,7 +44,7 @@ router.use((req, res, next) => {
   next();
 });
 
-// SSE stream
+// SSE / Event‑stream for real‑time notifications
 const _clients = new Set();
 function sseWrite(res, type, data) {
   try {
@@ -82,15 +79,23 @@ router.get('/metrics', requireAdmin, async (_req, res) => {
     const openVals = sVals.filter(v => /open|new|pending|unresolved/i.test(String(v)));
     const openFilter = openVals.length
       ? { status: { $in: openVals } }
-      : { $or: [{ status: { $exists: false } }, { status: null }, { status: 'open' }] };
+      : { status: 'open' };
 
-    let usersCount = 0, threadsCount = 0, commentsCount = 0, reportsCount = 0;
-    try { usersCount = await User.countDocuments(); } catch {}
-    try { threadsCount = await Thread.countDocuments(); } catch {}
-    try { commentsCount = await Comment.countDocuments(); } catch {}
-    try { reportsCount = await Report.countDocuments(openFilter); } catch {}
+    const [usersCount, threadsCount, commentsCount, reportsCount] = await Promise.all([
+      User.countDocuments().catch(() => 0),
+      Thread.countDocuments().catch(() => 0),
+      Comment.countDocuments().catch(() => 0),
+      Report.countDocuments(openFilter).catch(() => 0),
+    ]);
 
-    res.json({ metrics: { users: usersCount, threads: threadsCount, comments: commentsCount, reports: reportsCount } });
+    res.json({
+      metrics: {
+        users: usersCount,
+        threads: threadsCount,
+        comments: commentsCount,
+        reports: reportsCount
+      }
+    });
   } catch (e) {
     console.error('[admin] metrics error:', e);
     res.status(500).json({ error: 'Failed to load metrics', detail: String(e) });
@@ -131,319 +136,14 @@ router.get('/search', requireAdmin, async (req, res) => {
   }
 });
 
-// ===== REPORTS LIST =====
-router.get('/reports', requireAdmin, async (req, res) => {
-  try {
-    const status = String(req.query.status || 'open').toLowerCase();
-    const sVals = enumValues(Report, 'status') || [];
-    const openVals = sVals.filter(v => /open|new|pending|unresolved/i.test(String(v)));
-    const resolvedVals = sVals.filter(v => /resol|clos|done/i.test(String(v)));
+// ===== EXPORT CSV ROUTES =====
+// These must come **before** any route like `/reports/:reportId`
+// so that `export.csv` is not mistaken for a report ID
 
-    let filter;
-    if (status === 'all') filter = {};
-    else if (status === 'resolved') {
-      filter = resolvedVals.length ? { status: { $in: resolvedVals } } : { status: 'resolved' };
-    } else {
-      filter = openVals.length
-        ? { status: { $in: openVals } }
-        : { $or: [{ status: 'open' }, { status: null }, { status: { $exists: false } }] };
-    }
-
-    const reports = await Report.find(filter)
-      .sort({ createdAt: -1 })
-      .limit(400)
-      .lean();
-
-    const threadIds = reports.filter(r => r.targetType === 'thread').map(r => r.targetId).filter(Boolean);
-    const commentIds = reports.filter(r => r.targetType === 'comment').map(r => r.targetId).filter(Boolean);
-    const reporterIds = reports.map(r => r.reporterId).filter(Boolean);
-
-    const [threads, comments, users] = await Promise.all([
-      Thread.find({ _id: { $in: threadIds } })
-        .select('title body content author isDeleted isPinned pinned isLocked locked')
-        .populate('author', 'name email')
-        .lean(),
-      Comment.find({ _id: { $in: commentIds } })
-        .select('body author thread isDeleted')
-        .populate('author', 'name email')
-        .lean(),
-      User.find({ _id: { $in: reporterIds } })
-        .select('name email')
-        .lean()
-    ]);
-
-    const tMap = new Map(threads.map(t => [String(t._id), t]));
-    const cMap = new Map(comments.map(c => [String(c._id), c]));
-    const uMap = new Map(users.map(u => [String(u._id), u]));
-
-    const shaped = reports.map(r => {
-      let snippet = '', threadId = null, targetOwnerId = null;
-      let threadFlags = {}, commentFlags = {};
-
-      if (r.targetType === 'thread') {
-        const t = tMap.get(String(r.targetId));
-        if (t) {
-          snippet = `${t.title || '(untitled)'} — ${(t.body ?? t.content ?? '').slice(0, 180)}`;
-          threadId = t._id;
-          targetOwnerId = t.author || null;
-          threadFlags = {
-            isDeleted: !!t.isDeleted,
-            pinned: !!(t.isPinned || t.pinned),
-            locked: !!(t.isLocked || t.locked)
-          };
-        }
-      } else if (r.targetType === 'comment') {
-        const c = cMap.get(String(r.targetId));
-        if (c) {
-          snippet = (c.body || '').slice(0, 200);
-          threadId = c.thread;
-          targetOwnerId = c.author || null;
-          commentFlags = { isDeleted: !!c.isDeleted };
-        }
-      }
-
-      return {
-        _id: r._id,
-        targetType: r.targetType,
-        targetId: r.targetId,
-        threadId,
-        status: r.status || 'open',
-        category: r.category || 'other',
-        details: r.details || r.reason || '',
-        createdAt: r.createdAt,
-        reporter: uMap.get(String(r.reporterId)) || null,
-        snippet,
-        resolutionNote: r.resolutionNote || '',
-        resolvedAt: r.resolvedAt || '',
-        resolvedBy: r.resolvedBy || '',
-        resolvedByName: r.resolvedByName || '',
-        resolvedByEmail: r.resolvedByEmail || '',
-        targetOwnerId,
-        threadFlags,
-        commentFlags
-      };
-    });
-
-    res.json({ reports: shaped });
-  } catch (e) {
-    console.error('[admin] reports error:', e);
-    res.status(500).json({ error: 'Failed to load reports', detail: String(e) });
-  }
-});
-
-// ===== GET SINGLE REPORT (robust version) =====
-router.get('/reports/:reportId', requireAdmin, async (req, res) => {
-  try {
-    const rid = req.params.reportId;
-    if (!mongoose.isValidObjectId(rid)) {
-      return res.status(400).json({ error: 'Invalid report ID' });
-    }
-
-    const report = await Report.findById(rid).lean();
-    if (!report) {
-      return res.status(404).json({ error: 'Report not found' });
-    }
-
-    // Reporter
-    let reporter = null;
-    if (report.reporterId && mongoose.isValidObjectId(report.reporterId)) {
-      reporter = await User.findById(report.reporterId).select('name email').lean();
-    }
-
-    // Original content (thread or comment)
-    let original = null;
-    if (report.targetType === 'thread' && report.targetId && mongoose.isValidObjectId(report.targetId)) {
-      original = await Thread.findById(report.targetId)
-        .select('title body author')
-        .lean();
-    } else if (report.targetType === 'comment' && report.targetId && mongoose.isValidObjectId(report.targetId)) {
-      original = await Comment.findById(report.targetId)
-        .select('body author thread')
-        .lean();
-    }
-
-    // Populate author details for original if possible
-    if (original) {
-      const authId = original.author || original.authorId;
-      if (authId && mongoose.isValidObjectId(authId)) {
-        const authorDoc = await User.findById(authId).select('name email').lean();
-        if (authorDoc) {
-          original.author = authorDoc;
-        }
-      }
-    }
-
-    // Attach to report
-    report.reporter = reporter;
-    report.original = original;
-
-    return res.json({ report });
-  } catch (e) {
-    console.error('[admin] get single report error:', e);
-    return res.status(500).json({ error: 'Failed to load report', detail: String(e) });
-  }
-});
-
-
-// ===== Resolve a report =====
-router.post('/reports/:reportId/resolve', requireAdmin, async (req, res) => {
-  try {
-    const rid = req.params.reportId;
-    const { resolutionNote } = req.body;
-
-    if (!mongoose.isValidObjectId(rid)) {
-      return res.status(400).json({ error: 'Invalid report ID' });
-    }
-
-    const report = await Report.findById(rid);
-    if (!report) {
-      return res.status(404).json({ error: 'Report not found' });
-    }
-
-    report.status = 'resolved';
-    if (typeof resolutionNote === 'string') {
-      report.resolutionNote = resolutionNote.trim();
-    }
-    report.resolvedAt = new Date();
-    report.resolvedBy = req.user?.uid;
-
-    await report.save();
-
-    return res.json({ ok: true, report: report.toObject() });
-  } catch (e) {
-    console.error('[admin] resolve report error:', e);
-    return res.status(500).json({ error: 'Failed to resolve report', detail: String(e) });
-  }
-});
-
-// ===== Bulk Resolve =====
-router.post('/reports/resolve', requireAdmin, async (req, res) => {
-  try {
-    const { reportIds, resolutionNote } = req.body;
-    if (!Array.isArray(reportIds) || reportIds.length === 0) {
-      return res.status(400).json({ error: 'No report IDs provided' });
-    }
-
-    const validIds = reportIds.filter(id => mongoose.isValidObjectId(id));
-    const update = {
-      status: 'resolved',
-      resolvedAt: new Date(),
-      resolvedBy: req.user?.uid
-    };
-    if (typeof resolutionNote === 'string') {
-      update.resolutionNote = resolutionNote.trim();
-    }
-
-    const result = await Report.updateMany(
-      { _id: { $in: validIds } },
-      { $set: update }
-    );
-
-    return res.json({ ok: true, modified: result.nModified });
-  } catch (e) {
-    console.error('[admin] bulk resolve error:', e);
-    return res.status(500).json({ error: 'Failed to bulk resolve reports', detail: String(e) });
-  }
-});
-
-// ===== USERS =====
-router.get('/users', requireAdmin, async (req, res) => {
-  try {
-    const qstr = s(req.query.q, 200);
-    const page = iRange(req.query.page, 1, 1e6, 1);
-    const limit = iRange(req.query.limit, 1, 200, 50);
-
-    let filter = {};
-    if (qstr) {
-      filter = {
-        $or: [
-          { name: { $regex: qstr, $options: 'i' } },
-          { email: { $regex: qstr, $options: 'i' } }
-        ]
-      };
-    }
-
-    const [users, total] = await Promise.all([
-      User.find(filter)
-        .select('name email role isBanned createdAt notes')
-        .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .lean(),
-      User.countDocuments(filter)
-    ]);
-
-    res.json({ users, total });
-  } catch (e) {
-    console.error('[admin] users error:', e);
-    res.status(500).json({ error: 'Failed to load users', detail: String(e) });
-  }
-});
-
-// Export Reports (CSV or JSON)
+// Export Reports CSV
 router.get('/reports/export.csv', requireAdmin, async (req, res) => {
   try {
     const reports = await Report.find().lean();
-    // transform to CSV
-    const rows = reports.map(r => ({
-      id: r._id,
-      reporterId: r.reporterId,
-      targetType: r.targetType,
-      targetId: r.targetId,
-      category: r.category,
-      details: r.details,
-      status: r.status,
-      createdAt: r.createdAt,
-      resolvedAt: r.resolvedAt,
-      resolutionNote: r.resolutionNote
-    }));
-    // Build CSV string
-    const header = Object.keys(rows[0] || {}).join(',');
-    const lines = rows.map(r => Object.values(r).map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
-    const csv = [header, ...lines].join('\n');
-
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename="reports_export.csv"');
-    res.send(csv);
-  } catch (e) {
-    console.error('[admin] export reports error:', e);
-    res.status(500).json({ error: 'Failed to export reports', detail: String(e) });
-  }
-});
-
-// Similarly for comments
-router.get('/comments/export.csv', requireAdmin, async (req, res) => {
-  try {
-    const comments = await Comment.find().lean();
-    const rows = comments.map(c => ({
-      id: c._id,
-      thread: c.thread,
-      author: c.author,
-      body: c.body,
-      createdAt: c.createdAt,
-      isDeleted: c.isDeleted
-    }));
-    const header = Object.keys(rows[0] || {}).join(',');
-    const lines = rows.map(r => Object.values(r).map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
-    const csv = [header, ...lines].join('\n');
-
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename="comments_export.csv"');
-    res.send(csv);
-  } catch (e) {
-    console.error('[admin] export comments error:', e);
-    res.status(500).json({ error: 'Failed to export comments', detail: String(e) });
-  }
-});
-
-// ===== EXPORT REPORTS (CSV) =====
-router.get('/reports/export.csv', requireAdmin, async (req, res) => {
-  try {
-    // You can filter by status etc if you want
-    const reports = await Report.find().lean();
-
-    // Optionally populate reporter and maybe target fields
-    // For simplicity, export basic report fields
     const rows = reports.map(r => ({
       id: String(r._id),
       reporterId: r.reporterId || '',
@@ -457,14 +157,12 @@ router.get('/reports/export.csv', requireAdmin, async (req, res) => {
       resolutionNote: r.resolutionNote || ''
     }));
 
-    if (rows.length === 0) {
-      // no rows, return empty CSV header
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename="reports_export.csv"');
-      return res.send('id,reporterId,targetType,targetId,category,details,status,createdAt,resolvedAt,resolutionNote\n');
-    }
+    const header = Object.keys(rows[0] || {
+      id: '', reporterId: '', targetType: '', targetId: '',
+      category: '', details: '', status: '', createdAt: '',
+      resolvedAt: '', resolutionNote: ''
+    }).join(',');
 
-    const header = Object.keys(rows[0]).join(',');
     const lines = rows.map(r =>
       Object.values(r).map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
     );
@@ -472,35 +170,30 @@ router.get('/reports/export.csv', requireAdmin, async (req, res) => {
 
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="reports_export.csv"');
-    return res.send(csv);
+    res.send(csv);
   } catch (e) {
     console.error('[admin] export reports error:', e);
-    return res.status(500).json({ error: 'Failed to export reports', detail: String(e) });
+    res.status(500).json({ error: 'Failed to export reports', detail: String(e) });
   }
 });
 
-// ===== EXPORT COMMENTS (CSV) =====
+// Export Comments CSV
 router.get('/comments/export.csv', requireAdmin, async (req, res) => {
   try {
-    // fetch all comments, possibly populate author
     const comments = await Comment.find().lean();
-
     const rows = comments.map(c => ({
       id: String(c._id),
       thread: String(c.thread || ''),
-      authorId: c.author || '',
+      authorId: String(c.author || ''),
       body: c.body || '',
       createdAt: c.createdAt ? c.createdAt.toISOString() : '',
       isDeleted: c.isDeleted ? 'true' : 'false'
     }));
 
-    if (rows.length === 0) {
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename="comments_export.csv"');
-      return res.send('id,thread,authorId,body,createdAt,isDeleted\n');
-    }
+    const header = Object.keys(rows[0] || {
+      id: '', thread: '', authorId: '', body: '', createdAt: '', isDeleted: ''
+    }).join(',');
 
-    const header = Object.keys(rows[0]).join(',');
     const lines = rows.map(r =>
       Object.values(r).map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
     );
@@ -508,18 +201,17 @@ router.get('/comments/export.csv', requireAdmin, async (req, res) => {
 
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="comments_export.csv"');
-    return res.send(csv);
+    res.send(csv);
   } catch (e) {
     console.error('[admin] export comments error:', e);
-    return res.status(500).json({ error: 'Failed to export comments', detail: String(e) });
+    res.status(500).json({ error: 'Failed to export comments', detail: String(e) });
   }
 });
 
-// ===== EXPORT USERS (CSV) =====
+// Export Users CSV
 router.get('/users/export.csv', requireAdmin, async (req, res) => {
   try {
     const users = await User.find().lean();
-
     const rows = users.map(u => ({
       id: String(u._id),
       name: u.name || '',
@@ -529,13 +221,10 @@ router.get('/users/export.csv', requireAdmin, async (req, res) => {
       createdAt: u.createdAt ? u.createdAt.toISOString() : ''
     }));
 
-    if (rows.length === 0) {
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename="users_export.csv"');
-      return res.send('id,name,email,role,isBanned,createdAt\n');
-    }
+    const header = Object.keys(rows[0] || {
+      id: '', name: '', email: '', role: '', isBanned: '', createdAt: ''
+    }).join(',');
 
-    const header = Object.keys(rows[0]).join(',');
     const lines = rows.map(r =>
       Object.values(r).map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
     );
@@ -543,10 +232,179 @@ router.get('/users/export.csv', requireAdmin, async (req, res) => {
 
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="users_export.csv"');
-    return res.send(csv);
+    res.send(csv);
   } catch (e) {
     console.error('[admin] export users error:', e);
-    return res.status(500).json({ error: 'Failed to export users', detail: String(e) });
+    res.status(500).json({ error: 'Failed to export users', detail: String(e) });
+  }
+});
+
+// ===== REPORTS LIST =====
+router.get('/reports', requireAdmin, async (req, res) => {
+  try {
+    const status = String(req.query.status || 'open').toLowerCase();
+    const sVals = enumValues(Report, 'status') || [];
+    const openVals = sVals.filter(v => /open|new|pending|unresolved/i.test(String(v)));
+    const resolvedVals = sVals.filter(v => /resol|clos|done/i.test(String(v)));
+
+    let filter;
+    if (status === 'all') {
+      filter = {};
+    } else if (status === 'resolved') {
+      filter = resolvedVals.length ? { status: { $in: resolvedVals } } : { status: 'resolved' };
+    } else {
+      filter = openVals.length
+        ? { status: { $in: openVals } }
+        : { $or: [{ status: 'open' }, { status: null }, { status: { $exists: false } }] };
+    }
+
+    const reports = await Report.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(400)
+      .lean();
+
+    res.json({ reports });
+  } catch (e) {
+    console.error('[admin] reports error:', e);
+    res.status(500).json({ error: 'Failed to load reports', detail: String(e) });
+  }
+});
+
+// ===== SINGLE REPORT =====
+router.get('/reports/:reportId', requireAdmin, async (req, res) => {
+  try {
+    const rid = req.params.reportId;
+    if (!mongoose.isValidObjectId(rid)) {
+      return res.status(400).json({ error: 'Invalid report ID' });
+    }
+
+    const report = await Report.findById(rid).lean();
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found' });
+    }
+
+    let reporter = null;
+    if (report.reporterId && mongoose.isValidObjectId(report.reporterId)) {
+      reporter = await User.findById(report.reporterId)
+        .select('name email')
+        .lean();
+    }
+
+    let original = null;
+    if (report.targetType === 'thread' && mongoose.isValidObjectId(report.targetId)) {
+      original = await Thread.findById(report.targetId)
+        .select('title body author')
+        .lean();
+    } else if (report.targetType === 'comment' && mongoose.isValidObjectId(report.targetId)) {
+      original = await Comment.findById(report.targetId)
+        .select('body author thread')
+        .lean();
+    }
+
+    if (original && original.author && mongoose.isValidObjectId(original.author)) {
+      const authorDoc = await User.findById(original.author)
+        .select('name email')
+        .lean();
+      if (authorDoc) {
+        original.author = authorDoc;
+      }
+    }
+
+    report.reporter = reporter;
+    report.original = original;
+
+    res.json({ report });
+  } catch (e) {
+    console.error('[admin] single report error:', e);
+    res.status(500).json({ error: 'Failed to load report', detail: String(e) });
+  }
+});
+
+// ===== RESOLVE SINGLE REPORT =====
+router.post('/reports/:reportId/resolve', requireAdmin, async (req, res) => {
+  try {
+    const rid = req.params.reportId;
+    if (!mongoose.isValidObjectId(rid)) {
+      return res.status(400).json({ error: 'Invalid report ID' });
+    }
+
+    const report = await Report.findById(rid);
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found' });
+    }
+
+    const { resolutionNote } = req.body;
+    report.status = 'resolved';
+    if (typeof resolutionNote === 'string') {
+      report.resolutionNote = resolutionNote.trim();
+    }
+    report.resolvedAt = new Date();
+    report.resolvedBy = req.user?.uid;
+
+    await report.save();
+
+    res.json({ ok: true, report: report.toObject() });
+  } catch (e) {
+    console.error('[admin] resolve report error:', e);
+    res.status(500).json({ error: 'Failed to resolve report', detail: String(e) });
+  }
+});
+
+// ===== BULK RESOLVE =====
+router.post('/reports/resolve', requireAdmin, async (req, res) => {
+  try {
+    const { reportIds, resolutionNote } = req.body;
+    if (!Array.isArray(reportIds) || reportIds.length === 0) {
+      return res.status(400).json({ error: 'No report IDs provided' });
+    }
+    const validIds = reportIds.filter(id => mongoose.isValidObjectId(id));
+    const update = {
+      status: 'resolved',
+      resolvedAt: new Date(),
+      resolvedBy: req.user?.uid
+    };
+    if (typeof resolutionNote === 'string') {
+      update.resolutionNote = resolutionNote.trim();
+    }
+    const result = await Report.updateMany(
+      { _id: { $in: validIds } },
+      { $set: update }
+    );
+    res.json({ ok: true, modified: result.nModified });
+  } catch (e) {
+    console.error('[admin] bulk resolve error:', e);
+    res.status(500).json({ error: 'Failed to bulk resolve reports', detail: String(e) });
+  }
+});
+
+// ===== USERS LIST =====
+router.get('/users', requireAdmin, async (req, res) => {
+  try {
+    const qstr = s(req.query.q, 200);
+    const page = iRange(req.query.page, 1, 1e6, 1);
+    const limit = iRange(req.query.limit, 1, 200, 50);
+    let filter = {};
+    if (qstr) {
+      filter = {
+        $or: [
+          { name: { $regex: qstr, $options: 'i' } },
+          { email: { $regex: qstr, $options: 'i' } }
+        ]
+      };
+    }
+    const [users, total] = await Promise.all([
+      User.find(filter)
+        .select('name email role isBanned createdAt notes')
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      User.countDocuments(filter)
+    ]);
+    res.json({ users, total });
+  } catch (e) {
+    console.error('[admin] users error:', e);
+    res.status(500).json({ error: 'Failed to load users', detail: String(e) });
   }
 });
 
