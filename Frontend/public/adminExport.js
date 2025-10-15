@@ -27,13 +27,14 @@ async function triggerExportResource(resource, format) {
   // append cache‑buster
   url += `?t=${Date.now()}`;
 
-  const resp = await apiFetch(url, { method: 'GET', headers: { 'Accept': 'text/csv' } });
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({}));
-    alert('Export failed: ' + (err.error || resp.status));
-    return;
-  }
-  const blob = await resp.blob();
+  const resp = await fetch(url, { method: 'GET', headers: { 'Accept': 'text/csv' }, credentials: 'include' });
+    if (!resp.ok) {
+      const text = await resp.text();
+      alert('Export failed: ' + text);
+      return;
+    }
+    const blob = await resp.blob();
+
   const ext = 'csv';
   const downloadUrl = URL.createObjectURL(blob);
   const a = document.createElement('a');
