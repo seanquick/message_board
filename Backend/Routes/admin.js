@@ -141,12 +141,18 @@ router.get('/search', requireAdmin, async (req, res) => {
 // so that `export.csv` is not mistaken for a report ID
 
 // Export Reports CSV
+// ===== EXPORT REPORTS (CSV with reporter info) =====
 router.get('/reports/export.csv', requireAdmin, async (req, res) => {
   try {
-    const reports = await Report.find().lean();
+    const reports = await Report.find()
+      .populate('reporterId', 'name email')
+      .lean();
+
     const rows = reports.map(r => ({
       id: String(r._id),
-      reporterId: r.reporterId || '',
+      reporterId: r.reporterId?._id || '',
+      reporterName: r.reporterId?.name || '',
+      reporterEmail: r.reporterId?.email || '',
       targetType: r.targetType || '',
       targetId: r.targetId || '',
       category: r.category || '',
@@ -157,12 +163,7 @@ router.get('/reports/export.csv', requireAdmin, async (req, res) => {
       resolutionNote: r.resolutionNote || ''
     }));
 
-    const header = Object.keys(rows[0] || {
-      id: '', reporterId: '', targetType: '', targetId: '',
-      category: '', details: '', status: '', createdAt: '',
-      resolvedAt: '', resolutionNote: ''
-    }).join(',');
-
+    const header = Object.keys(rows[0] || {}).join(',');
     const lines = rows.map(r =>
       Object.values(r).map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
     );
@@ -170,12 +171,47 @@ router.get('/reports/export.csv', requireAdmin, async (req, res) => {
 
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="reports_export.csv"');
-    res.send(csv);
+    return res.send(csv);
   } catch (e) {
     console.error('[admin] export reports error:', e);
-    res.status(500).json({ error: 'Failed to export reports', detail: String(e) });
+    return res.status(500).json({ error: 'Failed to export reports', detail: String(e) });
   }
 });
+
+
+// ===== EXPORT COMMENTS (CSV with author info) =====
+router.get('/comments/export.csv', requireAdmin, async (req, res) => {
+  try {
+    const comments = await Comment.find()
+      .populate('author', 'name email')
+      .lean();
+
+    const rows = comments.map(c => ({
+      id: String(c._id),
+      thread: String(c.thread || ''),
+      authorId: c.author?._id || '',
+      authorName: c.author?.name || '',
+      authorEmail: c.author?.email || '',
+      body: c.body || '',
+      createdAt: c.createdAt ? c.createdAt.toISOString() : '',
+      isDeleted: c.isDeleted ? 'true' : 'false'
+    }));
+
+    const header = Object.keys(rows[0] || {}).join(',');
+    const lines = rows.map(r =>
+      Object.values(r).map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
+    );
+    const csv = [header, ...lines].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="comments_export.csv"');
+    return res.send(csv);
+  } catch (e) {
+    console.error('[admin] export comments error:', e);
+    return res.status(500).json({ error: 'Failed to export comments', detail: String(e) });
+  }
+});
+
 
 // Export Comments CSV
 router.get('/comments/export.csv', requireAdmin, async (req, res) => {
