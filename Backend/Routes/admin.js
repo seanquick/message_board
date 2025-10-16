@@ -428,6 +428,31 @@ router.get('/users', requireAdmin, async (req, res) => {
   }
 });
 
+// DELETE a user
+router.delete('/users/:userId', requireAdmin, async (req, res) => {
+  try {
+    const uid = req.params.userId;
+    if (!mongoose.isValidObjectId(uid)) {
+      return res.status(400).json({ error: 'Invalid user ID' });
+    }
+
+    const deleted = await User.deleteOne({ _id: uid });
+    if (deleted.deletedCount === 0) {
+      return res.status(404).json({ error: 'User not found or already deleted' });
+    }
+
+    // Optionally and importantly: clean up related data (threads, comments, etc.)
+    // e.g. await Thread.deleteMany({ author: uid });
+    // await Comment.deleteMany({ author: uid });
+    // maybe log a ModLog, notify, etc.
+
+    res.json({ ok: true, deletedCount: deleted.deletedCount });
+  } catch (e) {
+    console.error('[admin] delete user error:', e);
+    res.status(500).json({ error: 'Failed to delete user', detail: String(e) });
+  }
+});
+
 // Add this in backend/routes/admin.js, after your /users route(s)
 
 router.get('/users/:userId/content', requireAdmin, async (req, res) => {
