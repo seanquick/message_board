@@ -1,4 +1,3 @@
-// Frontend/public/adminTest.js
 import { apiFetch } from './main.js';
 
 const tests = [
@@ -17,8 +16,12 @@ const tests = [
     label: 'CSRF Token Mint (/api/auth/csrf)',
     async run() {
       const r = await apiFetch('/api/auth/csrf', { skipHtmlRedirect: true });
-      if (!r.ok) throw new Error('CSRF endpoint failed');
-      const j = await r.json();
+      let j;
+      if (typeof r.json === 'function') {
+        j = await r.json();
+      } else {
+        j = r;
+      }
       if (!j.csrfToken) throw new Error('Missing token');
     },
   },
@@ -27,9 +30,14 @@ const tests = [
     label: 'List Threads (/api/threads)',
     async run() {
       const r = await apiFetch('/api/threads', { skipHtmlRedirect: true });
-      if (!r.ok) throw new Error('Threads fetch failed');
-      const j = await r.json();
-      if (!Array.isArray(j)) throw new Error('Expected array');
+      let data;
+      if (typeof r.json === 'function') {
+        if (!r.ok) throw new Error('Threads fetch failed: ' + r.status);
+        data = await r.json();
+      } else {
+        data = r;
+      }
+      if (!Array.isArray(data)) throw new Error('Expected array, got ' + typeof data);
     },
   },
   {
@@ -37,9 +45,15 @@ const tests = [
     label: 'Export Threads JSON',
     async run() {
       const r = await apiFetch('/api/admin/export/threads?format=json', { skipHtmlRedirect: true });
-      if (!r.ok) throw new Error('Export failed');
-      const text = await r.text();
-      if (!text.startsWith('[')) throw new Error('Malformed JSON');
+      let result;
+      if (typeof r.text === 'function') {
+        result = await r.text();
+      } else {
+        result = JSON.stringify(r);
+      }
+      if (!result.trim().startsWith('[')) {
+        throw new Error('Malformed JSON: ' + result.slice(0, 100));
+      }
     },
   },
   {
@@ -47,7 +61,12 @@ const tests = [
     label: 'Silent Auth Refresh (/api/auth/refresh)',
     async run() {
       const r = await apiFetch('/api/auth/refresh', { method: 'POST', skipHtmlRedirect: true });
-      if (!r.ok) throw new Error('Refresh failed');
+      if (typeof r.json === 'function') {
+        if (!r.ok) throw new Error('Refresh failed: ' + r.status);
+      } else {
+        // assume r is parsed JSON with success indicator
+        if (!r.ok && !r.success) throw new Error('Refresh failed');
+      }
     },
   },
 ];
@@ -68,16 +87,16 @@ function createTestUI() {
 
   root.querySelector('#run-tests').addEventListener('click', async () => {
     for (const test of tests) {
-      const status = document.getElementById(`status-${test.id}`);
-      status.textContent = '⏳';
-      status.className = 'status running';
+      const statusEl = document.getElementById(`status-${test.id}`);
+      statusEl.textContent = '⏳';
+      statusEl.className = 'status running';
       try {
         await test.run();
-        status.textContent = '✅';
-        status.className = 'status pass';
+        statusEl.textContent = '✅';
+        statusEl.className = 'status pass';
       } catch (err) {
-        status.textContent = '❌';
-        status.className = 'status fail';
+        statusEl.textContent = '❌';
+        statusEl.className = 'status fail';
         console.error(`Test "${test.label}" failed:`, err);
       }
     }
