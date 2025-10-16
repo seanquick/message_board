@@ -266,10 +266,13 @@ async function loadThreads() {
     for (const t of results) {
       const tr = document.createElement('tr');
       tr.dataset.id = t._id;
+      const authorDisplay = t.author
+        ? `${escapeHTML(t.author.name || '')} (${escapeHTML(t.author.email || '')})`
+        : escapeHTML(t.authorId || '');
       tr.innerHTML = `
         <td>${new Date(t.createdAt).toLocaleString()}</td>
         <td>${escapeHTML(t.title || '(no title)')}</td>
-        <td>${escapeHTML(t.author || t.authorId || '')}</td>
+        <td>${authorDisplay}</td>
         <td>${t.upvoteCount ?? t.upvotes ?? 0}</td>
         <td>${t.commentCount ?? ''}</td>
         <td>${escapeHTML(t.status || '')}</td>
@@ -342,10 +345,13 @@ async function loadComments() {
     for (const c of results) {
       const tr = document.createElement('tr');
       tr.dataset.id = c._id;
+      const authorDisplay = c.author
+        ? `${escapeHTML(c.author.name || '')} (${escapeHTML(c.author.email || '')})`
+        : escapeHTML(c.authorId || '');
       tr.innerHTML = `
         <td>${new Date(c.createdAt).toLocaleString()}</td>
         <td>${escapeHTML(c.snippet || '')}</td>
-        <td>${escapeHTML(c.author || c.authorId || '')}</td>
+        <td>${authorDisplay}</td>
         <td>${escapeHTML(c.thread || '')}</td>
         <td>${c.upvoteCount ?? 0}</td>
         <td>${escapeHTML(c.isDeleted ? 'Deleted' : '')}</td>
@@ -510,9 +516,7 @@ function showReportDetailModal(report, original) {
         : original.body || original.content || '(no content)';
 
     let origAuthor = '(unknown)';
-    if (original.adminAuthor && typeof original.adminAuthor === 'object') {
-      origAuthor = original.adminAuthor.name || original.adminAuthor.email || String(original.adminAuthor.id || '');
-    } else if (original.author && typeof original.author === 'object') {
+    if (original.author && typeof original.author === 'object') {
       origAuthor = original.author.name || original.author.email || String(original.author._id || '');
     } else if (typeof original.author === 'string') {
       origAuthor = original.author;
@@ -653,6 +657,7 @@ async function doSearch() {
   }
 }
 
+// --- INIT ---
 async function init() {
   console.log('admin init running');
   try {
@@ -705,7 +710,7 @@ async function init() {
     loadReports().catch(console.error);
     loadUsers().catch(console.error);
   } catch (err) {
-    showErr(`Init failed: ${err?.message || err}`);  
+    showErr(`Init failed: ${err?.message || err}`);
     console.error('Init error', err);
   }
 }

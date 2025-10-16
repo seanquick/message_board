@@ -114,7 +114,8 @@ router.get('/search', requireAdmin, async (req, res) => {
       results = await Thread.find(filter)
         .sort({ createdAt: -1 })
         .limit(100)
-        .select('_id title author createdAt isDeleted isPinned pinned isLocked locked upvoteCount commentCount')
+        .select('_id title author createdAt isDeleted isPinned pinned isLocked locked upvoteCount commentCount status')
+        .populate('author', 'name email')
         .lean();
     } else if (type === 'comments') {
       const filter = includeDeleted ? {} : notDeleted('isDeleted');
@@ -122,7 +123,9 @@ router.get('/search', requireAdmin, async (req, res) => {
         .sort({ createdAt: -1 })
         .limit(100)
         .select('_id thread author createdAt body isDeleted upvoteCount')
+        .populate('author', 'name email')
         .lean();
+
       results = results.map(c => ({
         ...c,
         snippet: (c.body || '').slice(0, 120)
@@ -136,24 +139,16 @@ router.get('/search', requireAdmin, async (req, res) => {
   }
 });
 
-// ===== EXPORT CSV ROUTES =====
-// These must come **before** any route like `/reports/:reportId`
-// so that `export.csv` is not mistaken for a report ID
-
-// Export Reports CSV
 // ===== EXPORT REPORTS (CSV with reporter + target owner info) =====
-router.get('/reports/export.csv', requireAdmin, async (req, res) => {
+router.get('/reports/export.csv', requireAdmin, async (_req, res) => {
   try {
     const reports = await Report.find().lean();
 
     const reporterIds = reports.map(r => r.reporterId).filter(Boolean);
-    const targetOwnerIds = [];
-
     const commentTargetIds = reports
       .filter(r => r.targetType === 'comment')
       .map(r => r.targetId)
       .filter(Boolean);
-
     const threadTargetIds = reports
       .filter(r => r.targetType === 'thread')
       .map(r => r.targetId)
@@ -212,18 +207,15 @@ router.get('/reports/export.csv', requireAdmin, async (req, res) => {
 
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="reports_export.csv"');
-    return res.send(csv);
+    res.send(csv);
   } catch (e) {
     console.error('[admin] export reports error:', e);
-    return res.status(500).json({ error: 'Failed to export reports', detail: String(e) });
+    res.status(500).json({ error: 'Failed to export reports', detail: String(e) });
   }
 });
 
-
-
-
 // ===== EXPORT COMMENTS (CSV with author info) =====
-router.get('/comments/export.csv', requireAdmin, async (req, res) => {
+router.get('/comments/export.csv', requireAdmin, async (_req, res) => {
   try {
     const comments = await Comment.find()
       .populate('author', 'name email')
@@ -248,38 +240,6 @@ router.get('/comments/export.csv', requireAdmin, async (req, res) => {
 
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="comments_export.csv"');
-    return res.send(csv);
-  } catch (e) {
-    console.error('[admin] export comments error:', e);
-    return res.status(500).json({ error: 'Failed to export comments', detail: String(e) });
-  }
-});
-
-
-// Export Comments CSV
-router.get('/comments/export.csv', requireAdmin, async (req, res) => {
-  try {
-    const comments = await Comment.find().lean();
-    const rows = comments.map(c => ({
-      id: String(c._id),
-      thread: String(c.thread || ''),
-      authorId: String(c.author || ''),
-      body: c.body || '',
-      createdAt: c.createdAt ? c.createdAt.toISOString() : '',
-      isDeleted: c.isDeleted ? 'true' : 'false'
-    }));
-
-    const header = Object.keys(rows[0] || {
-      id: '', thread: '', authorId: '', body: '', createdAt: '', isDeleted: ''
-    }).join(',');
-
-    const lines = rows.map(r =>
-      Object.values(r).map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
-    );
-    const csv = [header, ...lines].join('\n');
-
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename="comments_export.csv"');
     res.send(csv);
   } catch (e) {
     console.error('[admin] export comments error:', e);
@@ -287,8 +247,8 @@ router.get('/comments/export.csv', requireAdmin, async (req, res) => {
   }
 });
 
-// Export Users CSV
-router.get('/users/export.csv', requireAdmin, async (req, res) => {
+// ===== EXPORT USERS (CSV) =====
+router.get('/users/export.csv', requireAdmin, async (_req, res) => {
   try {
     const users = await User.find().lean();
     const rows = users.map(u => ({
@@ -300,10 +260,7 @@ router.get('/users/export.csv', requireAdmin, async (req, res) => {
       createdAt: u.createdAt ? u.createdAt.toISOString() : ''
     }));
 
-    const header = Object.keys(rows[0] || {
-      id: '', name: '', email: '', role: '', isBanned: '', createdAt: ''
-    }).join(',');
-
+    const header = Object.keys(rows[0] || {}).join(',');
     const lines = rows.map(r =>
       Object.values(r).map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
     );
@@ -327,15 +284,13 @@ router.get('/reports', requireAdmin, async (req, res) => {
     const resolvedVals = sVals.filter(v => /resol|clos|done/i.test(String(v)));
 
     let filter;
-    if (status === 'all') {
-      filter = {};
-    } else if (status === 'resolved') {
+    if (status === 'all') filter = {};
+    else if (status === 'resolved')
       filter = resolvedVals.length ? { status: { $in: resolvedVals } } : { status: 'resolved' };
-    } else {
+    else
       filter = openVals.length
         ? { status: { $in: openVals } }
         : { $or: [{ status: 'open' }, { status: null }, { status: { $exists: false } }] };
-    }
 
     const reports = await Report.find(filter)
       .sort({ createdAt: -1 })
@@ -358,35 +313,24 @@ router.get('/reports/:reportId', requireAdmin, async (req, res) => {
     }
 
     const report = await Report.findById(rid).lean();
-    if (!report) {
-      return res.status(404).json({ error: 'Report not found' });
-    }
+    if (!report) return res.status(404).json({ error: 'Report not found' });
 
     let reporter = null;
     if (report.reporterId && mongoose.isValidObjectId(report.reporterId)) {
-      reporter = await User.findById(report.reporterId)
-        .select('name email')
-        .lean();
+      reporter = await User.findById(report.reporterId).select('name email').lean();
     }
 
     let original = null;
     if (report.targetType === 'thread' && mongoose.isValidObjectId(report.targetId)) {
       original = await Thread.findById(report.targetId)
         .select('title body author')
+        .populate('author', 'name email')
         .lean();
     } else if (report.targetType === 'comment' && mongoose.isValidObjectId(report.targetId)) {
       original = await Comment.findById(report.targetId)
         .select('body author thread')
+        .populate('author', 'name email')
         .lean();
-    }
-
-    if (original && original.author && mongoose.isValidObjectId(original.author)) {
-      const authorDoc = await User.findById(original.author)
-        .select('name email')
-        .lean();
-      if (authorDoc) {
-        original.author = authorDoc;
-      }
     }
 
     report.reporter = reporter;
@@ -408,9 +352,7 @@ router.post('/reports/:reportId/resolve', requireAdmin, async (req, res) => {
     }
 
     const report = await Report.findById(rid);
-    if (!report) {
-      return res.status(404).json({ error: 'Report not found' });
-    }
+    if (!report) return res.status(404).json({ error: 'Report not found' });
 
     const { resolutionNote } = req.body;
     report.status = 'resolved';
@@ -421,7 +363,6 @@ router.post('/reports/:reportId/resolve', requireAdmin, async (req, res) => {
     report.resolvedBy = req.user?.uid;
 
     await report.save();
-
     res.json({ ok: true, report: report.toObject() });
   } catch (e) {
     console.error('[admin] resolve report error:', e);
@@ -488,9 +429,11 @@ router.get('/users', requireAdmin, async (req, res) => {
 });
 
 // ===== EXPORT THREADS JSON =====
-router.get('/export/threads', requireAdmin, async (req, res) => {
+router.get('/export/threads', requireAdmin, async (_req, res) => {
   try {
-    const threads = await Thread.find().lean();
+    const threads = await Thread.find()
+      .populate('author', 'name email')
+      .lean();
     res.json(threads);
   } catch (e) {
     console.error('[admin] export threads json error:', e);
