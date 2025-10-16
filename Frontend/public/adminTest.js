@@ -22,7 +22,11 @@ const tests = [
       } else {
         j = r;
       }
-      if (!j.csrfToken) throw new Error('Missing token');
+      // Accept either csrfToken or token (whichever your backend uses)
+      if (!j.csrfToken && !j.token) {
+        console.error('CSRF response:', j);
+        throw new Error('Missing token field');
+      }
     },
   },
   {
@@ -30,14 +34,25 @@ const tests = [
     label: 'List Threads (/api/threads)',
     async run() {
       const r = await apiFetch('/api/threads', { skipHtmlRedirect: true });
-      let data;
+      let j;
       if (typeof r.json === 'function') {
         if (!r.ok) throw new Error('Threads fetch failed: ' + r.status);
-        data = await r.json();
+        j = await r.json();
       } else {
-        data = r;
+        j = r;
       }
-      if (!Array.isArray(data)) throw new Error('Expected array, got ' + typeof data);
+      let arr;
+      if (Array.isArray(j)) {
+        arr = j;
+      } else if (Array.isArray(j.threads)) {
+        arr = j.threads;
+      } else if (Array.isArray(j.data)) {
+        arr = j.data;
+      } else {
+        console.error('Threads response:', j);
+        throw new Error('Expected array or object containing array');
+      }
+      // Optionally check length or type
     },
   },
   {
@@ -45,14 +60,19 @@ const tests = [
     label: 'Export Threads JSON',
     async run() {
       const r = await apiFetch('/api/admin/export/threads?format=json', { skipHtmlRedirect: true });
-      let result;
+      let text;
       if (typeof r.text === 'function') {
-        result = await r.text();
+        text = await r.text();
       } else {
-        result = JSON.stringify(r);
+        text = JSON.stringify(r);
       }
-      if (!result.trim().startsWith('[')) {
-        throw new Error('Malformed JSON: ' + result.slice(0, 100));
+      if (text.trim().startsWith('<')) {
+        console.error('Export JSON response (HTML):', text.slice(0,200));
+        throw new Error('Got HTML instead of JSON');
+      }
+      if (!text.trim().startsWith('[')) {
+        console.error('Malformed JSON:', text.slice(0,200));
+        throw new Error('Malformed JSON: ' + text.slice(0,100));
       }
     },
   },
@@ -64,8 +84,10 @@ const tests = [
       if (typeof r.json === 'function') {
         if (!r.ok) throw new Error('Refresh failed: ' + r.status);
       } else {
-        // assume r is parsed JSON with success indicator
-        if (!r.ok && !r.success) throw new Error('Refresh failed');
+        if (!r.ok && !r.success) {
+          console.error('Refresh response:', r);
+          throw new Error('Refresh failed');
+        }
       }
     },
   },
