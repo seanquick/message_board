@@ -437,6 +437,12 @@ router.get('/users/:userId/content', requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Invalid user ID' });
     }
 
+    // Fetch user basic info
+    const userDoc = await User.findById(uid).select('name email').lean();
+    if (!userDoc) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
     // Fetch recent threads by this user
     const threads = await Thread.find({ author: uid })
       .sort({ createdAt: -1 })
@@ -451,18 +457,24 @@ router.get('/users/:userId/content', requireAdmin, async (req, res) => {
       .select('_id thread body createdAt upvoteCount')
       .lean();
 
-    // Optionally, you can do a snippet for comments (body truncated)
+    // Add snippet field to comments
     const commentsWithSnippet = comments.map(c => ({
       ...c,
       snippet: (c.body || '').slice(0, 200)
     }));
 
-    return res.json({ threads, comments: commentsWithSnippet });
+    return res.json({
+      user: userDoc,
+      threads,
+      comments: commentsWithSnippet
+    });
+
   } catch (e) {
     console.error('[admin] user content error:', e);
     return res.status(500).json({ error: 'Failed to load user content', detail: String(e) });
   }
 });
+
 
 
 // ===== EXPORT THREADS JSON =====

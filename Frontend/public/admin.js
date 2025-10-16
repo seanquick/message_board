@@ -224,7 +224,8 @@ async function onUserLinkClick(ev) {
   if (!uid) return;
   try {
     const payload = await api(`/api/admin/users/${uid}/content`);
-    showUserContentModal(payload.user || { _id: uid }, payload.threads || [], payload.comments || []);
+      const userObj = payload.user || { _id: uid };
+      showUserContentModal(userObj, payload.threads || [], payload.comments || []);
   } catch (e) {
     showErr(`Failed to fetch user content: ${e?.error || e?.message}`);
   }
