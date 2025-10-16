@@ -487,4 +487,15 @@ router.get('/users', requireAdmin, async (req, res) => {
   }
 });
 
+// ===== EXPORT THREADS JSON =====
+router.get('/export/threads', requireAdmin, async (req, res) => {
+  try {
+    const threads = await Thread.find().lean();
+    res.json(threads);
+  } catch (e) {
+    console.error('[admin] export threads json error:', e);
+    res.status(500).json({ error: 'Failed to export threads JSON', detail: String(e) });
+  }
+});
+
 module.exports = router;

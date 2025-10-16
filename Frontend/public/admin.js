@@ -1,6 +1,6 @@
 // frontend/public/admin.js
 
-import { api, escapeHTML, timeAgo, q, $, qa, refreshMe, me as meVar } from './main.js';
+import { api, escapeHTML, timeAgo, q, qa, refreshMe, me as meVar } from './main.js';
 
 let meUser = null;
 
@@ -94,10 +94,13 @@ async function loadUsers() {
     params.set('t', String(Date.now()));
 
     const payload = await api(`/api/admin/users?${params.toString()}`, { nocache: true });
-
-    const users = Array.isArray(payload) ? payload :
-      Array.isArray(payload?.users) ? payload.users :
-      Array.isArray(payload?.data) ? payload.data : [];
+    const users = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload.users)
+        ? payload.users
+        : Array.isArray(payload.data)
+          ? payload.data
+          : [];
 
     state.users.total = Number(payload?.total ?? users.length ?? 0);
     const pages = pagesFor(state.users);
@@ -253,7 +256,7 @@ async function loadThreads() {
     params.set('t', String(Date.now()));
     if (includeDeleted) params.set('includeDeleted', '1');
     const url = `/api/admin/search?type=threads&${params.toString()}`;
-    const resp = await api(url, { nocache: true });
+    const resp = await api(url, { nocache: true, skipHtmlRedirect: true });
     const { results } = resp;
     tbody.innerHTML = '';
     if (!Array.isArray(results) || !results.length) {
@@ -329,7 +332,7 @@ async function loadComments() {
     params.set('t', String(Date.now()));
     if (includeDeleted) params.set('includeDeleted', '1');
     const url = `/api/admin/search?type=comments&${params.toString()}`;
-    const resp = await api(url, { nocache: true });
+    const resp = await api(url, { nocache: true, skipHtmlRedirect: true });
     const { results } = resp;
     tbody.innerHTML = '';
     if (!Array.isArray(results) || !results.length) {
@@ -379,7 +382,7 @@ async function loadReports() {
     params.set('status', status);
     const path = group ? 'reports/grouped' : 'reports';
     const url = `/api/admin/${path}?${params.toString()}`;
-    const resp = await api(url, { nocache: true });
+    const resp = await api(url, { nocache: true, skipHtmlRedirect: true });
     const list = resp[group ? 'groups' : 'reports'];
     tbody.innerHTML = '';
     if (!Array.isArray(list) || !list.length) {
@@ -387,17 +390,12 @@ async function loadReports() {
       return;
     }
     for (const r of list) {
-        const tr = document.createElement('tr');
-        
-        // ✅ DEBUGGING: Log the assigned ID
-        const reportId = r._id || (r.ids && r.ids.length ? r.ids[0] : '');
-        console.log('Assigned report row ID:', reportId, r);
-
-        tr.dataset.id = reportId;
-
+      const tr = document.createElement('tr');
+      const reportId = r._id || (r.ids && r.ids.length ? r.ids[0] : '');
+      tr.dataset.id = reportId;
       const reporterName = r.reporter?.name || r.reporter?.email || '(unknown)';
       tr.innerHTML = `
-        <td><input type="checkbox" class="rSelect" data-id="${r._id}"></td>
+        <td><input type="checkbox" class="rSelect" data-id="${reportId}"></td>
         <td>${new Date(r.latestAt || r.createdAt).toLocaleString()}</td>
         <td>${escapeHTML(r.targetType || '')}</td>
         <td>${escapeHTML(r.snippet || '')}</td>
@@ -412,7 +410,6 @@ async function loadReports() {
       tbody.appendChild(tr);
     }
 
-    // Bind “View” buttons
     tbody.querySelectorAll('.viewReport').forEach(btn => {
       btn.addEventListener('click', ev => {
         ev.stopPropagation();
@@ -422,7 +419,6 @@ async function loadReports() {
       });
     });
 
-    // Bind “Resolve” buttons
     tbody.querySelectorAll('.resolveOne').forEach(btn => {
       btn.addEventListener('click', async ev => {
         ev.stopPropagation();
@@ -450,7 +446,6 @@ async function loadReports() {
 
 async function openReportDetail(reportId) {
   try {
-    // Prevent redirect to login if HTML login page is returned
     const resp = await api(`/api/admin/reports/${reportId}?t=${Date.now()}`, {
       nocache: true,
       skipHtmlRedirect: true
@@ -480,8 +475,6 @@ async function openReportDetail(reportId) {
   }
 }
 
-
-
 function showReportDetailModal(report, original) {
   const modal = q('#adminReportModal');
   if (!modal) {
@@ -499,38 +492,31 @@ function showReportDetailModal(report, original) {
   backdrop.style.display = 'flex';
   btnClose.onclick = () => { backdrop.style.display = 'none'; };
 
-  // Reporter info
   const reporterName = report.reporter?.name || report.reporter?.email || report.reporterId || '(unknown)';
-
-  // Created / updated dates
   const createdAt = new Date(report.createdAt).toLocaleString();
   const updatedAt = report.updatedAt ? new Date(report.updatedAt).toLocaleString() : null;
 
-  // Other metadata
   const category = escapeHTML(report.category || '');
   const details = escapeHTML(report.details || '');
   const status = escapeHTML(report.status || '');
   const resolutionNote = escapeHTML(report.resolutionNote || '');
 
-  // Original content block
   let originalHtml = '';
   if (original) {
     const titleOrSnippet = original.title
       ? original.title
       : original.snippet
-      ? original.snippet
-      : original.body || original.content || '(no content)';
+        ? original.snippet
+        : original.body || original.content || '(no content)';
 
-    // Original author name (if available)
     let origAuthor = '(unknown)';
-      if (original.adminAuthor && typeof original.adminAuthor === 'object') {
-        // Use adminAuthor if it exists
-        origAuthor = original.adminAuthor.name || original.adminAuthor.email || String(original.adminAuthor.id || '');
-      } else if (original.author && typeof original.author === 'object') {
-        origAuthor = original.author.name || original.author.email || String(original.author._id || '');
-      } else if (typeof original.author === 'string') {
-        origAuthor = original.author;
-      }
+    if (original.adminAuthor && typeof original.adminAuthor === 'object') {
+      origAuthor = original.adminAuthor.name || original.adminAuthor.email || String(original.adminAuthor.id || '');
+    } else if (original.author && typeof original.author === 'object') {
+      origAuthor = original.author.name || original.author.email || String(original.author._id || '');
+    } else if (typeof original.author === 'string') {
+      origAuthor = original.author;
+    }
 
     if (report.targetType === 'thread') {
       originalHtml += `<p><strong>Thread title:</strong> <a href="thread.html?id=${encodeURIComponent(original._id)}" target="_blank">${escapeHTML(titleOrSnippet)}</a></p>`;
@@ -553,7 +539,6 @@ function showReportDetailModal(report, original) {
     originalHtml = `<em>(Original content not found)</em>`;
   }
 
-  // Resolve button (if still open)
   const resolveBtnHtml = (report.status !== 'resolved' && report.status !== 'closed')
     ? `<button id="modalResolveBtn" class="btn tiny" style="margin-top: 1rem;">Resolve</button>`
     : '';
@@ -575,7 +560,6 @@ function showReportDetailModal(report, original) {
     ${resolveBtnHtml}
   `;
 
-  // Bind resolve button if present
   const modalResolveBtn = modal.querySelector('#modalResolveBtn');
   if (modalResolveBtn) {
     modalResolveBtn.onclick = async () => {
@@ -587,7 +571,7 @@ function showReportDetailModal(report, original) {
         });
         if (res.ok || res.report) {
           backdrop.style.display = 'none';
-          loadReports();  // reload the reports list
+          loadReports();
         } else {
           showErr(`Resolve failed: ${res.error || 'Unknown'}`);
         }
@@ -597,8 +581,6 @@ function showReportDetailModal(report, original) {
     };
   }
 }
-
-
 
 async function bulkResolveSelected() {
   const cbs = qa('#reportsTable tbody .rSelect:checked');
@@ -648,7 +630,7 @@ async function doSearch() {
   if (minUp) params.set('minUp', minUp);
   if (category) params.set('category', category);
 
-  const resp = await api(`/api/admin/search?${params.toString()}`, { nocache: true });
+  const resp = await api(`/api/admin/search?${params.toString()}`, { nocache: true, skipHtmlRedirect: true });
   const { results } = resp;
 
   const tbody = ensureTbody('#searchTable');
@@ -669,10 +651,6 @@ async function doSearch() {
     `;
     tbody.appendChild(tr);
   }
-}
-
-function startEventStream() {
-  // optionally implement SSE
 }
 
 async function init() {
@@ -696,7 +674,7 @@ async function init() {
     q('#rGroup')?.addEventListener('change', loadReports);
     q('#rFilter')?.addEventListener('change', loadReports);
     q('#rBulkResolve')?.addEventListener('click', bulkResolveSelected);
-    
+
     q('#rExport')?.addEventListener('click', exportReportsCSV);
     q('#cExport')?.addEventListener('click', exportCommentsCSV);
     q('#uExport')?.addEventListener('click', exportUsersCSV);
@@ -727,7 +705,7 @@ async function init() {
     loadReports().catch(console.error);
     loadUsers().catch(console.error);
   } catch (err) {
-    showErr(`Init failed: ${err?.message || err}`);
+    showErr(`Init failed: ${err?.message || err}`);  
     console.error('Init error', err);
   }
 }
