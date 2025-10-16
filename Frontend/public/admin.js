@@ -277,6 +277,7 @@ async function loadThreads() {
         <td>${t.commentCount ?? ''}</td>
         <td>${escapeHTML(t.status || '')}</td>
         <td class="row gap-05">
+          <button class="btn tiny viewThread">View</button>
           <button class="btn tiny pinBtn">Pin/Unpin</button>
           <button class="btn tiny lockBtn">Lock/Unlock</button>
           <button class="btn tiny deleteThread">Delete/Restore</button>
@@ -284,6 +285,16 @@ async function loadThreads() {
       `;
       tbody.appendChild(tr);
     }
+    tbody.querySelectorAll('.viewThread').forEach(btn => {
+        btn.addEventListener('click', ev => {
+          const tr = ev.currentTarget.closest('tr');
+          const tid = tr.dataset.id;
+          if (tid) {
+            window.open(`thread.html?id=${encodeURIComponent(tid)}`, '_blank');
+          }
+        });
+      });
+
     tbody.querySelectorAll('.pinBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
       const tr = ev.currentTarget.closest('tr');
       const tid = tr.dataset.id;
