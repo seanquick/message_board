@@ -428,6 +428,43 @@ router.get('/users', requireAdmin, async (req, res) => {
   }
 });
 
+// Add this in backend/routes/admin.js, after your /users route(s)
+
+router.get('/users/:userId/content', requireAdmin, async (req, res) => {
+  try {
+    const uid = req.params.userId;
+    if (!mongoose.isValidObjectId(uid)) {
+      return res.status(400).json({ error: 'Invalid user ID' });
+    }
+
+    // Fetch recent threads by this user
+    const threads = await Thread.find({ author: uid })
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .select('_id title createdAt status commentCount upvoteCount')
+      .lean();
+
+    // Fetch recent comments by this user
+    const comments = await Comment.find({ author: uid })
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .select('_id thread body createdAt upvoteCount')
+      .lean();
+
+    // Optionally, you can do a snippet for comments (body truncated)
+    const commentsWithSnippet = comments.map(c => ({
+      ...c,
+      snippet: (c.body || '').slice(0, 200)
+    }));
+
+    return res.json({ threads, comments: commentsWithSnippet });
+  } catch (e) {
+    console.error('[admin] user content error:', e);
+    return res.status(500).json({ error: 'Failed to load user content', detail: String(e) });
+  }
+});
+
+
 // ===== EXPORT THREADS JSON =====
 router.get('/export/threads', requireAdmin, async (_req, res) => {
   try {

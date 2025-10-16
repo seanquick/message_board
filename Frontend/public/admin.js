@@ -234,17 +234,32 @@ function showUserContentModal(uid, threads, comments) {
   const modal = document.createElement('div');
   modal.className = 'user-content-modal';
   modal.style = 'position:fixed;top:10%;left:10%;width:80%;height:80%;background:white;overflow:auto;z-index:10000;padding:1rem;border:1px solid #ccc';
+
   modal.innerHTML = `
     <button class="close-modal" style="position:absolute;top:1rem;right:1rem">Close</button>
     <h2>User: ${escapeHTML(uid)}</h2>
     <h3>Threads (${threads.length})</h3>
-    ${threads.map(t => `<div><a href="thread.html?id=${encodeURIComponent(t._id)}" target="_blank">${escapeHTML(t.title || '(untitled)')}</a></div>`).join('')}
+    ${threads.map(t =>
+      `<div>
+         <a href="thread.html?id=${encodeURIComponent(t._id)}" target="_blank">${escapeHTML(t.title || '(untitled)')}</a>
+         &mdash; ${new Date(t.createdAt).toLocaleString()}
+       </div>`
+    ).join('')}
     <h3>Comments (${comments.length})</h3>
-    ${comments.map(c => `<div>${escapeHTML(c.body || '')} <em>(thread: ${escapeHTML(String(c.thread))})</em></div>`).join('')}
+    ${comments.map(c =>
+      `<div>
+         <a href="thread.html?id=${encodeURIComponent(c.thread)}#comment-${encodeURIComponent(c._id)}" target="_blank">
+           ${escapeHTML(c.snippet || '(no content)')}
+         </a>
+         &mdash; ${new Date(c.createdAt).toLocaleString()}
+       </div>`
+    ).join('')}
   `;
+
   document.body.appendChild(modal);
   modal.querySelector('.close-modal')?.addEventListener('click', () => modal.remove());
 }
+
 
 // --- THREADS Section ---
 async function loadThreads() {
