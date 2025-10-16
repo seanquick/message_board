@@ -366,10 +366,24 @@ async function loadComments() {
         <td>${escapeHTML(c.thread || '')}</td>
         <td>${c.upvoteCount ?? 0}</td>
         <td>${escapeHTML(c.isDeleted ? 'Deleted' : '')}</td>
-        <td><button class="btn tiny delRestoreComment">Delete/Restore</button></td>
+        <td class="row gap-05">
+          <button class="btn tiny viewComment">View</button>
+          <button class="btn tiny delRestoreComment">Delete/Restore</button>
+        </td>
       `;
       tbody.appendChild(tr);
     }
+
+    tbody.querySelectorAll('.viewComment').forEach(btn => {
+      btn.addEventListener('click', ev => {
+        const tr = ev.currentTarget.closest('tr');
+        const tid = tr.querySelector('td:nth-child(4)')?.textContent?.trim();
+        if (tid) {
+          window.open(`thread.html?id=${encodeURIComponent(tid)}`, '_blank');
+        }
+      });
+    });
+
     tbody.querySelectorAll('.delRestoreComment').forEach(btn => btn.addEventListener('click', async (ev) => {
       const tr = ev.currentTarget.closest('tr');
       const cid = tr.dataset.id;
@@ -386,7 +400,7 @@ async function loadComments() {
     renderErrorRow('#commentsTable', `Error loading comments: ${e?.error || e?.message}`, 7);
   }
 }
-
+ 
 // --- REPORTS Section ---
 async function loadReports() {
   const tbody = ensureTbody('#reportsTable');
