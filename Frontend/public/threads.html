@@ -34,24 +34,26 @@
     <!-- Create Thread Composer -->
     <section id="createBox" class="card mt-1" aria-labelledby="createTitle">
       <h3 id="createTitle">Start a new thread</h3>
+
       <label for="tTitle">Title</label>
-      <input id="tTitle" placeholder="Title (min 3 characters)" />
+      <input id="tTitle" name="title" placeholder="Title (min 3 characters)" />
 
       <input type="text" name="website" id="hpWebsiteNew" autocomplete="off" tabindex="-1" style="display:none" />
 
       <label for="tBody">Body</label>
-      <textarea id="tBody" placeholder="Write the details of your post (min 10 characters)…"></textarea>
+      <textarea id="tBody" name="body" placeholder="Write the details of your post (min 10 characters)…"></textarea>
 
       <label class="row items-center gap-05 mt-05" for="tAnon">
-        <input type="checkbox" id="tAnon" />
+        <input type="checkbox" id="tAnon" name="anonymous" />
         Post as Anonymous
       </label>
 
       <div class="row items-center between mt-05">
         <div id="tErr" class="err" style="display:none"></div>
-        <button id="tCreate" class="btn">Create</button>
+        <button id="createThreadBtn" class="btn">Create</button>
       </div>
     </section>
+
 
     <h2 class="mt-2">Latest Threads</h2>
 

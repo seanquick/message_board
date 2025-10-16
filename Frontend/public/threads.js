@@ -5,8 +5,10 @@ import { openReportModal } from './report.js';
 document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
+  wireCreateThreadForm(); // Attach thread creation logic
+  renderSkeleton();
+
   try {
-    renderSkeleton();
     const payload = await api('/api/threads', { nocache: true });
     const threads = Array.isArray(payload?.threads) ? payload.threads : [];
 
@@ -26,6 +28,43 @@ async function init() {
   } catch (e) {
     renderError(e?.error || e?.message || 'Failed to load threads.');
   }
+}
+
+function wireCreateThreadForm() {
+  const btn = q('button#createThreadBtn') || q('button[type="submit"]');
+  if (!btn) return;
+
+  btn.addEventListener('click', async (e) => {
+    e.preventDefault();
+    const titleEl = q('input[name="title"]');
+    const bodyEl = q('textarea[name="body"]');
+    const anonEl = q('input[name="anonymous"]');
+
+    const title = titleEl?.value.trim();
+    const body = bodyEl?.value.trim();
+    const anonymous = !!anonEl?.checked;
+
+    if (!title || !body) {
+      alert('Please enter a title and body for your thread.');
+      return;
+    }
+
+    try {
+      const thread = await api('/api/threads', {
+        method: 'POST',
+        body: { title, body, anonymous }
+      });
+
+      if (thread?._id) {
+        window.location.href = `thread.html?id=${encodeURIComponent(thread._id)}`;
+      } else {
+        alert('Thread created but no ID returned.');
+      }
+    } catch (e) {
+      console.error('Thread creation failed', e);
+      alert(`Failed to create thread: ${e?.error || e?.message}`);
+    }
+  });
 }
 
 function ensureListHost() {
@@ -79,11 +118,9 @@ function renderCards(host, threads) {
       </footer>
     `;
 
-    // Append the card before wiring event listeners
     host.appendChild(card);
   }
 
-  // Wire up report thread buttons
   document.querySelectorAll('.report-thread').forEach(btn => {
     btn.addEventListener('click', ev => {
       ev.preventDefault();
@@ -124,7 +161,6 @@ function renderTable(tbody, threads) {
     tbody.appendChild(tr);
   }
 
-  // Wire up report buttons in table
   document.querySelectorAll('.report-thread').forEach(btn => {
     btn.addEventListener('click', ev => {
       ev.preventDefault();
