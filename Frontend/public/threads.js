@@ -55,11 +55,13 @@ function wireCreateThreadForm() {
         body: { title, body, anonymous }
       });
 
-      if (thread?._id) {
-        window.location.href = `thread.html?id=${encodeURIComponent(thread._id)}`;
-      } else {
-        alert('Thread created but no ID returned.');
-      }
+      const id = thread?._id || thread?.id || thread?.thread?._id || thread?.thread?.id;
+        if (id) {
+          window.location.href = `thread.html?id=${encodeURIComponent(id)}`;
+        } else {
+          alert('Thread created but no ID returned.');
+        }
+
     } catch (e) {
       console.error('Thread creation failed', e);
       alert(`Failed to create thread: ${e?.error || e?.message}`);
