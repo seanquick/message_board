@@ -224,8 +224,8 @@ async function onUserLinkClick(ev) {
   if (!uid) return;
   try {
     const payload = await api(`/api/admin/users/${uid}/content`);
-      const userObj = payload.user || { _id: uid };
-      showUserContentModal(userObj, payload.threads || [], payload.comments || []);
+    const userObj = payload.user || { _id: uid };
+    showUserContentModal(userObj, payload.threads || [], payload.comments || []);
   } catch (e) {
     showErr(`Failed to fetch user content: ${e?.error || e?.message}`);
   }
@@ -243,7 +243,7 @@ function showUserContentModal(user, threads, comments) {
     <button class="close-modal" style="position:absolute;top:1rem;right:1rem">Close</button>
     <h2>User: ${escapeHTML(displayName)}</h2>
     ${displayEmail ? `<div style="margin-bottom:1rem;">${escapeHTML(displayEmail)}</div>` : ''}
-    
+
     <h3>Threads (${threads.length})</h3>
     ${threads.map(t => `
       <div>
@@ -264,9 +264,6 @@ function showUserContentModal(user, threads, comments) {
   document.body.appendChild(modal);
   modal.querySelector('.close-modal')?.addEventListener('click', () => modal.remove());
 }
-
-
-
 
 // --- THREADS Section ---
 async function loadThreads() {
@@ -308,14 +305,14 @@ async function loadThreads() {
       tbody.appendChild(tr);
     }
     tbody.querySelectorAll('.viewThread').forEach(btn => {
-        btn.addEventListener('click', ev => {
-          const tr = ev.currentTarget.closest('tr');
-          const tid = tr.dataset.id;
-          if (tid) {
-            window.open(`thread.html?id=${encodeURIComponent(tid)}`, '_blank');
-          }
-        });
+      btn.addEventListener('click', ev => {
+        const tr = ev.currentTarget.closest('tr');
+        const tid = tr.dataset.id;
+        if (tid) {
+          window.open(`thread.html?id=${encodeURIComponent(tid)}`, '_blank');
+        }
       });
+    });
 
     tbody.querySelectorAll('.pinBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
       const tr = ev.currentTarget.closest('tr');
@@ -390,6 +387,8 @@ async function loadComments() {
         <td>${escapeHTML(c.isDeleted ? 'Deleted' : '')}</td>
         <td class="row gap-05">
           <button class="btn tiny viewComment">View</button>
+          <button class="btn tiny replyComment">Reply</button>
+          <button class="btn tiny editComment">Edit</button>
           <button class="btn tiny delRestoreComment">Delete/Restore</button>
         </td>
       `;
@@ -403,6 +402,22 @@ async function loadComments() {
         if (tid) {
           window.open(`thread.html?id=${encodeURIComponent(tid)}`, '_blank');
         }
+      });
+    });
+
+    tbody.querySelectorAll('.replyComment').forEach(btn => {
+      btn.addEventListener('click', ev => {
+        const tr = ev.currentTarget.closest('tr');
+        const cid = tr.dataset.id;
+        showReplyEditor(tr, cid);
+      });
+    });
+    tbody.querySelectorAll('.editComment').forEach(btn => {
+      btn.addEventListener('click', ev => {
+        const tr = ev.currentTarget.closest('tr');
+        const cid = tr.dataset.id;
+        const originalBody = tr.querySelector('td:nth-child(2)')?.textContent || '';
+        showEditEditor(tr, cid, originalBody);
       });
     });
 
@@ -422,7 +437,72 @@ async function loadComments() {
     renderErrorRow('#commentsTable', `Error loading comments: ${e?.error || e?.message}`, 7);
   }
 }
- 
+
+function showEditEditor(tr, cid, originalBody) {
+  const tdBody = tr.querySelector('td:nth-child(2)');
+  const textarea = document.createElement('textarea');
+  textarea.value = originalBody;
+  textarea.style.width = '100%';
+  tdBody.innerHTML = '';
+  tdBody.appendChild(textarea);
+  const btn = document.createElement('button');
+  btn.textContent = 'Save';
+  btn.className = 'btn tiny';
+  tdBody.appendChild(btn);
+  btn.addEventListener('click', async () => {
+    const newBody = textarea.value.trim();
+    try {
+      await api(`/api/admin/comments/${cid}/edit`, {
+        method: 'POST',
+        body: { body: newBody }
+      });
+      loadComments();  // reload or update
+    } catch (e) {
+      showErr(`Edit failed: ${e?.error || e?.message}`);
+    }
+  });
+}
+
+function showReplyEditor(tr, cid) {
+  const td = tr.querySelector('td:nth-child(2)');
+  const textarea = document.createElement('textarea');
+  textarea.placeholder = 'Write your reply...';
+  textarea.style.width = '100%';
+  tr.after(document.createElement('tr'));  
+  // Simpler: append reply UI right after this row
+  const replyRow = tr.nextElementSibling;
+  replyRow.innerHTML = `<td colspan="${tr.children.length}">
+    <textarea style="width:100%;" placeholder="Reply..."></textarea>
+    <br>
+    <button class="btn tiny replySave">Post Reply</button>
+    <button class="btn tiny replyCancel">Cancel</button>
+  </td>`;
+  const textarea2 = replyRow.querySelector('textarea');
+  const btnSave = replyRow.querySelector('.replySave');
+  const btnCancel = replyRow.querySelector('.replyCancel');
+
+  btnSave.addEventListener('click', async () => {
+    const newBody = textarea2.value.trim();
+    if (!newBody) {
+      showErr('Reply body required.');
+      return;
+    }
+    try {
+      await api(`/api/admin/comments/${cid}/reply`, {
+        method: 'POST',
+        body: { body: newBody }
+      });
+      loadComments();
+    } catch (e) {
+      showErr(`Reply failed: ${e?.error || e?.message}`);
+    }
+  });
+
+  btnCancel.addEventListener('click', () => {
+    replyRow.remove();
+  });
+}
+
 // --- REPORTS Section ---
 async function loadReports() {
   const tbody = ensureTbody('#reportsTable');

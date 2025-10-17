@@ -397,6 +397,64 @@ router.post('/reports/resolve', requireAdmin, async (req, res) => {
   }
 });
 
+// Reply to a comment (admin posting new comment)
+router.post('/comments/:commentId/reply', requireAdmin, async (req, res) => {
+  try {
+    const cid = req.params.commentId;
+    if (!mongoose.isValidObjectId(cid)) {
+      return res.status(400).json({ error: 'Invalid comment ID' });
+    }
+    const parent = await Comment.findById(cid);
+    if (!parent) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+    const threadId = parent.thread;
+    const { body } = req.body;
+    if (!body || typeof body !== 'string' || body.trim().length < 1) {
+      return res.status(400).json({ error: 'Reply body required' });
+    }
+    const comment = await Comment.create({
+      body: body.trim(),
+      thread: threadId,
+      parent: cid,           // optional parent reference
+      author: req.user.uid,
+      isFromAdmin: true      // optional flag
+    });
+    return res.json({ comment });
+  } catch (e) {
+    console.error('[admin] reply comment error:', e);
+    return res.status(500).json({ error: 'Failed to reply to comment', detail: String(e) });
+  }
+});
+
+// Edit a comment
+router.post('/comments/:commentId/edit', requireAdmin, async (req, res) => {
+  try {
+    const cid = req.params.commentId;
+    if (!mongoose.isValidObjectId(cid)) {
+      return res.status(400).json({ error: 'Invalid comment ID' });
+    }
+    const { body } = req.body;
+    if (!body || typeof body !== 'string') {
+      return res.status(400).json({ error: 'New body required' });
+    }
+    const comment = await Comment.findById(cid);
+    if (!comment) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+
+    comment.body = body.trim();
+    comment.editedAt = new Date();     // optional field
+    comment.editedBy = req.user.uid;   // optional field
+    await comment.save();
+
+    return res.json({ comment });
+  } catch (e) {
+    console.error('[admin] edit comment error:', e);
+    return res.status(500).json({ error: 'Failed to edit comment', detail: String(e) });
+  }
+});
+
 // ===== USERS LIST =====
 router.get('/users', requireAdmin, async (req, res) => {
   try {
