@@ -415,3 +415,50 @@ textarea.input {
   max-width: 440px;
   box-shadow: var(--shadow-2);
 }
+
+/* === Admin Comment Reply/Edit UI Enhancements === */
+.reply-row td {
+  background-color: #fefefe;
+  border-top: 1px solid #ddd;
+  padding: 0.5rem;
+  border-left: 3px solid #8ab4f8;
+}
+
+.reply-row textarea,
+.reply-row td textarea,
+tr textarea {
+  width: 100%;
+  min-height: 4rem;
+  margin-bottom: 0.5rem;
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  resize: vertical;
+}
+
+.reply-row button,
+tr td button {
+  margin-right: 0.5rem;
+}
+
+.reply-row .replySave,
+.reply-row .replyCancel,
+.reply-row .btn.tiny {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+tr.editing td:nth-child(2) {
+  background-color: #fbfbf5;
+}
+
+tr .row.gap-05 button {
+  white-space: nowrap;
+}
+
+#commentsTable td {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
