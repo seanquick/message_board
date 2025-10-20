@@ -8,7 +8,6 @@
 </head>
 <body>
 
-
   <main class="container">
     <section class="card">
       <h1>Community Guidelines</h1>
@@ -17,7 +16,6 @@
       <p>We’re glad you’re here. To keep this space helpful and safe, please follow these rules:</p>
 
       <nav class="card mt-05">
-
         <strong>Quick navigation</strong>
         <ul style="margin:.5rem 0 0 1rem;line-height:1.7;">
           <li><a href="#be-civil">Be civil</a></li>
@@ -84,11 +82,9 @@
     </section>
   </main>
 
-  <!-- ✅ Shared scripts first (header injection + auth/nav wiring) -->
+  <!-- ✅ Shared scripts only (no thread injection) -->
   <script type="module" src="nav.js"></script>
   <script type="module" src="main.js"></script>
-  <!-- ✅ Page script last -->
-  <script type="module" src="threads.js"></script>
   <script type="module" src="account.js"></script>
 </body>
 </html>
