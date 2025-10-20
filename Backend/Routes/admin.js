@@ -3,13 +3,13 @@
 const router = require('express').Router();
 const mongoose = require('mongoose');
 
-const User = require('../Models/User');
-const Thread = require('../Models/Thread');
+const User    = require('../Models/User');
+const Thread  = require('../Models/Thread');
 const Comment = require('../Models/Comment');
-const Report = require('../Models/Report');
+const Report  = require('../Models/Report');
 
 const Notification = (() => { try { return require('../Models/Notification'); } catch { return null; } })();
-const ModLog = (() => { try { return require('../Models/ModLog'); } catch { return null; } })();
+const ModLog       = (() => { try { return require('../Models/ModLog'); } catch { return null; } })();
 
 const { requireAdmin } = require('../Middleware/auth');
 
@@ -24,7 +24,10 @@ try {
 
 const toBool = v => v === true || v === 'true' || v === '1' || v === 1;
 const notDeleted = (field = 'isDeleted') => ({
-  $or: [{ [field]: false }, { [field]: { $exists: false } }]
+  $or: [
+    { [field]: false },
+    { [field]: { $exists: false } }
+  ]
 });
 const s = (v, max = 1000) => String(v ?? '').trim().slice(0, max);
 const iRange = (v, min, max, def) => {
@@ -36,10 +39,10 @@ const iRange = (v, min, max, def) => {
 // Disable caching globally for admin routes
 router.use((req, res, next) => {
   res.set({
-    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-    'Pragma': 'no-cache',
-    'Expires': '0',
-    'Surrogate-Control': 'no-store'
+    'Cache-Control':       'no-store, no-cache, must-revalidate, proxy-revalidate',
+    'Pragma':              'no-cache',
+    'Expires':             '0',
+    'Surrogate-Control':   'no-store'
   });
   next();
 });
@@ -59,8 +62,8 @@ function broadcast(type, data) {
 router.get('/stream', requireAdmin, (req, res) => {
   res.set({
     'Cache-Control': 'no-cache',
-    'Content-Type': 'text/event-stream',
-    'Connection': 'keep-alive'
+    'Content-Type':  'text/event-stream',
+    'Connection':     'keep-alive'
   });
   res.flushHeaders?.();
   sseWrite(res, 'hello', { ok: true });
@@ -90,10 +93,10 @@ router.get('/metrics', requireAdmin, async (_req, res) => {
 
     res.json({
       metrics: {
-        users: usersCount,
-        threads: threadsCount,
+        users:    usersCount,
+        threads:  threadsCount,
         comments: commentsCount,
-        reports: reportsCount
+        reports:  reportsCount
       }
     });
   } catch (e) {
@@ -139,17 +142,17 @@ router.get('/search', requireAdmin, async (req, res) => {
   }
 });
 
-// ===== EXPORT REPORTS (CSV with reporter + target owner info) =====
+// ===== EXPORT REPORTS (CSV) =====
 router.get('/reports/export.csv', requireAdmin, async (_req, res) => {
   try {
     const reports = await Report.find().lean();
 
-    const reporterIds = reports.map(r => r.reporterId).filter(Boolean);
+    const reporterIds      = reports.map(r => r.reporterId).filter(Boolean);
     const commentTargetIds = reports
       .filter(r => r.targetType === 'comment')
       .map(r => r.targetId)
       .filter(Boolean);
-    const threadTargetIds = reports
+    const threadTargetIds  = reports
       .filter(r => r.targetType === 'thread')
       .map(r => r.targetId)
       .filter(Boolean);
@@ -160,17 +163,17 @@ router.get('/reports/export.csv', requireAdmin, async (_req, res) => {
       Thread.find({ _id: { $in: threadTargetIds } }).select('_id author').lean()
     ]);
 
-    const authorIds = [...comments, ...threads].map(t => t.author).filter(Boolean);
-    const users = await User.find({ _id: { $in: authorIds } }).select('_id name email').lean();
+    const authorIds   = [...comments, ...threads].map(t => t.author).filter(Boolean);
+    const users       = await User.find({ _id: { $in: authorIds } }).select('_id name email').lean();
 
-    const userMap = new Map(users.map(u => [String(u._id), u]));
+    const userMap     = new Map(users.map(u => [String(u._id), u]));
     const reporterMap = new Map(reporters.map(u => [String(u._id), u]));
-    const commentMap = new Map(comments.map(c => [String(c._id), c]));
-    const threadMap = new Map(threads.map(t => [String(t._id), t]));
+    const commentMap  = new Map(comments.map(c => [String(c._id), c]));
+    const threadMap   = new Map(threads.map(t => [String(t._id), t]));
 
     const rows = reports.map(r => {
-      const reporter = reporterMap.get(String(r.reporterId)) || {};
-      let targetOwner = {};
+      const reporter    = reporterMap.get(String(r.reporterId)) || {};
+      let targetOwner   = {};
 
       if (r.targetType === 'comment') {
         const comment = commentMap.get(String(r.targetId));
@@ -181,40 +184,41 @@ router.get('/reports/export.csv', requireAdmin, async (_req, res) => {
       }
 
       return {
-        id: String(r._id),
-        reporterId: r.reporterId || '',
-        reporterName: reporter.name || '',
-        reporterEmail: reporter.email || '',
-        targetType: r.targetType || '',
-        targetId: r.targetId || '',
-        targetOwnerId: targetOwner._id || '',
+        id:              String(r._id),
+        reporterId:      r.reporterId || '',
+        reporterName:    reporter.name || '',
+        reporterEmail:   reporter.email || '',
+        targetType:      r.targetType || '',
+        targetId:        r.targetId || '',
+        targetOwnerId:   targetOwner._id || '',
         targetOwnerName: targetOwner.name || '',
-        targetOwnerEmail: targetOwner.email || '',
-        category: r.category || '',
-        details: r.details || '',
-        status: r.status || '',
-        createdAt: r.createdAt ? r.createdAt.toISOString() : '',
-        resolvedAt: r.resolvedAt ? r.resolvedAt.toISOString() : '',
-        resolutionNote: r.resolutionNote || ''
+        targetOwnerEmail:targetOwner.email || '',
+        category:        r.category || '',
+        details:         r.details || '',
+        status:          r.status || '',
+        createdAt:       r.createdAt ? r.createdAt.toISOString() : '',
+        resolvedAt:      r.resolvedAt ? r.resolvedAt.toISOString() : '',
+        resolutionNote:  r.resolutionNote || ''
       };
     });
 
     const header = Object.keys(rows[0] || {}).join(',');
-    const lines = rows.map(r =>
+    const lines  = rows.map(r =>
       Object.values(r).map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
     );
-    const csv = [header, ...lines].join('\n');
+    const csv    = [header, ...lines].join('\n');
 
-    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Type',        'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="reports_export.csv"');
     res.send(csv);
+
   } catch (e) {
     console.error('[admin] export reports error:', e);
     res.status(500).json({ error: 'Failed to export reports', detail: String(e) });
   }
 });
 
-// ===== EXPORT COMMENTS (CSV with author info) =====
+// ===== EXPORT COMMENTS (CSV) =====
 router.get('/comments/export.csv', requireAdmin, async (_req, res) => {
   try {
     const comments = await Comment.find()
@@ -222,25 +226,26 @@ router.get('/comments/export.csv', requireAdmin, async (_req, res) => {
       .lean();
 
     const rows = comments.map(c => ({
-      id: String(c._id),
-      thread: String(c.thread || ''),
-      authorId: c.author?._id || '',
-      authorName: c.author?.name || '',
+      id:          String(c._id),
+      thread:      String(c.thread || ''),
+      authorId:    c.author?._id || '',
+      authorName:  c.author?.name || '',
       authorEmail: c.author?.email || '',
-      body: c.body || '',
-      createdAt: c.createdAt ? c.createdAt.toISOString() : '',
-      isDeleted: c.isDeleted ? 'true' : 'false'
+      body:        c.body || '',
+      createdAt:   c.createdAt ? c.createdAt.toISOString() : '',
+      isDeleted:   c.isDeleted ? 'true' : 'false'
     }));
 
     const header = Object.keys(rows[0] || {}).join(',');
-    const lines = rows.map(r =>
+    const lines  = rows.map(r =>
       Object.values(r).map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
     );
-    const csv = [header, ...lines].join('\n');
+    const csv    = [header, ...lines].join('\n');
 
-    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Type',        'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="comments_export.csv"');
     res.send(csv);
+
   } catch (e) {
     console.error('[admin] export comments error:', e);
     res.status(500).json({ error: 'Failed to export comments', detail: String(e) });
@@ -251,53 +256,70 @@ router.get('/comments/export.csv', requireAdmin, async (_req, res) => {
 router.get('/users/export.csv', requireAdmin, async (_req, res) => {
   try {
     const users = await User.find().lean();
-    const rows = users.map(u => ({
-      id: String(u._id),
-      name: u.name || '',
-      email: u.email || '',
-      role: u.role || '',
-      isBanned: u.isBanned ? 'true' : 'false',
-      createdAt: u.createdAt ? u.createdAt.toISOString() : ''
+    const rows  = users.map(u => ({
+      id:         String(u._id),
+      name:       u.name || '',
+      email:      u.email || '',
+      role:       u.role || '',
+      isBanned:   u.isBanned ? 'true' : 'false',
+      createdAt:  u.createdAt ? u.createdAt.toISOString() : ''
     }));
 
     const header = Object.keys(rows[0] || {}).join(',');
-    const lines = rows.map(r =>
+    const lines  = rows.map(r =>
       Object.values(r).map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
     );
-    const csv = [header, ...lines].join('\n');
+    const csv    = [header, ...lines].join('\n');
 
-    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Type',        'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="users_export.csv"');
     res.send(csv);
+
   } catch (e) {
     console.error('[admin] export users error:', e);
     res.status(500).json({ error: 'Failed to export users', detail: String(e) });
   }
 });
 
-// ===== REPORTS LIST =====
+// ===== REPORTS LIST (with pagination) =====
 router.get('/reports', requireAdmin, async (req, res) => {
   try {
-    const status = String(req.query.status || 'open').toLowerCase();
-    const sVals = enumValues(Report, 'status') || [];
-    const openVals = sVals.filter(v => /open|new|pending|unresolved/i.test(String(v)));
+    const status       = String(req.query.status || 'open').toLowerCase();
+    const pageParam    = iRange(req.query.page, 1, 1e6, 1);
+    const limitParam   = iRange(req.query.limit, 1, 500, 100);
+    const skipCount    = (pageParam - 1) * limitParam;
+
+    const sVals        = enumValues(Report, 'status') || [];
+    const openVals     = sVals.filter(v => /open|new|pending|unresolved/i.test(String(v)));
     const resolvedVals = sVals.filter(v => /resol|clos|done/i.test(String(v)));
 
     let filter;
-    if (status === 'all') filter = {};
-    else if (status === 'resolved')
+    if (status === 'all') {
+      filter = {};
+    } else if (status === 'resolved') {
       filter = resolvedVals.length ? { status: { $in: resolvedVals } } : { status: 'resolved' };
-    else
+    } else {
       filter = openVals.length
         ? { status: { $in: openVals } }
         : { $or: [{ status: 'open' }, { status: null }, { status: { $exists: false } }] };
+    }
 
-    const reports = await Report.find(filter)
+    const totalCount = await Report.countDocuments(filter);
+    const reports    = await Report.find(filter)
       .sort({ createdAt: -1 })
-      .limit(400)
+      .skip(skipCount)
+      .limit(limitParam)
       .lean();
 
-    res.json({ reports });
+    res.json({
+      reports,
+      pagination: {
+        page:       pageParam,
+        limit:      limitParam,
+        total:      totalCount,
+        totalPages: Math.ceil(totalCount / limitParam)
+      }
+    });
   } catch (e) {
     console.error('[admin] reports error:', e);
     res.status(500).json({ error: 'Failed to load reports', detail: String(e) });
@@ -315,7 +337,7 @@ router.get('/reports/:reportId', requireAdmin, async (req, res) => {
     const report = await Report.findById(rid).lean();
     if (!report) return res.status(404).json({ error: 'Report not found' });
 
-    let reporter = null;
+    let reporter  = null;
     if (report.reporterId && mongoose.isValidObjectId(report.reporterId)) {
       reporter = await User.findById(report.reporterId).select('name email').lean();
     }
@@ -355,12 +377,12 @@ router.post('/reports/:reportId/resolve', requireAdmin, async (req, res) => {
     if (!report) return res.status(404).json({ error: 'Report not found' });
 
     const { resolutionNote } = req.body;
-    report.status = 'resolved';
+    report.status         = 'resolved';
     if (typeof resolutionNote === 'string') {
       report.resolutionNote = resolutionNote.trim();
     }
-    report.resolvedAt = new Date();
-    report.resolvedBy = req.user?.uid;
+    report.resolvedAt     = new Date();
+    report.resolvedBy     = req.user?.uid;
 
     await report.save();
     res.json({ ok: true, report: report.toObject() });
@@ -378,8 +400,8 @@ router.post('/reports/resolve', requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'No report IDs provided' });
     }
     const validIds = reportIds.filter(id => mongoose.isValidObjectId(id));
-    const update = {
-      status: 'resolved',
+    const update   = {
+      status:     'resolved',
       resolvedAt: new Date(),
       resolvedBy: req.user?.uid
     };
@@ -414,11 +436,11 @@ router.post('/comments/:commentId/reply', requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Reply body required' });
     }
     const comment = await Comment.create({
-      body: body.trim(),
-      thread: threadId,
-      parent: cid,           // optional parent reference
-      author: req.user.uid,
-      isFromAdmin: true      // optional flag
+      body:        body.trim(),
+      thread:      threadId,
+      parent:      cid,
+      author:      req.user.uid,
+      isFromAdmin: true
     });
     return res.json({ comment });
   } catch (e) {
@@ -443,9 +465,9 @@ router.post('/comments/:commentId/edit', requireAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Comment not found' });
     }
 
-    comment.body = body.trim();
-    comment.editedAt = new Date();     // optional field
-    comment.editedBy = req.user.uid;   // optional field
+    comment.body     = body.trim();
+    comment.editedAt = new Date();
+    comment.editedBy = req.user.uid;
     await comment.save();
 
     return res.json({ comment });
@@ -455,31 +477,44 @@ router.post('/comments/:commentId/edit', requireAdmin, async (req, res) => {
   }
 });
 
-// ===== USERS LIST =====
+// ===== USERS LIST (with pagination) =====
 router.get('/users', requireAdmin, async (req, res) => {
   try {
-    const qstr = s(req.query.q, 200);
-    const page = iRange(req.query.page, 1, 1e6, 1);
-    const limit = iRange(req.query.limit, 1, 200, 50);
+    const qstr      = s(req.query.q, 200);
+    const page      = iRange(req.query.page, 1, 1e6, 1);
+    const limit     = iRange(req.query.limit, 1, 200, 50);
+    const skipCount = (page - 1) * limit;
+
     let filter = {};
     if (qstr) {
       filter = {
         $or: [
-          { name: { $regex: qstr, $options: 'i' } },
+          { name:  { $regex: qstr, $options: 'i' } },
           { email: { $regex: qstr, $options: 'i' } }
         ]
       };
     }
+
     const [users, total] = await Promise.all([
       User.find(filter)
         .select('name email role isBanned createdAt notes')
         .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
+        .skip(skipCount)
         .limit(limit)
         .lean(),
       User.countDocuments(filter)
     ]);
-    res.json({ users, total });
+
+    res.json({
+      users,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
+
   } catch (e) {
     console.error('[admin] users error:', e);
     res.status(500).json({ error: 'Failed to load users', detail: String(e) });
@@ -499,20 +534,19 @@ router.delete('/users/:userId', requireAdmin, async (req, res) => {
       return res.status(404).json({ error: 'User not found or already deleted' });
     }
 
-    // Optionally and importantly: clean up related data (threads, comments, etc.)
+    // Optionally: clean up related data
     // e.g. await Thread.deleteMany({ author: uid });
-    // await Comment.deleteMany({ author: uid });
-    // maybe log a ModLog, notify, etc.
+    //      await Comment.deleteMany({ author: uid });
 
     res.json({ ok: true, deletedCount: deleted.deletedCount });
+
   } catch (e) {
     console.error('[admin] delete user error:', e);
     res.status(500).json({ error: 'Failed to delete user', detail: String(e) });
   }
 });
 
-// Add this in backend/routes/admin.js, after your /users route(s)
-
+// Fetch user content (recent threads/comments) – consider adding pagination if needed
 router.get('/users/:userId/content', requireAdmin, async (req, res) => {
   try {
     const uid = req.params.userId;
@@ -520,34 +554,30 @@ router.get('/users/:userId/content', requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Invalid user ID' });
     }
 
-    // Fetch user basic info
     const userDoc = await User.findById(uid).select('name email').lean();
     if (!userDoc) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Fetch recent threads by this user
-    const threads = await Thread.find({ author: uid })
+    const threads  = await Thread.find({ author: uid })
       .sort({ createdAt: -1 })
       .limit(100)
       .select('_id title createdAt status commentCount upvoteCount')
       .lean();
 
-    // Fetch recent comments by this user
     const comments = await Comment.find({ author: uid })
       .sort({ createdAt: -1 })
       .limit(100)
       .select('_id thread body createdAt upvoteCount')
       .lean();
 
-    // Add snippet field to comments
     const commentsWithSnippet = comments.map(c => ({
       ...c,
       snippet: (c.body || '').slice(0, 200)
     }));
 
     return res.json({
-      user: userDoc,
+      user:     userDoc,
       threads,
       comments: commentsWithSnippet
     });
@@ -557,8 +587,6 @@ router.get('/users/:userId/content', requireAdmin, async (req, res) => {
     return res.status(500).json({ error: 'Failed to load user content', detail: String(e) });
   }
 });
-
-
 
 // ===== EXPORT THREADS JSON =====
 router.get('/export/threads', requireAdmin, async (_req, res) => {

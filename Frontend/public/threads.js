@@ -4,27 +4,20 @@ import { openReportModal } from './report.js';
 
 document.addEventListener('DOMContentLoaded', init);
 
+let state = {
+  threads: [],
+  nextCursor: null,
+  hasMore: false,
+  loading: false,
+  limit: 20  // you can adjust this if desired
+};
+
 async function init() {
-  wireCreateThreadForm(); // Attach thread creation logic
+  wireCreateThreadForm();
   renderSkeleton();
 
   try {
-    const payload = await api('/api/threads', { nocache: true });
-    const threads = Array.isArray(payload?.threads) ? payload.threads : [];
-
-    for (const t of threads) {
-      t.isPinned = !!(t.isPinned || t.pinned);
-      t.isLocked = !!(t.isLocked || t.locked);
-      t.upvoteCount = Number(t.upvoteCount ?? t.thumbsUp ?? t.upvotes ?? t.score ?? 0);
-    }
-
-    const tableBody = q('#threadsTable tbody');
-    if (tableBody) {
-      renderTable(tableBody, threads);
-    } else {
-      const listHost = ensureListHost();
-      renderCards(listHost, threads);
-    }
+    await loadThreads(true);
   } catch (e) {
     renderError(e?.error || e?.message || 'Failed to load threads.');
   }
@@ -56,12 +49,11 @@ function wireCreateThreadForm() {
       });
 
       const id = thread?._id || thread?.id || thread?.thread?._id || thread?.thread?.id;
-        if (id) {
-          window.location.href = `thread.html?id=${encodeURIComponent(id)}`;
-        } else {
-          alert('Thread created but no ID returned.');
-        }
-
+      if (id) {
+        window.location.href = `thread.html?id=${encodeURIComponent(id)}`;
+      } else {
+        alert('Thread created but no ID returned.');
+      }
     } catch (e) {
       console.error('Thread creation failed', e);
       alert(`Failed to create thread: ${e?.error || e?.message}`);
@@ -69,8 +61,84 @@ function wireCreateThreadForm() {
   });
 }
 
+async function loadThreads(reset = false) {
+  if (state.loading) return;
+  state.loading = true;
+
+  if (reset) {
+    state.threads = [];
+    state.nextCursor = null;
+    state.hasMore = false;
+    renderSkeleton();
+  }
+
+  const params = new URLSearchParams();
+  params.set('limit', String(state.limit));
+  if (state.nextCursor) {
+    params.set('after', state.nextCursor);
+  }
+  params.set('t', String(Date.now()));
+
+  try {
+    const payload = await api(`/api/threads?${params.toString()}`, { nocache: true });
+    const threads = Array.isArray(payload?.threads) ? payload.threads : [];
+    const hasMore = !!payload?.hasMore;
+    const nextCursor = payload?.nextCursor || null;
+
+    // Transform threads for UI
+    for (const t of threads) {
+      t.isPinned = !!(t.isPinned || t.pinned);
+      t.isLocked = !!(t.isLocked || t.locked);
+      t.upvoteCount = Number(t.upvoteCount ?? t.thumbsUp ?? t.upvotes ?? t.score ?? 0);
+    }
+
+    if (reset) {
+      state.threads = threads;
+    } else {
+      state.threads = state.threads.concat(threads);
+    }
+    state.hasMore = hasMore;
+    state.nextCursor = nextCursor;
+
+    const tableBody = q('#threadsTable tbody');
+    if (tableBody) {
+      renderTable(tableBody, state.threads);
+    } else {
+      const listHost = ensureListHost();
+      renderCards(listHost, state.threads);
+    }
+
+    // After rendering, show Load More if needed
+    renderLoadMoreButton();
+
+  } catch (e) {
+    renderError(e?.error || e?.message || 'Failed to load threads.');
+  } finally {
+    state.loading = false;
+  }
+}
+
+function renderLoadMoreButton() {
+  let btn = q('#loadMoreThreadsBtn');
+  if (!btn) {
+    const container = q('#threadsList') || document.querySelector('main') || document.body;
+    btn = document.createElement('button');
+    btn.id = 'loadMoreThreadsBtn';
+    btn.className = 'btn ghost mt-1';
+    btn.textContent = 'Load More Threads';
+    container.appendChild(btn);
+    btn.addEventListener('click', () => loadThreads(false));
+  }
+  if (state.hasMore) {
+    btn.style.display = '';
+    btn.disabled = state.loading;
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
 function ensureListHost() {
-  let host = q('#threadsList');
+  let host = q('#list') || q('#threadsList');
   if (!host) {
     host = document.createElement('div');
     host.id = 'threadsList';
@@ -84,6 +152,7 @@ function ensureListHost() {
 function renderCards(host, threads) {
   if (!threads.length) {
     host.innerHTML = `<div class="empty">No threads yet.</div>`;
+    renderLoadMoreButton();
     return;
   }
 
@@ -132,12 +201,15 @@ function renderCards(host, threads) {
       }
     });
   });
+
+  renderLoadMoreButton();
 }
 
 function renderTable(tbody, threads) {
   tbody.innerHTML = '';
   if (!threads.length) {
     tbody.innerHTML = `<tr><td colspan="6" class="empty">No threads yet.</td></tr>`;
+    renderLoadMoreButton();
     return;
   }
 
@@ -170,6 +242,8 @@ function renderTable(tbody, threads) {
       if (tid) openReportModal('thread', tid);
     });
   });
+
+  renderLoadMoreButton();
 }
 
 function renderSkeleton() {
@@ -192,7 +266,7 @@ function pinBadge() {
   return `
     <span class="badge pin" title="Pinned">
       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-        <path d="M14 2l-2 2 2 5-4 4-3-3-2 2 7 7 2-2-3-3 4-4 5 2 2-2-8-8z" fill="currentColor"/>
+        <path d="M14 2l-2 2 2 5-4 4-3-3-2 2 7 7 2-2-3-3 4‑4 5 2 2‑2‑8‑8z" fill="currentColor"/>
       </svg>
       Pinned
     </span>
@@ -203,7 +277,7 @@ function lockBadge() {
   return `
     <span class="badge lock" title="Locked">
       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-        <path d="M12 1a5 5 0 00-5 5v3H6a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2v-8a2 2 0 00-2-2h-1V6a5 5 0 00-5-5zm-3 8V6a3 3 0 116 0v3H9z" fill="currentColor"/>
+        <path d="M12 1a5 5 0 00‑5 5v3H6a2 2 0 00‑2 2v8a2 2 0 002 2h12a2 2 0 002‑2v‑8a2 2 0 00‑2‑2h‑1V6a5 5 0 00‑5−5zm‑3 8V6a3 3 0 116 0v3H9z" fill="currentColor"/>
       </svg>
       Locked
     </span>

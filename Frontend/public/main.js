@@ -1,61 +1,73 @@
 // Frontend/public/main.js
 
 /* ---------------- HTTP helper + silent refresh for admin routes ---------------- */
-const JSON_HEADERS = { 'Content-Type': 'application/json' };
+const JSON_HEADERS = { 'Content‑Type': 'application/json' };
+
+function makeUrl(url, params = {}) {
+  const keys = Object.keys(params);
+  if (keys.length === 0) return url;
+  const esc = encodeURIComponent;
+  const query = keys
+    .map(k => `${esc(k)}=${esc(params[k])}`)
+    .join('&');
+  return url + (url.includes('?') ? '&' : '?') + query;
+}
 
 export async function api(url, opts = {}) {
   const {
     method = 'GET',
-    body,
+    body = null,
     headers = {},
+    params = {},        // new: support query params
     nocache = false,
-    skipHtmlRedirect = false  // new option
+    skipHtmlRedirect = false
   } = opts;
 
   const finalHeaders = { ...JSON_HEADERS, ...headers };
-
   const upper = String(method).toUpperCase();
+
   if (!['GET', 'HEAD', 'OPTIONS'].includes(upper)) {
     const csrf = getCsrfToken();
-    if (csrf) finalHeaders['X-CSRF-Token'] = csrf;
+    if (csrf) {
+      finalHeaders['X‑CSRF‑Token'] = csrf;
+    }
   }
 
+  const fullUrl = makeUrl(url, params);
+
   async function doFetch() {
-    return fetch(url, {
+    return fetch(fullUrl, {
       method: upper,
       headers: finalHeaders,
       credentials: 'include',
-      cache: nocache ? 'no-store' : 'default',
-      body: body ? JSON.stringify(body) : undefined
+      cache:   nocache ? 'no-store' : 'default',
+      body:    body ? JSON.stringify(body) : undefined
     });
   }
 
   let res = await doFetch();
 
-  if (res.status === 401 && url.startsWith('/api/admin/')) {
+  if (res.status === 401 && fullUrl.startsWith('/api/admin/')) {
     const refreshed = await tryRefreshSession();
     if (refreshed) {
       res = await doFetch();
     }
   }
 
-  const ct = res.headers.get('content-type') || '';
+  const ct     = res.headers.get('content-type') || '';
   const isJson = ct.includes('application/json');
   const isHtml = ct.includes('text/html');
-  const text = await res.text();
+  const text   = await res.text();
 
-  // Only do redirect logic if skipHtmlRedirect is false
-  if (!skipHtmlRedirect && isHtml && (
-    text.includes('<title>Sign in') ||
-    (text.includes('input') && text.includes('password') && text.includes('email'))
-  )) {
+  if (!skipHtmlRedirect && isHtml &&
+      (text.includes('<title>Sign in') ||
+       (text.includes('input') && text.includes('password') && text.includes('email'))) ) {
     console.warn('🔒 Detected login HTML in api response — redirecting to login.');
     window.location.href = '/login.html';
     return {};
   }
 
   const data = isJson ? JSON.parse(text) : text;
-
   if (!res.ok) {
     const err = (typeof data === 'object' && data) ? data : { error: String(data || 'Request failed') };
     throw err;
@@ -66,9 +78,9 @@ export async function api(url, opts = {}) {
 async function tryRefreshSession() {
   try {
     const r = await fetch('/api/auth/refresh', {
-      method: 'POST',
+      method:      'POST',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' }
+      headers:      { 'Content‑Type': 'application/json' }
     });
     return r.ok;
   } catch (e) {
@@ -91,27 +103,28 @@ export async function refreshMe() {
 }
 
 /* ---------------- Tiny DOM helpers ---------------- */
-export const $ = id => document.getElementById(id);
-export const q = sel => document.querySelector(sel);
+export const $  = id  => document.getElementById(id);
+export const q  = sel => document.querySelector(sel);
 export const qa = sel => Array.from(document.querySelectorAll(sel));
 
 export function escapeHTML(s = '') {
   return String(s)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
+    .replaceAll('&',  '&amp;')
+    .replaceAll('<',  '&lt;')
+    .replaceAll('>',  '&gt;')
+    .replaceAll('"',  '&quot;')
     .replaceAll("'", '&#039;');
 }
 
 export function timeAgo(v) {
-  const d = (typeof v === 'string' || typeof v === 'number') ? new Date(v)
-    : (v instanceof Date ? v : new Date());
+  const d = (typeof v === 'string' || typeof v === 'number')
+            ? new Date(v)
+            : (v instanceof Date ? v : new Date());
   const s = Math.floor((Date.now() - d.getTime()) / 1000);
   if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60); if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`;
-  const d2 = Math.floor(h / 24); if (d2 < 7) return `${d2}d ago`;
+  const m = Math.floor(s/60); if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m/60); if (h < 24) return `${h}h ago`;
+  const d2 = Math.floor(h/24); if (d2 < 7) return `${d2}d ago`;
   return d.toLocaleDateString();
 }
 
@@ -224,9 +237,9 @@ function ensureAdminLink() {
 function ensureControls() {
   if (!navRoot()) return;
   ensureAdminLink();
-  const login = ensureLogin();
+  const login    = ensureLogin();
   const register = ensureRegister();
-  const logout = ensureLogout();
+  const logout   = ensureLogout();
   return { login, register, logout };
 }
 
@@ -237,9 +250,9 @@ function updateNav() {
   const adminLink = document.querySelector('a[href$="admin.html"]');
   const loggedIn = !!me;
 
-  if (logout) logout.style.display = loggedIn ? 'inline-block' : 'none';
-  if (login) login.style.display = loggedIn ? 'none' : 'inline-block';
-  if (register) register.style.display = loggedIn ? 'none' : 'inline-block';
+  if (logout)   logout.style.display   = loggedIn ? 'inline-block' : 'none';
+  if (login)    login.style.display    = loggedIn ? 'none'       : 'inline-block';
+  if (register) register.style.display = loggedIn ? 'none'       : 'inline-block';
 
   if (adminLink) {
     if (me?.role === 'admin') {
@@ -287,9 +300,9 @@ document.addEventListener('nav:ready', () => {
 /* ---------------- Debug helper ---------------- */
 window.__authDebug = () => ({
   me,
-  hasLogin: !!$('#loginLink'),
-  hasRegister: !!$('#registerLink'),
-  hasLogout: !!$('#logoutBtn'),
+  hasLogin:     !!$('#loginLink'),
+  hasRegister:  !!$('#registerLink'),
+  hasLogout:    !!$('#logoutBtn'),
   adminVisible: !document.querySelector('a[href$="admin.html"]')?.classList.contains('hidden')
 });
 

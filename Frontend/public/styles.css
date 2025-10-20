@@ -416,6 +416,31 @@ textarea.input {
   box-shadow: var(--shadow-2);
 }
 
+/* 25) Pagination / Load More UI */
+.load‑more-container {
+  text-align: center;
+  margin-top: var(--space);
+}
+.load‑more-btn {
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line‑2);
+  border-radius: var(--r‑sm);
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.load‑more-btn:hover {
+  background: #fbfbfb;
+  border-color: #cbd5e1;
+}
+.load‑more‑btn[disabled] {
+  opacity: .6;
+  cursor: not‑allowed;
+}
+
 /* === Admin Comment Reply/Edit UI Enhancements === */
 .reply-row td {
   background-color: #fefefe;

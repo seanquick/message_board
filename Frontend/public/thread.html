@@ -7,35 +7,48 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <!-- Nav header injected by nav.js -->
   <main class="container card" role="main">
     <article id="threadBox" class="card"></article>
 
     <section class="card mt-2" id="commentsSection">
       <h2>Comments</h2>
-      <div id="commentsLoading" class="meta">Loading...</div>
+      <div id="commentsLoading" class="meta">Loading…</div>
 
-      <form id="commentForm" style="margin-top:1rem; display:none;">
-        <textarea id="cBody" placeholder="Write a comment…" required></textarea>
+      <div id="commentsListHost" class="mt-2">
+        <div id="comments"></div>
+        <button id="loadMoreCommentsBtn" class="btn ghost mt-1" style="display:none">Load More Comments</button>
+      </div>
 
-        <label class="row items-center gap-05 mt-05">
-          <input type="checkbox" id="cAnon" />
-          Post as Anonymous
-        </label>
+      <div class="composer" style="margin-top:1rem;">
+        <form id="replyForm">
+          <div id="replyingTo" class="meta" style="display:none; margin-bottom:.35rem"></div>
+          <textarea name="body" id="replyBody" placeholder="Write a comment…" required></textarea>
+          <input type="hidden" name="parentId" id="parentId" />
 
-        <div class="row items-center between mt-05">
-          <div id="cErr" class="err" style="display:none"></div>
-          <button type="submit" class="btn primary">Post comment</button>
+          <label class="row items-center gap-05 mt-05">
+            <input type="checkbox" id="isAnonymous" name="isAnonymous" />
+            <span>Post as Anonymous</span>
+          </label>
+
+          <div class="row items-center between mt-05">
+            <div id="cErr" class="err" style="display:none"></div>
+            <button type="submit" class="btn primary">Post comment</button>
+            <button type="button" id="cancelReply" class="btn tiny" style="display:none">Cancel reply</button>
+          </div>
+        </form>
+
+        <div id="loginHint" class="meta" style="display:none; margin-top:.5rem;">
+          Please log in to comment.
         </div>
-      </form>
-
-      <div id="commentsList" class="mt-2"></div>
+      </div>
     </section>
   </main>
 
   <!-- Scripts in load order -->
-  <script type="module" src="nav.js"></script>
-  <script type="module" src="main.js"></script>
-  <script type="module" src="report.js"></script>
-  <script type="module" src="thread.js"></script>
+  <script type="module" src="nav.js?v=1"></script>
+  <script type="module" src="main.js?v=1"></script>
+  <script type="module" src="report.js?v=1"></script>
+  <script type="module" src="thread.js?v=1"></script>
 </body>
 </html>

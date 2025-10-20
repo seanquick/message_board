@@ -58,14 +58,18 @@
     <h2 class="mt-2">Latest Threads</h2>
 
     <div id="list" class="stack mt-1" aria-live="polite">
-      <!-- threads.js will inject thread items; if a thread has a “Report” link here, it should use .btn.danger -->
+  <!-- threads.js will inject thread items -->
+    </div>
+
+    <div class="row items-center justify-center mt-1">
+      <button id="loadMoreThreadsBtn" class="btn ghost" style="display:none">Load More Threads</button>
     </div>
 
     <div class="row items-center between mt-1">
       <span class="meta"></span>
       <button id="refresh" class="btn ghost">Refresh</button>
     </div>
-  </main>
+
 
   <script type="module" src="nav.js?v=3"></script>
   <script type="module" src="main.js?v=9"></script>
