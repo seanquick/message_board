@@ -1,7 +1,8 @@
 // Frontend/public/main.js
 
 /* ---------------- HTTP helper + silent refresh for admin routes ---------------- */
-const JSON_HEADERS = { 'Content‑Type': 'application/json' };
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
+
 
 function makeUrl(url, params = {}) {
   const keys = Object.keys(params);
