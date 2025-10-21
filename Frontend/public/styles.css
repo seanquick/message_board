@@ -103,7 +103,7 @@ p  { margin: 0 0 1rem; color: var(--text-soft); }
 
 /* 4) Layout */
 .container {
-  width: min(1100px, 92%);
+  width: 95%;
   margin: 32px auto;
 }
 
@@ -114,6 +114,7 @@ p  { margin: 0 0 1rem; color: var(--text-soft); }
   box-shadow: var(--shadow-1);
   padding: calc(var(--space) * 1.25);
   position: relative;
+  width: 100%; /* ✅ Ensure full width inside container */
 }
 
 .grid { display: grid; gap: 1rem; }
@@ -125,12 +126,20 @@ p  { margin: 0 0 1rem; color: var(--text-soft); }
 .between { justify-content: space-between; }
 .items-center { align-items: center; }
 .minw-0 { min-width: 0; }
-.overflow-auto { overflow: auto; }
 
-/* Spacing utils (used by your HTML) */
-.mt-1 { margin-top: .75rem; }
-.mt-2 { margin-top: 1.25rem; }
-.gap-05 { gap: .5rem; }
+/* ✅ Updated to remove horizontal scroll constraints */
+.overflow-auto {
+  overflow-x: unset;
+  width: 100%;
+}
+
+/* ✅ Ensure all tables are full width inside cards */
+.card table,
+.dashboard-box table {
+  width: 100%;
+  table-layout: auto;
+  max-width: 100%;
+}
 
 /* 5) Stats */
 .stat {
