@@ -4,13 +4,13 @@ import { api, escapeHTML, timeAgo, q, $, me, refreshMe } from './main.js';
 import { initReportUI, openReportModal } from './report.js';
 
 let THREAD_ID = null;
-let THREAD = null;
+let THREAD    = null;
 let commentState = {
-  comments: [],
+  comments:   [],
   nextCursor: null,
-  hasMore: false,
-  loading: false,
-  limit: 20
+  hasMore:     false,
+  loading:     false,
+  limit:       20
 };
 
 /* --- Helpers --- */
@@ -71,6 +71,16 @@ async function init() {
 
     renderThread(THREAD);
 
+    // If thread is locked: disable composer
+    if (THREAD.flags?.locked) {
+      safeSetHTML('#lockBanner', `<strong>Notice:</strong> This thread is locked — no new comments allowed.`);
+      safeShow('#lockBanner', true);
+      safeShow('#replyForm', false);
+    } else {
+      safeShow('#lockBanner', false);
+      safeShow('#replyForm', true);
+    }
+
     // load initial batch of comments
     await loadComments(true);
 
@@ -106,14 +116,14 @@ function ensureScaffold() {
   if (!q('#commentsSection')) {
     const sec = document.createElement('section');
     sec.id = 'commentsSection';
-    sec.className = 'card';
+    sec.className = 'card mt‑2';
     sec.innerHTML = `
       <h2>Comments</h2>
       <div id="comments"></div>
       <button id="loadMoreCommentsBtn" class="btn ghost mt-1" style="display:none">Load More Comments</button>
       <div class="composer">
         <form id="replyForm">
-          <div id="replyingTo" class="meta" style="display:none; margin-bottom:.35rem"></div>
+          <div id="replyingTo" class="meta" style="display:none; margin‑bottom:.35rem"></div>
           <textarea name="body" id="replyBody" placeholder="Write a comment…"></textarea>
           <input type="hidden" name="parentId" id="parentId" />
           <div class="row" style="margin-top:.5rem; justify-content:space-between">
@@ -154,9 +164,9 @@ function renderThread(t) {
   if (t.flags?.locked || t.isLocked || t.locked) badges.push(lockBadge());
   safeSetHTML('#threadBadges', badges.join(''));
 
-  const author = escapeHTML(t.author_display || 'Unknown');
-  const when = timeAgo(t.createdAt);
-  const upvotes = Number(t.upvoteCount ?? t.thumbsUp ?? t.upvotes ?? t.score ?? 0);
+  const author    = escapeHTML(t.author_display || 'Unknown');
+  const when      = timeAgo(t.createdAt);
+  const upvotes   = Number(t.upvoteCount ?? t.thumbsUp ?? t.upvotes ?? t.score ?? 0);
   safeSetHTML('#threadMeta', `${author} • ${when} • ▲ ${upvotes}`);
 
   safeSetHTML('#threadBody', safeParagraphs(t.body ?? t.content ?? ''));
@@ -166,11 +176,11 @@ function renderThread(t) {
 
 /* --- Toolbar with Report / Upvote --- */
 function buildToolbar() {
-  const host = q('#threadToolbar');
+  const host   = q('#threadToolbar');
   if (!host) return;
 
   const loggedIn = !!me?.id;
-  const isOwn = loggedIn && (me.id === THREAD.author || me.id === THREAD.authorId);
+  const isOwn    = loggedIn && (me.id === THREAD.author || me.id === THREAD.authorId);
   const canReport = loggedIn && !isOwn;
 
   const tooltip = !loggedIn
@@ -178,7 +188,7 @@ function buildToolbar() {
     : (isOwn ? 'Cannot report your own thread' : 'Report this thread');
 
   host.innerHTML = `
-    <button id="threadUpvote" class="btn tiny" ${!loggedIn ? 'disabled' : ''} title="${loggedIn ? 'Upvote' : 'Login required'}">
+    <button id="threadUpvote" class="btn tiny" ${!loggedIn ? 'disabled':'')} title="${loggedIn ? 'Upvote':'Login required'}">
       ▲ Upvote <span id="threadUpCount" class="mono">${Number(THREAD.upvoteCount || 0)}</span>
     </button>
     <button id="reportThreadBtn" class="btn tiny danger" ${canReport ? '' : 'disabled'} title="${tooltip}" data-thread-id="${THREAD._id}">
@@ -198,7 +208,9 @@ function buildToolbar() {
 
 async function onUpvoteThread() {
   try {
-    const res = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}/upvote`, { method: 'POST' });
+    const res = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}/upvote`, {
+      method: 'POST'
+    });
     safeSetText('#threadUpCount', Number(res?.upvoteCount || 0));
   } catch (e) {
     alert(e?.error || e?.message || 'Failed to upvote.');
@@ -211,9 +223,9 @@ async function loadComments(reset = false) {
   commentState.loading = true;
 
   if (reset) {
-    commentState.comments = [];
+    commentState.comments   = [];
     commentState.nextCursor = null;
-    commentState.hasMore = false;
+    commentState.hasMore    = false;
     safeSetHTML('#comments', `<div class="skeleton"><div class="bar"></div><div class="bar short"></div><div class="bar"></div></div>`);
   }
 
@@ -227,11 +239,11 @@ async function loadComments(reset = false) {
   try {
     const resp = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}/comments?${params.toString()}`, { nocache: true });
     const newComments = Array.isArray(resp?.comments) ? resp.comments : [];
-    const hasMore = !!resp?.hasMore;
-    const nextCursor = resp?.nextCursor || null;
+    const hasMore     = !!resp?.hasMore;
+    const nextCursor  = resp?.nextCursor || null;
 
-    commentState.comments = reset ? newComments : commentState.comments.concat(newComments);
-    commentState.hasMore = hasMore;
+    commentState.comments   = reset ? newComments : commentState.comments.concat(newComments);
+    commentState.hasMore    = hasMore;
     commentState.nextCursor = nextCursor;
 
     renderCommentsTree(commentState.comments);
@@ -274,13 +286,11 @@ function renderCommentsTree(nodes = []) {
   host.querySelectorAll('.replyBtn').forEach(b => b.addEventListener('click', onReplyClick));
   host.querySelectorAll('.c-upvote').forEach(b => b.addEventListener('click', onUpvoteComment));
   host.querySelectorAll('.c-report').forEach(b => {
-    b.addEventListener('click', ev => {
-      const btn = ev.currentTarget;
-      const cid = btn.dataset.commentId;
-      if (!btn.disabled && cid) {
-        openReportModal('comment', cid);
-      }
-    });
+    const btn  = b;
+    const cid  = btn.dataset.commentId;
+    if (!btn.disabled && cid) {
+      btn.addEventListener('click', ev => openReportModal('comment', cid));
+    }
   });
 
   renderLoadMoreCommentsButton();
@@ -294,12 +304,12 @@ function renderCommentNode(c) {
   const isDeleted = !!c.isDeleted;
 
   const author = escapeHTML(c.author_display || 'Unknown');
-  const when = timeAgo(c.createdAt);
-  const up = Number(c.upvoteCount ?? c.score ?? 0);
-  const body = isDeleted ? '<em class="meta">[deleted]</em>' : escapeHTML(c.body || '');
+  const when   = timeAgo(c.createdAt);
+  const up     = Number(c.upvoteCount ?? c.score ?? 0);
+  const body   = isDeleted ? '<em class="meta">[deleted]</em>' : escapeHTML(c.body || '');
 
   const loggedIn = !!me?.id;
-  const isOwn = loggedIn && (c.authorId === me.id);
+  const isOwn    = loggedIn && (c.authorId === me.id);
   const canReport = loggedIn && !isOwn;
 
   const tooltip = !loggedIn
@@ -324,14 +334,14 @@ function renderCommentNode(c) {
 }
 
 function renderCommentChildHTML(child) {
-  const id = escapeAttr(String(child._id));
+  const id     = escapeAttr(String(child._id));
   const author = escapeHTML(child.author_display || 'Unknown');
-  const when = timeAgo(child.createdAt);
-  const up = Number(child.upvoteCount ?? child.score ?? 0);
-  const body = !!child.isDeleted ? '<em class="meta">[deleted]</em>' : escapeHTML(child.body || '');
+  const when   = timeAgo(child.createdAt);
+  const up     = Number(child.upvoteCount ?? child.score ?? 0);
+  const body   = !!child.isDeleted ? '<em class="meta">[deleted]</em>' : escapeHTML(child.body || '');
 
   const loggedIn = !!me?.id;
-  const isOwn = loggedIn && (child.authorId === me.id);
+  const isOwn    = loggedIn && (child.authorId === me.id);
   const canReport = loggedIn && !isOwn;
 
   return `
@@ -339,8 +349,8 @@ function renderCommentChildHTML(child) {
       <header class="meta">${author} • ${when}</header>
       <div class="c-body">${body}</div>
       <div class="row wrap" style="gap:.5rem; margin-top:.35rem">
-        <button class="btn tiny c-upvote" ${child.isDeleted ? 'disabled' : ''}>▲ ${up}</button>
-        <button class="btn tiny replyBtn" ${child.isDeleted ? 'disabled' : ''}>Reply</button>
+        <button class="btn tiny c-upvote" ${child.isDeleted ? 'disabled':''}>▲ ${up}</button>
+        <button class="btn tiny replyBtn" ${child.isDeleted ? 'disabled':''}>Reply</button>
         <button class="btn tiny danger c-report" ${canReport ? '' : 'disabled'} title="${tooltip}" data-comment-id="${child._id}">Report</button>
       </div>
     </article>
@@ -349,10 +359,10 @@ function renderCommentChildHTML(child) {
 
 /* --- Reply / Composer Logic --- */
 function onReplyClick(ev) {
-  const btn = ev.currentTarget;
+  const btn       = ev.currentTarget;
   const commentId = btn.closest('.comment')?.dataset.id;
   if (commentId) {
-    q('#parentId').value = commentId;
+    q('#parentId').value        = commentId;
     q('#replyingTo').textContent = 'Replying…';
     q('#replyingTo').style.display = '';
     q('#cancelReply').style.display = '';
@@ -361,7 +371,7 @@ function onReplyClick(ev) {
 }
 
 function clearReplyTarget() {
-  q('#parentId').value = '';
+  q('#parentId').value        = '';
   q('#replyingTo').textContent = '';
   q('#replyingTo').style.display = 'none';
   q('#cancelReply').style.display = 'none';
@@ -376,8 +386,14 @@ function bindComposer() {
   form.addEventListener('submit', async ev => {
     ev.preventDefault();
 
-    const body = (q('#replyBody')?.value || '').trim();
-    const parentId = (q('#parentId')?.value || '').trim();
+    // If locked, guard early (just in case)
+    if (THREAD.flags?.locked) {
+      alert('Thread is locked. New comments are disabled.');
+      return;
+    }
+
+    const body       = (q('#replyBody')?.value || '').trim();
+    const parentId   = (q('#parentId')?.value || '').trim();
     const isAnonymous = !!q('#isAnonymous')?.checked;
 
     if (!me?.id) {
@@ -395,16 +411,15 @@ function bindComposer() {
     try {
       await api(`/api/comments/${encodeURIComponent(THREAD_ID)}`, {
         method: 'POST',
-        body: payload
+        body:   payload
       });
       q('#replyBody').value = '';
       clearReplyTarget();
-      // reload comments fully (could optimize to append)
       await loadComments(true);
       initReportUI();
     } catch (e) {
       const msg = e?.error || e?.message || 'Failed to post comment.';
-      if (/locked|forbidden|banned|423/i.test(msg)) {
+      if (/locked|forbidden|423/i.test(msg)) {
         alert('Thread is locked. New comments are disabled.');
       } else {
         alert(msg);
@@ -415,7 +430,7 @@ function bindComposer() {
 
 /* --- Comment Upvote Function --- */
 function onUpvoteComment(ev) {
-  const btn = ev.currentTarget;
+  const btn       = ev.currentTarget;
   const commentId = btn.closest('.comment')?.dataset.id;
   if (!commentId) return;
 

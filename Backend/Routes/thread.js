@@ -140,8 +140,8 @@ router.get('/:id', tryAuth, async (req, res) => {
       body: getThreadBody(t),
       author_display: t.isAnonymous ? 'Anonymous' : tAuthorName,
       flags: {
-        pinned: !!(t.isPinned || t.pinned),
-        locked: !!(t.isLocked || t.locked),
+        pinned:  !!(t.isPinned || t.pinned),
+        locked:  !!(t.isLocked || t.locked),
         deleted: !!t.isDeleted
       },
       ...(isAdmin && tAuthorId ? { adminAuthor: { id: tAuthorId, name: tAuthorDoc?.name || tAuthorName, email: tAuthorDoc?.email } } : {})
@@ -166,12 +166,10 @@ router.get('/', tryAuth, async (req, res) => {
     const includeDeleted = isAdmin && toBool(req.query.includeDeleted);
 
     const baseFilter = includeDeleted ? {} : { isDeleted: false };
-
-    // parse limit & after cursor
-    const qLimit = Number(req.query.limit) || 50;
-    const limit = Math.min(qLimit, 100);
-
     const filter = { ...baseFilter };
+
+    const qLimit = Number(req.query.limit) || 50;
+    const limit  = Math.min(qLimit, 100);
 
     if (req.query.after) {
       const afterVal = req.query.after;
@@ -183,14 +181,13 @@ router.get('/', tryAuth, async (req, res) => {
       }
     }
 
-    // Pull up to limit+1 to detect more
     const raw = await Thread.find(filter)
       .sort({ createdAt: -1, upvoteCount: -1 })
       .limit(limit + 1)
       .lean();
 
     const hasMore = raw.length > limit;
-    const items = hasMore ? raw.slice(0, limit) : raw;
+    const items  = hasMore ? raw.slice(0, limit) : raw;
 
     const ids = items.map(t => t._id);
     const cAgg = await Comment.aggregate([
@@ -200,24 +197,25 @@ router.get('/', tryAuth, async (req, res) => {
     const countMap = new Map(cAgg.map(c => [String(c._id), c.n]));
 
     const authorIds = [...new Set(items.map(getThreadAuthorId).filter(Boolean))];
-    const users = authorIds.length
+    const users     = authorIds.length
       ? await User.find({ _id: { $in: authorIds } }).select('name email').lean()
       : [];
     const uMap = new Map(users.map(u => [String(u._id), u]));
 
     const threads = items.map(t => {
-      const isAnon = !!t.isAnonymous;
+      const isAnon   = !!t.isAnonymous;
       const authorId = getThreadAuthorId(t);
-      const u = authorId ? uMap.get(String(authorId)) : null;
-      const displayName = t.author_name || u?.name || 'Unknown';
+      const u        = authorId ? uMap.get(String(authorId)) : null;
+      const display  = t.author_name || u?.name || 'Unknown';
+
       return {
         ...t,
-        body: getThreadBody(t),
-        author_display: isAnon ? 'Anonymous' : displayName,
-        commentCount: countMap.get(String(t._id)) || 0,
-        isPinned: !!(t.isPinned || t.pinned),
-        isLocked: !!(t.isLocked || t.locked),
-        upvoteCount: Number(getUpvoteCount(t)) || 0,
+        body:          getThreadBody(t),
+        author_display: isAnon ? 'Anonymous' : display,
+        commentCount:  countMap.get(String(t._id)) || 0,
+        isPinned:      !!(t.isPinned || t.pinned),
+        isLocked:      !!(t.isLocked || t.locked),
+        upvoteCount:   Number(getUpvoteCount(t)) || 0,
       };
     });
 
@@ -225,9 +223,11 @@ router.get('/', tryAuth, async (req, res) => {
       const ap = a.isPinned ? 1 : 0;
       const bp = b.isPinned ? 1 : 0;
       if (ap !== bp) return bp - ap;
+
       const ad = new Date(a.createdAt).getTime();
       const bd = new Date(b.createdAt).getTime();
       if (ad !== bd) return bd - ad;
+
       return (b.upvoteCount || 0) - (a.upvoteCount || 0);
     });
 
@@ -272,16 +272,16 @@ router.post(
       if (finalBody.length  < 10) return res.status(400).json({ error: 'Content must be at least 10 characters.' });
 
       const t = await Thread.create({
-        title: finalTitle,
-        body: finalBody,
-        content: finalBody,
+        title:       finalTitle,
+        body:        finalBody,
+        content:     finalBody,
         isAnonymous: !!isAnonymous,
-        author: req.user.uid,
-        userId: req.user.uid,
+        author:      req.user.uid,
+        userId:      req.user.uid,
         author_name: req.user.name,
-        upvoters: [],
+        upvoters:    [],
         upvoteCount: 0,
-        thumbsUp: 0
+        thumbsUp:    0
       });
 
       res.status(201).json({ thread: { id: t._id } });
@@ -333,9 +333,9 @@ router.post(
       const reason      = (req.body?.reason  || details || rawCategory).toString().slice(0,1000);
 
       const doc = {
-        targetType: 'thread',
-        targetId  : t._id,
-        reporterId: req.user.uid,
+        targetType:  'thread',
+        targetId:    t._id,
+        reporterId:  req.user.uid,
         reason,
         details
       };
@@ -349,21 +349,21 @@ router.post(
           try { Notification = require('../Models/Notification'); } catch {}
           if (Notification) {
             const admins = await User.find({ role: 'admin', isBanned: { $ne: true } }).select('_id').lean();
-            const link = `thread.html?id=${encodeURIComponent(String(t._id))}`;
+            const link   = `thread.html?id=${encodeURIComponent(String(t._id))}`;
             await Promise.all(admins.map(a => Notification.create({
               userId: a._id,
-              type: 'report_created',
-              title: 'New report: thread',
-              body : reason || '',
+              type:   'report_created',
+              title:  'New report: thread',
+              body:   reason || '',
               link,
-              meta : { targetType: 'thread', targetId: t._id, reportId: r._id }
+              meta:   { targetType: 'thread', targetId: t._id, reportId: r._id }
             })));
           }
           if (process.env.SEND_REPORT_EMAILS === '1' && process.env.ADMIN_EMAILS) {
-            const to = process.env.ADMIN_EMAILS.split(',').map(s => s.trim()).filter(Boolean);
+            const to      = process.env.ADMIN_EMAILS.split(',').map(s => s.trim()).filter(Boolean);
             if (to.length) {
               const snippet = `${t.title || '(untitled)'} — ${(t.body ?? t.content ?? '').slice(0,180)}`;
-              const link = `thread.html?id=${encodeURIComponent(String(t._id))}`;
+              const link    = `thread.html?id=${encodeURIComponent(String(t._id))}`;
               await sendMail({ to, subject: 'New report (thread)', text: `${snippet}\n\nReason: ${reason}\n${link}` });
             }
           }
@@ -396,7 +396,7 @@ router.post(
       await t.softDelete?.(req.user.uid, req.body?.reason || '');
       res.json({ ok: true });
     } catch (e) {
-      console.error('[threads] soft‑delete error:', e);
+      console.error('[threads] soft-delete error:', e);
       res.status(500).json({ error: 'Failed to delete thread' });
     }
   }
@@ -405,13 +405,56 @@ router.post(
 router.post('/:id/restore', requireAdmin, async (req, res) => {
   try {
     const t = await Thread.findById(req.params.id);
-      if (!t) return res.status(404).json({ error: 'Thread not found' });
+    if (!t) return res.status(404).json({ error: 'Thread not found' });
       await t.restore?.();
       res.json({ ok: true });
-    } catch (e) {
-      console.error('[threads] restore error:', e);
-      res.status(500).json({ error: 'Failed to restore thread' });
+  } catch (e) {
+    console.error('[threads] restore error:', e);
+    res.status(500).json({ error: 'Failed to restore thread' });
+  }
+});
+
+/* ============================== ADMIN: Lock / Unlock Threads ============================== */
+router.post('/:id/lock', requireAdmin, async (req, res) => {
+  try {
+    const tid = req.params.id;
+    if (!mongoose.isValidObjectId(tid)) {
+      return res.status(400).json({ error: 'Invalid thread id' });
     }
+    const t = await Thread.findById(tid);
+    if (!t) return res.status(404).json({ error: 'Thread not found' });
+
+    t.isLocked = true;
+    t.lockedAt  = new Date();
+    t.lockedBy  = req.user.uid;
+    await t.save();
+
+    return res.json({ ok: true, locked: true });
+  } catch (e) {
+    console.error('[threads] lock error:', e);
+    return res.status(500).json({ error: 'Failed to lock thread' });
+  }
+});
+
+router.post('/:id/unlock', requireAdmin, async (req, res) => {
+  try {
+    const tid = req.params.id;
+    if (!mongoose.isValidObjectId(tid)) {
+      return res.status(400).json({ error: 'Invalid thread id' });
+    }
+    const t = await Thread.findById(tid);
+    if (!t) return res.status(404).json({ error: 'Thread not found' });
+
+    t.isLocked = false;
+    t.lockedAt  = null;
+    t.lockedBy  = null;
+    await t.save();
+
+    return res.json({ ok: true, locked: false });
+  } catch (e) {
+    console.error('[threads] unlock error:', e);
+    return res.status(500).json({ error: 'Failed to unlock thread' });
+  }
 });
 
 module.exports = router;
