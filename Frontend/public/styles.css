@@ -487,3 +487,52 @@ tr .row.gap-05 button {
   overflow-wrap: break-word;
   word-break: break-word;
 }
+
+/* ... your original styles here ... */
+
+/* === Dashboard Full Width Enhancements === */
+.dashboard-container {
+  width: 100vw;
+  position: relative;
+  left: 50%;
+  right: 50%;
+  margin-left: -50vw;
+  margin-right: -50vw;
+  padding: 1.5rem 2rem;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 1.5rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.dashboard-box {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 1.25rem;
+  box-shadow: var(--shadow-1);
+  overflow-x: auto;
+  min-width: 0;
+}
+
+.dashboard-box table {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* Responsive adjustment for smaller screens */
+@media (max-width: 768px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-container {
+    padding: 1rem;
+  }
+}

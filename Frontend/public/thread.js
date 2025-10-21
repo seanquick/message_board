@@ -116,14 +116,14 @@ function ensureScaffold() {
   if (!q('#commentsSection')) {
     const sec = document.createElement('section');
     sec.id = 'commentsSection';
-    sec.className = 'card mt‑2';
+    sec.className = 'card mt-2';
     sec.innerHTML = `
       <h2>Comments</h2>
       <div id="comments"></div>
       <button id="loadMoreCommentsBtn" class="btn ghost mt-1" style="display:none">Load More Comments</button>
       <div class="composer">
         <form id="replyForm">
-          <div id="replyingTo" class="meta" style="display:none; margin‑bottom:.35rem"></div>
+          <div id="replyingTo" class="meta" style="display:none; margin-bottom:.35rem"></div>
           <textarea name="body" id="replyBody" placeholder="Write a comment…"></textarea>
           <input type="hidden" name="parentId" id="parentId" />
           <div class="row" style="margin-top:.5rem; justify-content:space-between">
@@ -188,7 +188,7 @@ function buildToolbar() {
     : (isOwn ? 'Cannot report your own thread' : 'Report this thread');
 
   host.innerHTML = `
-    <button id="threadUpvote" class="btn tiny" ${!loggedIn ? 'disabled':'')} title="${loggedIn ? 'Upvote':'Login required'}">
+    <button id="threadUpvote" class="btn tiny" ${!loggedIn ? 'disabled':''} title="${loggedIn ? 'Upvote':'Login required'}">
       ▲ Upvote <span id="threadUpCount" class="mono">${Number(THREAD.upvoteCount || 0)}</span>
     </button>
     <button id="reportThreadBtn" class="btn tiny danger" ${canReport ? '' : 'disabled'} title="${tooltip}" data-thread-id="${THREAD._id}">
