@@ -30,7 +30,7 @@ export async function api(url, opts = {}) {
   if (!['GET', 'HEAD', 'OPTIONS'].includes(upper)) {
     const csrf = getCsrfToken();
     if (csrf) {
-      finalHeaders['X‑CSRF‑Token'] = csrf;
+      finalHeaders['X-CSRF-Token'] = csrf;
     }
   }
 
