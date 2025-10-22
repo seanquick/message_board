@@ -81,7 +81,7 @@ async function tryRefreshSession() {
     const r = await fetch('/api/auth/refresh', {
       method:      'POST',
       credentials: 'include',
-      headers:      { 'Content‑Type': 'application/json' }
+      headers:      { 'Content-Type': 'application/json' }
     });
     return r.ok;
   } catch (e) {
