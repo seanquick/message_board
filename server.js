@@ -31,7 +31,7 @@ if (!MONGO) {
   process.exit(1);
 }
 
-// Security & middleware
+// Security & Middleware
 app.use(helmet({
   contentSecurityPolicy: {
     useDefaults: true,

@@ -5,6 +5,7 @@ const Comment = require('../Models/Comment');
 const User    = require('../Models/User');
 const { tryAuth } = require('../Middleware/auth');
 
+
 // simple public search across threads + comments
 router.get('/', tryAuth, async (req, res) => {
   try {
