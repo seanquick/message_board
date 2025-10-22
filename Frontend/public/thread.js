@@ -3,14 +3,14 @@
 import { api, escapeHTML, timeAgo, q, $, me, refreshMe } from './main.js';
 import { initReportUI, openReportModal } from './report.js';
 
-let THREAD_ID  = null;
-let THREAD     = null;
+let THREAD_ID = null;
+let THREAD = null;
 let commentState = {
-  comments:   [],
+  comments: [],
   nextCursor: null,
-  hasMore:    false,
-  loading:    false,
-  limit:      20
+  hasMore: false,
+  loading: false,
+  limit: 20
 };
 
 /* --- Helpers --- */
@@ -145,7 +145,6 @@ function renderCommentNode(c) {
     ? 'Login required'
     : (isOwn ? 'Cannot report your own comment' : 'Report this comment');
 
-  // Edited metadata
   let editedHtml = '';
   if (!isDeleted && c.editedAt) {
     editedHtml = `<div class="meta" style="font-size:.85rem; color:var(--muted)">
@@ -280,53 +279,82 @@ function bindComposer() {
     }
   });
 }
+function onUpvoteComment(ev) {
+  const btn       = ev.currentTarget;
+  const commentId = btn.closest('.comment')?.dataset.id;
+  if (!commentId) return;
 
-/* --- Entry Point --- */
-document.addEventListener('DOMContentLoaded', init);
+  api(`/api/comments/${encodeURIComponent(commentId)}/upvote`, { method: 'POST' })
+    .then(res => {
+      if (res?.ok && typeof res.upvoteCount === 'number') {
+        btn.innerHTML = `▲ ${res.upvoteCount}`;
+      }
+    })
+    .catch(err => {
+      console.error('Upvote comment failed', err);
+      alert('Failed to upvote comment.');
+    });
+}
 
-async function init() {
-  const params = new URLSearchParams(location.search);
-  THREAD_ID = params.get('id') || '';
-  if (!THREAD_ID) return showFatal('Missing thread id.');
-
-  try {
-    await refreshMe();
-  } catch (err) {
-    console.warn('refreshMe failed', err);
+/* --- Thread Rendering --- */
+function renderLoading() {
+  safeSetText('#threadTitle', 'Loading…');
+  const body = q('#threadBody');
+  if (body) {
+    body.innerHTML = `<div class="skeleton"><div class="bar"></div><div class="bar short"></div><div class="bar"></div></div>`;
   }
+}
+function renderThread(t) {
+  safeSetHTML('#threadTitle', escapeHTML(t.title || '(untitled)'));
 
-  if (!me) {
-    console.warn('Not logged in — redirecting to login.html');
-    window.location.href = '/login.html';
-    return;
-  }
+  const badges = [];
+  if (t.flags?.pinned || t.isPinned || t.pinned) badges.push(pinBadge());
+  if (t.flags?.locked || t.isLocked || t.locked) badges.push(lockBadge());
+  safeSetHTML('#threadBadges', badges.join(''));
 
-  ensureScaffold();
-  renderLoading();
+  const author  = escapeHTML(t.author_display || 'Unknown');
+  const when    = timeAgo(t.createdAt);
+  const upvotes = Number(t.upvoteCount ?? t.thumbsUp ?? t.upvotes ?? t.score ?? 0);
+  safeSetHTML('#threadMeta', `${author} • ${when} • ▲ ${upvotes}`);
 
-  try {
-    const resp = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}`, { nocache: true });
-    THREAD = resp.thread ?? null;
-    if (!THREAD) return showFatal('Thread not found.');
+  safeSetHTML('#threadBody', safeParagraphs(t.body ?? t.content ?? ''));
 
-    renderThread(THREAD);
+  buildToolbar();
+}
+function buildToolbar() {
+  const host     = q('#threadToolbar');
+  if (!host) return;
 
-    if (THREAD.flags?.locked || THREAD.isLocked || THREAD.locked) {
-      safeSetHTML('#lockBanner', `<strong>Notice:</strong> This thread is locked — no new comments allowed.`);
-      safeShow('#lockBanner', true);
-      safeShow('#replyForm', false);
-    } else {
-      safeShow('#lockBanner', false);
-      safeShow('#replyForm', true);
+  const loggedIn  = !!me?.id;
+  const isOwn     = loggedIn && (me.id === THREAD.author || me.id === THREAD.authorId);
+  const canReport = loggedIn && !isOwn;
+
+  const tooltip = !loggedIn
+    ? 'Login required'
+    : (isOwn ? 'Cannot report your own thread' : 'Report this thread');
+
+  host.innerHTML = `
+    <button id="threadUpvote" class="btn tiny"${!loggedIn ? ' disabled':''} title="${escapeAttr(loggedIn ? 'Upvote':'Login required')}">
+      ▲ Upvote <span id="threadUpCount" class="mono">${Number(THREAD.upvoteCount || 0)}</span>
+    </button>
+    <button id="reportThreadBtn" class="btn tiny danger"${canReport ? '' : ' disabled'} title="${escapeAttr(tooltip)}" data-thread-id="${escapeAttr(THREAD._id)}">
+      Report Thread
+    </button>
+  `;
+
+  $('#threadUpvote')?.addEventListener('click', onUpvoteThread);
+  $('#reportThreadBtn')?.addEventListener('click', () => {
+    if (canReport) {
+      openReportModal('thread', THREAD_ID);
     }
-
-    await loadComments(true);
-
-    bindComposer();
-    initReportUI();
+  });
+}
+async function onUpvoteThread() {
+  try {
+    const res = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}/upvote`, { method: 'POST' });
+    safeSetText('#threadUpCount', Number(res?.upvoteCount || 0));
   } catch (e) {
-    console.error('error loading thread:', e);
-    showFatal(e?.error || e?.message || 'Failed to load thread.');
+    alert(e?.error || e?.message || 'Failed to upvote.');
   }
 }
 
@@ -381,5 +409,53 @@ function ensureScaffold() {
     main.appendChild(sec);
 
     q('#loadMoreCommentsBtn')?.addEventListener('click', () => loadComments(false));
+  }
+}
+
+/* --- Entry Point --- */
+document.addEventListener('DOMContentLoaded', init);
+
+async function init() {
+  const params = new URLSearchParams(location.search);
+  THREAD_ID = params.get('id') || '';
+  if (!THREAD_ID) return showFatal('Missing thread id.');
+
+  try {
+    await refreshMe();
+  } catch (err) {
+    console.warn('refreshMe failed', err);
+  }
+
+  if (!me) {
+    console.warn('Not logged in — redirecting to login.html');
+    window.location.href = '/login.html';
+    return;
+  }
+
+  ensureScaffold();
+  renderLoading();
+
+  try {
+    const resp = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}`, { nocache: true });
+    THREAD = resp.thread ?? null;
+    if (!THREAD) return showFatal('Thread not found.');
+
+    renderThread(THREAD);
+
+    if (THREAD.flags?.locked || THREAD.isLocked || THREAD.locked) {
+      safeSetHTML('#lockBanner', `<strong>Notice:</strong> This thread is locked — no new comments allowed.`);
+      safeShow('#lockBanner', true);
+      safeShow('#replyForm', false);
+    } else {
+      safeShow('#lockBanner', false);
+      safeShow('#replyForm', true);
+    }
+
+    await loadComments(true);
+    bindComposer();
+    initReportUI();
+  } catch (e) {
+    console.error('error loading thread:', e);
+    showFatal(e?.error || e?.message || 'Failed to load thread.');
   }
 }
