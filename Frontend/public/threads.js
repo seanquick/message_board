@@ -1,5 +1,5 @@
 // Frontend/public/threads.js
-import { api, escapeHTML, timeAgo, q } from './main.js';
+import { api, escapeHTML, timeAgo, q, refreshMe, me } from './main.js';
 import { openReportModal } from './report.js';
 
 document.addEventListener('DOMContentLoaded', init);
@@ -9,12 +9,20 @@ let state = {
   nextCursor: null,
   hasMore: false,
   loading: false,
-  limit: 20  // you can adjust this if desired
+  limit: 20
 };
 
 async function init() {
   wireCreateThreadForm();
   renderSkeleton();
+
+  // ✅ Wait for user info before making any API requests
+  await refreshMe();
+  if (!me) {
+    console.warn('Not logged in — redirecting to login.html');
+    window.location.href = '/login.html';
+    return;
+  }
 
   try {
     await loadThreads(true);
@@ -85,7 +93,6 @@ async function loadThreads(reset = false) {
     const hasMore = !!payload?.hasMore;
     const nextCursor = payload?.nextCursor || null;
 
-    // Transform threads for UI
     for (const t of threads) {
       t.isPinned = !!(t.isPinned || t.pinned);
       t.isLocked = !!(t.isLocked || t.locked);
@@ -108,9 +115,7 @@ async function loadThreads(reset = false) {
       renderCards(listHost, state.threads);
     }
 
-    // After rendering, show Load More if needed
     renderLoadMoreButton();
-
   } catch (e) {
     renderError(e?.error || e?.message || 'Failed to load threads.');
   } finally {
@@ -283,4 +288,3 @@ function lockBadge() {
     </span>
   `;
 }
-

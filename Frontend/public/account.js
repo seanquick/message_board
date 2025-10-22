@@ -1,5 +1,5 @@
 // Frontend/public/account.js
-import { api, $, refreshMe } from './main.js';
+import { api, $, refreshMe, me } from './main.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
   // Only run on pages that actually have the form
@@ -8,6 +8,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!form || !msg) return;
 
   await refreshMe(); // update nav
+
+  // ✅ Redirect to login if not authenticated
+  if (!me?.id) {
+    window.location.href = '/login.html';
+    return;
+  }
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
