@@ -1,6 +1,6 @@
 // Backend/Routes/comments.js
 /**
- * Comments API (complete, backwards‑compatible + pagination support)
+ * Comments API (complete, backwards‑compatible + pagination support + edit metadata)
  *
  * Endpoints:
  *  - GET    /api/comments/:threadId            → List comments for a thread (pagination support)
@@ -9,8 +9,9 @@
  *  - POST   /api/comments/:id/upvote           → Toggle thumbs‑up (auth)
  *  - POST   /api/comments/vote/:id             → LEGACY (kept)
  *  - POST   /api/comments/:id/report           → Report a comment (auth)
- *  - POST   /api/comments/:id/soft-delete      → Admin
+ *  - POST   /api/comments/:id/soft‑delete      → Admin
  *  - POST   /api/comments/:id/restore          → Admin
+ *  - **PUT** /api/comments/:id                 → Edit a comment body (author or admin)
  */
 
 const router = require('express').Router();
@@ -83,31 +84,22 @@ router.get('/:threadId', async (req, res) => {
       Object.assign(filter, notDeletedFilter('isDeleted'));
     }
 
-    // Cursor‑based pagination: if after is provided, load comments created before that comment
+    // Cursor‑based pagination: if after is provided, load comments _before_ that comment
     if (req.query.after && mongoose.isValidObjectId(req.query.after)) {
-      // load items **before** the given id (so older than that)
       filter._id = { $lt: mongoose.Types.ObjectId(req.query.after) };
     }
 
-    // Sort newest first (descending by _id or createdAt)
     const docs = await Comment.find(filter)
       .sort({ _id: -1 })
-      .limit(limit + 1)  // fetch one extra to detect hasMore
+      .limit(limit + 1)
       .lean();
 
     const hasMore = docs.length > limit;
-    if (hasMore) {
-      docs.pop();  // remove extra item
-    }
+    if (hasMore) docs.pop();
 
     const nextCursor = hasMore ? String(docs[docs.length - 1]._id) : null;
 
-    res.json({
-      comments: docs,
-      hasMore,
-      nextCursor
-    });
-
+    res.json({ comments: docs, hasMore, nextCursor });
   } catch (e) {
     console.error('[comments] list error:', e);
     return bad(res, 500, 'Failed to list comments');
@@ -126,26 +118,23 @@ const createValidators = validate({
 
 const creationMiddleware = [
   requireAuth,
-  ensureThreadUnlocked, // checks the thread lock state by :threadId
-  ...(rateLimitByUserAndIP ? [rateLimitByUserAndIP({ key: 'comment', windowMs: 60_000, max: 20 })] : []),
+  ensureThreadUnlocked,
+  ...(rateLimitByUserAndIP ? [rateLimitByUserAndIP({ key: 'comment', windowMs: 60000, max: 20 })] : []),
   ...(contentRules ? [contentRules({ kind: 'comment', minChars: 1, maxLinks: 8 })] : []),
   createValidators,
 ];
 
 router.post('/:threadId', creationMiddleware, async (req, res) => {
   try {
-    // 1) Block banned users
     const me = await User.findById(req.user.uid).select('name isBanned').lean();
     if (!me) return bad(res, 401, 'Unauthorized');
     if (me.isBanned) return bad(res, 403, 'Account is banned from posting.');
 
-    // 2) Validate thread
     const threadId = toId(req.params.threadId);
     if (!threadId) return bad(res, 400, 'Invalid thread id.');
-    const thread = await Thread.findById(threadId).select('_id isDeleted').lean();
+    const thread   = await Thread.findById(threadId).select('_id isDeleted').lean();
     if (!thread || thread.isDeleted) return bad(res, 404, 'Thread not found');
 
-    // 3) Validate payload
     const { body, content, parentId: rawParentId, isAnonymous } = req.body || {};
     const finalBody = normStr(body ?? content);
     const parentId  = toId(rawParentId);
@@ -153,12 +142,10 @@ router.post('/:threadId', creationMiddleware, async (req, res) => {
     if (!finalBody) return bad(res, 400, 'Comment cannot be empty.');
     if (finalBody.length > 10000) return bad(res, 400, 'Comment too long.');
 
-    // Parent must belong to same thread
     if (parentId && !(await assertParentInThread(parentId, threadId))) {
       return bad(res, 400, 'Parent comment does not belong to this thread.');
     }
 
-    // 4) Create comment
     const c = await Comment.create({
       thread:       threadId,
       parentId:     parentId || null,
@@ -171,10 +158,42 @@ router.post('/:threadId', creationMiddleware, async (req, res) => {
     });
 
     return res.status(201).json({ id: c._id });
-
   } catch (e) {
     console.error('[comments] create error:', e);
     return bad(res, 500, 'Failed to create comment');
+  }
+});
+
+// ===================================================================
+// PUT /api/comments/:id — edit comment body (author or admin)
+// ===================================================================
+router.put('/:id', requireAuth, validate({ body: s.string({ min: 1, max: 10000 }) }), async (req, res) => {
+  try {
+    const cid = toId(req.params.id);
+    if (!cid) return bad(res, 400, 'Invalid comment id.');
+
+    const comment = await Comment.findById(cid);
+    if (!comment) return bad(res, 404, 'Comment not found');
+
+    // Only comment author or admin can edit
+    const isAuthor = String(comment.author) === String(req.user.uid);
+    const isAdmin  = req.user.role === 'admin';
+    if (!isAuthor && !isAdmin) {
+      return bad(res, 403, 'Not authorized to edit this comment.');
+    }
+
+    const newBody = normStr(req.body.body);
+    if (!newBody) return bad(res, 400, 'Comment body cannot be empty.');
+
+    comment.body     = newBody;
+    comment.editedBy = req.user.uid;
+    comment.editedAt = new Date();
+
+    await comment.save();
+    return res.json({ ok: true, comment });
+  } catch (e) {
+    console.error('[comments] edit error:', e);
+    return bad(res, 500, 'Failed to edit comment');
   }
 });
 
@@ -190,8 +209,7 @@ router.post('/:id/upvote', requireAuth, async (req, res) => {
     if (!c || c.isDeleted) return bad(res, 404, 'Comment not found');
 
     const result = await c.toggleUpvote(req.user.uid);
-    return res.json(result); // { upvoted, upvoteCount }
-
+    return res.json(result);
   } catch (e) {
     console.error('[comments] upvote error:', e);
     return bad(res, 500, 'Failed to upvote comment');
@@ -211,7 +229,6 @@ router.post('/vote/:id', requireAuth, async (req, res) => {
 
     const result = await c.toggleUpvote(req.user.uid);
     return res.json(result);
-
   } catch (e) {
     console.error('[comments] legacy vote error:', e);
     return bad(res, 500, 'Failed to vote comment');
@@ -239,7 +256,6 @@ router.post('/:id/report', requireAuth, validate({ reason: s.optional(s.string({
     });
 
     return res.json({ ok: true });
-
   } catch (e) {
     console.error('[comments] report error:', e);
     return bad(res, 500, 'Failed to report comment');
@@ -249,7 +265,7 @@ router.post('/:id/report', requireAuth, validate({ reason: s.optional(s.string({
 // ===================================================================
 // POST /api/comments/:id/soft‑delete — admin only
 // ===================================================================
-router.post('/:id/soft-delete', requireAdmin, validate({ reason: s.optional(s.string({ max: 2000 })) }), async (req, res) => {
+router.post('/:id/soft‑delete', requireAdmin, validate({ reason: s.optional(s.string({ max: 2000 })) }), async (req, res) => {
   try {
     const cid = toId(req.params.id);
     if (!cid) return bad(res, 400, 'Invalid comment id.');
@@ -259,9 +275,8 @@ router.post('/:id/soft-delete', requireAdmin, validate({ reason: s.optional(s.st
 
     await c.softDelete(req.user.uid, normStr(req.body?.reason));
     return res.json({ ok: true });
-
   } catch (e) {
-    console.error('[comments] soft-delete error:', e);
+    console.error('[comments] soft‑delete error:', e);
     return bad(res, 500, 'Failed to delete comment');
   }
 });
@@ -279,7 +294,6 @@ router.post('/:id/restore', requireAdmin, async (req, res) => {
 
     await c.restore();
     return res.json({ ok: true });
-
   } catch (e) {
     console.error('[comments] restore error:', e);
     return bad(res, 500, 'Failed to restore comment');

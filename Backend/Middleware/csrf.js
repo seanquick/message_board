@@ -1,12 +1,13 @@
 // Backend/Middleware/csrf.js
 /**
- * CSRF protection middleware (double-submit + same-origin check).
+ * CSRF protection middleware (double-submit cookie + same-origin check).
  *
- * - Sets a non-HttpOnly SameSite=Lax cookie `csrf` on GET/HEAD/OPTIONS
- * - Requires header "x-csrf-token" on POST/PUT/PATCH/DELETE to match cookie
- * - Also validates Origin/Referer to be same-origin (defense-in-depth)
- * - Allows toggling a fallback via env CSRF_ORIGIN_FALLBACK=1 (accepts same-origin
- *   requests even if header missing — not recommended; leave unset for strict mode)
+ * Behavior:
+ * - Sets a SameSite=Lax, non-HttpOnly cookie `csrf` on GET/HEAD/OPTIONS.
+ * - For unsafe methods (POST, PUT, PATCH, DELETE), verifies:
+ *     1) Header `x-csrf-token` matches cookie value
+ *     2) Origin or Referer matches the current host
+ * - Optional fallback (not recommended): CSRF_ORIGIN_FALLBACK=1 to relax header check
  */
 
 const crypto = require('crypto');
@@ -19,65 +20,56 @@ function baseCookieOpts() {
   return {
     path: '/',
     sameSite: 'lax',
-    secure: !!isProd(),
-    httpOnly: false, // must be readable by JS to send in header
+    secure: isProd(),
+    httpOnly: false, // JS-accessible for double-submit token
   };
 }
 
-function genToken() {
-  // URL-safe random token
-  return crypto.randomBytes(32).toString('base64url');
+function generateToken() {
+  return crypto.randomBytes(32).toString('base64url'); // URL-safe
 }
 
-function sameOrigin(req) {
-  // Compare Origin/Referer host to req.get('host')
+function isSameOrigin(req) {
   const host = (req.get('x-forwarded-host') || req.get('host') || '').toLowerCase();
   const origin = (req.get('origin') || '').toLowerCase();
   const referer = (req.get('referer') || '').toLowerCase();
 
-  const match = (url) => {
+  const matchHost = (url) => {
     try {
-      if (!url) return false;
-      const h = new URL(url).host.toLowerCase();
-      return h === host;
+      return new URL(url).host.toLowerCase() === host;
     } catch {
       return false;
     }
   };
 
-  if (origin) return match(origin);
-  if (referer) return match(referer);
-  return false;
+  return matchHost(origin) || matchHost(referer);
 }
 
 module.exports = function csrf(options = {}) {
-  const cookieName = 'csrf'; // changed from 'csrfToken' to 'csrf' to match frontend
+  const cookieName = 'csrf';
   const headerName = (options.headerName || 'x-csrf-token').toLowerCase();
-  const ignored = new Set(['GET', 'HEAD', 'OPTIONS']);
-  const originFallback = process.env.CSRF_ORIGIN_FALLBACK === '1';
+  const safeMethods = new Set(['GET', 'HEAD', 'OPTIONS']);
+  const allowOriginFallback = process.env.CSRF_ORIGIN_FALLBACK === '1';
 
   return function csrfMiddleware(req, res, next) {
     const method = req.method.toUpperCase();
 
-    if (ignored.has(method)) {
-      if (!req.cookies?.[cookieName]) {
-        const token = genToken();
-        res.cookie(cookieName, token, baseCookieOpts());
-        req.csrfToken = token;
-      } else {
-        req.csrfToken = req.cookies[cookieName];
-      }
+    if (safeMethods.has(method)) {
+      const existing = req.cookies?.[cookieName];
+      const token = existing || generateToken();
+      res.cookie(cookieName, token, baseCookieOpts());
+      req.csrfToken = token;
       return next();
     }
 
     const cookieToken = req.cookies?.[cookieName];
     const headerToken = (req.get(headerName) || '').trim();
-    const isSameOrigin = sameOrigin(req);
-    const tokenOk = cookieToken && headerToken && cookieToken === headerToken;
+    const isValidOrigin = isSameOrigin(req);
+    const isTokenMatch = cookieToken && headerToken && cookieToken === headerToken;
 
-    if (tokenOk && isSameOrigin) return next();
-
-    if (!tokenOk && isSameOrigin && originFallback) return next();
+    if ((isTokenMatch && isValidOrigin) || (isValidOrigin && allowOriginFallback)) {
+      return next();
+    }
 
     return res.status(403).json({ error: 'CSRF token invalid or missing' });
   };

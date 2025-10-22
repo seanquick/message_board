@@ -6,10 +6,15 @@ let meUser = null;
 
 function showErr(msg) {
   const host = q('#adminErr') || document.body;
-  const div = document.createElement('div');
-  div.className = 'err';
+  const div  = document.createElement('div');
+  div.className   = 'err';
   div.textContent = msg;
   host.prepend(div);
+}
+
+function clearErrs() {
+  const host = q('#adminErr') || document.body;
+  host.querySelectorAll('.err').forEach(el => el.remove());
 }
 
 function debounce(fn, ms = 300) {
@@ -47,9 +52,11 @@ function updatePagerUI(section, pages) {
   }
 }
 
-function setText(selector, text) {
-  const el = q(selector);
-  if (el) el.textContent = text;
+// Shared helper to disable/enable a button
+function setButtonState(btn, { disabled = false, text = null } = {}) {
+  if (!btn) return;
+  btn.disabled = disabled;
+  if (text !== null) btn.textContent = text;
 }
 
 function renderErrorRow(tableSelector, msg, colspan = 5) {
@@ -59,91 +66,95 @@ function renderErrorRow(tableSelector, msg, colspan = 5) {
 }
 
 const state = {
-  users: { page: 1, limit: 50, total: 0 },
+  users:    { page: 1, limit: 50, total: 0 },
   comments: { page: 1, limit: 50, total: 0 },
 };
 
 // --- METRICS ---
 async function loadMetrics() {
   try {
-    const { metrics } = await api(`/api/admin/metrics?t=${Date.now()}`);
-    setText('#mUsers', metrics.users);
+    const { metrics } = await api(`/api/admin/metrics?t=${Date.now()}`, { nocache: true });
+    setText('#mUsers',   metrics.users);
     setText('#mThreads', metrics.threads);
-    setText('#mComments', metrics.comments);
+    setText('#mComments',metrics.comments);
     setText('#mReports', metrics.reports);
   } catch (e) {
     showErr(`Failed to load metrics: ${e?.error || e?.message}`);
   }
 }
 
+function setText(sel, text) {
+  const el = q(sel);
+  if (el) el.textContent = text;
+}
+
 // --- USERS Section ---
 async function loadUsers() {
+  clearErrs();
   const tbody = ensureTbody('#usersTable');
   if (!tbody) {
-    console.error('No usersTable in DOM');
+    showErr('No users table found');
     return;
   }
 
   try {
     const searchEl = q('#uSearch') || q('#userSearch');
-    const qstr = (searchEl?.value || '').trim();
-    const params = new URLSearchParams();
+    const qstr     = (searchEl?.value || '').trim();
+    const params   = new URLSearchParams();
     if (qstr) params.set('q', qstr);
-    params.set('page', String(state.users.page));
+    params.set('page',  String(state.users.page));
     params.set('limit', String(state.users.limit));
-    params.set('t', String(Date.now()));
+    params.set('t',     String(Date.now()));
 
     const payload = await api(`/api/admin/users?${params.toString()}`, { nocache: true });
-    const users = Array.isArray(payload)
-      ? payload
-      : Array.isArray(payload.users)
-        ? payload.users
-        : Array.isArray(payload.data)
-          ? payload.data
-          : [];
+    const users   = Array.isArray(payload.users) ? payload.users : [];
 
-    state.users.total = Number(payload?.total ?? users.length ?? 0);
-    const pages = pagesFor(state.users);
+    state.users.total = Number(payload?.total ?? users.length);
+    const pages      = pagesFor(state.users);
     updatePagerUI('users', pages);
 
     tbody.innerHTML = '';
     if (!users.length) {
-      tbody.innerHTML = '<tr><td colspan="7">No users found.</td></tr>';
+      tbody.innerHTML = `<tr><td colspan="7">No users found.</td></tr>`;
       return;
     }
-    for (const u of users) {
-      const tr = document.createElement('tr');
-      tr.dataset.id = u._id;
-      const nameLink = u.name
-        ? `<a href="#" class="user-link" data-uid="${u._id}">${escapeHTML(u.name)}</a>`
-        : `<a href="#" class="user-link" data-uid="${u._id}">${escapeHTML(u.email)}</a>`;
-      tr.innerHTML = `
+
+    users.forEach(u => {
+      const tr         = document.createElement('tr');
+      tr.dataset.id    = u._id;
+      const display    = u.name ? escapeHTML(u.name) : escapeHTML(u.email);
+      const nameLink   = `<a href="#" class="user-link" data-uid="${escapeHTML(u._id)}">${display}</a>`;
+      tr.innerHTML     = `
         <td>${nameLink}<br><span class="meta">${escapeHTML(u.email)}</span></td>
         <td>${escapeHTML(u.role || 'user')}</td>
         <td>${u.isBanned ? '<span class="danger">Banned</span>' : '<span class="ok">Active</span>'}</td>
-        <td>${timeAgo(u.createdAt || Date.now())}</td>
+        <td>${escapeHTML(timeAgo(u.createdAt || Date.now()))}</td>
         <td class="truncate">${escapeHTML(u.notes || '')}</td>
         <td class="row gap-05">
           <button class="btn tiny editNote">Edit Note</button>
           <button class="btn tiny toggleBan">${u.isBanned ? 'Unban' : 'Ban'}</button>
-          <button class="btn tiny setRole" data-role="${u.role === 'admin' ? 'user' : 'admin'}">
+          <button class="btn tiny setRole" data-role="${escapeHTML(u.role === 'admin' ? 'user' : 'admin')}">
             ${u.role === 'admin' ? 'Revoke Admin' : 'Make Admin'}
           </button>
           <button class="btn tiny deleteUser" style="color:red">Delete</button>
         </td>
       `;
       tbody.appendChild(tr);
-    }
+    });
 
-    tbody.querySelectorAll('.editNote').forEach(btn => btn.addEventListener('click', onEditUserNote));
-    tbody.querySelectorAll('.toggleBan').forEach(btn => btn.addEventListener('click', onToggleBan));
-    tbody.querySelectorAll('.setRole').forEach(btn => btn.addEventListener('click', onSetRole));
-    tbody.querySelectorAll('.deleteUser').forEach(btn => btn.addEventListener('click', onDeleteUser));
-    tbody.querySelectorAll('.user-link').forEach(a => a.addEventListener('click', onUserLinkClick));
+    bindUserActions(tbody);
 
   } catch (e) {
     showErr(`Failed to load users: ${e?.error || e?.message}`);
   }
+}
+
+function bindUserActions(tbody) {
+  tbody.querySelectorAll('.editNote').forEach(btn   => btn.addEventListener('click',     onEditUserNote));
+  tbody.querySelectorAll('.toggleBan').forEach(btn  => btn.addEventListener('click',     onToggleBan));
+  tbody.querySelectorAll('.setRole').forEach(btn    => btn.addEventListener('click',     onSetRole));
+  tbody.querySelectorAll('.deleteUser').forEach(btn => btn.addEventListener('click',     onDeleteUser));
+  tbody.querySelectorAll('.user-link').forEach(link => link.addEventListener('click',    onUserLinkClick));
 }
 
 async function onToggleBan(ev) {
@@ -151,16 +162,17 @@ async function onToggleBan(ev) {
   const id = tr?.dataset.id;
   if (!id) return;
   if (!confirm('Toggle ban for this user?')) return;
+
   try {
-    const res = await api(`/api/admin/users/${id}/toggle-ban`, { method: 'POST' });
+    const res = await api(`/api/admin/users/${encodeURIComponent(id)}/toggle-ban`, { method: 'POST' });
     const statusCell = tr.children[2];
-    const btn = tr.querySelector('.toggleBan');
+    const btn        = tr.querySelector('.toggleBan');
     if (res.isBanned) {
       statusCell.innerHTML = '<span class="danger">Banned</span>';
-      btn.textContent = 'Unban';
+      btn.textContent      = 'Unban';
     } else {
       statusCell.innerHTML = '<span class="ok">Active</span>';
-      btn.textContent = 'Ban';
+      btn.textContent      = 'Ban';
     }
   } catch (e) {
     showErr(e?.message || 'Failed to toggle ban');
@@ -168,13 +180,14 @@ async function onToggleBan(ev) {
 }
 
 async function onSetRole(ev) {
-  const tr = ev.currentTarget.closest('tr');
-  const id = tr?.dataset.id;
+  const tr   = ev.currentTarget.closest('tr');
+  const id   = tr?.dataset.id;
   const next = ev.currentTarget.getAttribute('data-role');
   if (!id || !next) return;
   if (!confirm(`Set role to "${next}"?`)) return;
+
   try {
-    const res = await api(`/api/admin/users/${id}/role`, { method: 'POST', body: { role: next } });
+    const res = await api(`/api/admin/users/${encodeURIComponent(id)}/role`, { method: 'POST', body: { role: next } });
     tr.children[1].textContent = res.role;
     ev.currentTarget.setAttribute('data-role', res.role === 'admin' ? 'user' : 'admin');
     ev.currentTarget.textContent = res.role === 'admin' ? 'Revoke Admin' : 'Make Admin';
@@ -187,15 +200,16 @@ async function onEditUserNote(ev) {
   const tr = ev.currentTarget.closest('tr');
   if (!tr) return;
   const id = tr.dataset.id;
+
   showModEditor(tr, {
-    title: 'Edit user note',
-    placeholder: 'Private admin note…',
+    title:        'Edit user note',
+    placeholder:  'Private admin note…',
     confirmLabel: 'Save note',
-    onConfirm: async (note) => {
+    onConfirm:    async (note) => {
       const final = note || '';
       try {
-        const res = await api(`/api/admin/users/${id}/note`, { method: 'POST', body: { note: final } });
-        if (tr.children[4]) tr.children[4].textContent = final;
+        const res = await api(`/api/admin/users/${encodeURIComponent(id)}/note`, { method: 'POST', body: { note: final } });
+        tr.children[4].textContent = final;
       } catch (e) {
         showErr(e?.message || 'Failed to save note');
       }
@@ -204,13 +218,12 @@ async function onEditUserNote(ev) {
 }
 
 async function onDeleteUser(ev) {
-  ev.stopPropagation();
   const tr = ev.currentTarget.closest('tr');
   const id = tr?.dataset.id;
-  if (!id) return;
-  if (!confirm('Are you sure you want to delete this user?')) return;
+  if (!id || !confirm('Are you sure you want to delete this user?')) return;
+
   try {
-    await api(`/api/admin/users/${id}`, { method: 'DELETE' });
+    await api(`/api/admin/users/${encodeURIComponent(id)}`, { method: 'DELETE' });
     tr.remove();
   } catch (e) {
     showErr(e?.error || e?.message || 'Failed to delete user');
@@ -219,13 +232,15 @@ async function onDeleteUser(ev) {
 
 async function onUserLinkClick(ev) {
   ev.preventDefault();
-  const a = ev.currentTarget;
-  const uid = a.dataset.uid;
+  const uid = ev.currentTarget.dataset.uid;
   if (!uid) return;
+
   try {
-    const payload = await api(`/api/admin/users/${uid}/content`);
-    const userObj = payload.user || { _id: uid };
-    showUserContentModal(userObj, payload.threads || [], payload.comments || []);
+    const payload = await api(`/api/admin/users/${encodeURIComponent(uid)}/content`);
+    const user    = payload.user    || { _id: uid };
+    const threads = payload.threads || [];
+    const comments= payload.comments|| [];
+    showUserContentModal(user, threads, comments);
   } catch (e) {
     showErr(`Failed to fetch user content: ${e?.error || e?.message}`);
   }
@@ -234,16 +249,26 @@ async function onUserLinkClick(ev) {
 function showUserContentModal(user, threads, comments) {
   const modal = document.createElement('div');
   modal.className = 'user-content-modal';
-  modal.style = 'position:fixed;top:10%;left:10%;width:80%;height:80%;background:white;overflow:auto;z-index:10000;padding:1rem;border:1px solid #ccc';
+  Object.assign(modal.style, {
+    position:   'fixed',
+    top:        '10%',
+    left:       '10%',
+    width:      '80%',
+    height:     '80%',
+    background: 'white',
+    overflow:   'auto',
+    zIndex:     10000,
+    padding:    '1rem',
+    border:     '1px solid #ccc',
+  });
 
-  const displayName = user.name || user.email || user._id;
+  const displayName  = escapeHTML(user.name  || user.email || user._id);
   const displayEmail = user.email || '';
 
   modal.innerHTML = `
     <button class="close-modal" style="position:absolute;top:1rem;right:1rem">Close</button>
-    <h2>User: ${escapeHTML(displayName)}</h2>
+    <h2>User: ${displayName}</h2>
     ${displayEmail ? `<div style="margin-bottom:1rem;">${escapeHTML(displayEmail)}</div>` : ''}
-
     <h3>Threads (${threads.length})</h3>
     ${threads.map(t => `
       <div>
@@ -251,7 +276,6 @@ function showUserContentModal(user, threads, comments) {
         — ${new Date(t.createdAt).toLocaleString()}
       </div>
     `).join('')}
-
     <h3>Comments (${comments.length})</h3>
     ${comments.map(c => `
       <div>
@@ -267,33 +291,35 @@ function showUserContentModal(user, threads, comments) {
 
 // --- THREADS Section ---
 async function loadThreads() {
+  clearErrs();
   const tbody = ensureTbody('#threadsTable');
   if (!tbody) return;
+
   try {
     const includeDeleted = q('#tIncludeDeleted')?.checked;
-    const params = new URLSearchParams();
+    const params         = new URLSearchParams();
     params.set('t', String(Date.now()));
     if (includeDeleted) params.set('includeDeleted', '1');
-    const url = `/api/admin/search?type=threads&${params.toString()}`;
+    const url  = `/api/admin/search?type=threads&${params.toString()}`;
     const resp = await api(url, { nocache: true, skipHtmlRedirect: true });
-    const { results } = resp;
+    const results = resp.results || [];
+
     tbody.innerHTML = '';
-    if (!Array.isArray(results) || !results.length) {
+    if (!results.length) {
       tbody.innerHTML = '<tr><td colspan="7">No threads found.</td></tr>';
       return;
     }
-    for (const t of results) {
-      const tr = document.createElement('tr');
-      tr.dataset.id = t._id;
-      const authorDisplay = t.author
-        ? `${escapeHTML(t.author.name || '')} (${escapeHTML(t.author.email || '')})`
-        : escapeHTML(t.authorId || '');
-      tr.innerHTML = `
-        <td>${new Date(t.createdAt).toLocaleString()}</td>
+
+    results.forEach(t => {
+      const tr       = document.createElement('tr');
+      tr.dataset.id  = t._id;
+      const author   = t.author?.name  || t.author?.email || t.authorId || '';
+      tr.innerHTML   = `
+        <td>${escapeHTML(new Date(t.createdAt || Date.now()).toLocaleString())}</td>
         <td>${escapeHTML(t.title || '(no title)')}</td>
-        <td>${authorDisplay}</td>
-        <td>${t.upvoteCount ?? t.upvotes ?? 0}</td>
-        <td>${t.commentCount ?? ''}</td>
+        <td>${escapeHTML(author)}</td>
+        <td>${Number(t.upvoteCount ?? t.upvotes ?? 0)}</td>
+        <td>${Number(t.commentCount ?? 0)}</td>
         <td>${escapeHTML(t.status || '')}</td>
         <td class="row gap-05">
           <button class="btn tiny viewThread">View</button>
@@ -303,287 +329,222 @@ async function loadThreads() {
         </td>
       `;
       tbody.appendChild(tr);
-    }
-    tbody.querySelectorAll('.viewThread').forEach(btn => {
-      btn.addEventListener('click', ev => {
-        const tr = ev.currentTarget.closest('tr');
-        const tid = tr.dataset.id;
-        if (tid) {
-          window.open(`thread.html?id=${encodeURIComponent(tid)}`, '_blank');
-        }
-      });
     });
 
-    tbody.querySelectorAll('.pinBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
-      const tr = ev.currentTarget.closest('tr');
-      const tid = tr.dataset.id;
-      const isNowPinned = !(tr.dataset.pinned === 'true');
-      const note = prompt('Note (optional):');
-      try {
-        await api(`/api/admin/threads/${tid}/pin`, { method: 'POST', body: { pinned: isNowPinned, note } });
-        loadThreads();
-      } catch (e) {
-        showErr(`Failed to pin/unpin: ${e?.error || e?.message}`);
-      }
-    }));
-    tbody.querySelectorAll('.lockBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
-      const tr = ev.currentTarget.closest('tr');
-      const tid = tr.dataset.id;
-      const isNowLocked = !(tr.dataset.locked === 'true');
-      const note = prompt('Note (optional):');
-      try {
-        await api(`/api/admin/threads/${tid}/lock`, { method: 'POST', body: { locked: isNowLocked, note } });
-        loadThreads();
-      } catch (e) {
-        showErr(`Failed to lock/unlock: ${e?.error || e?.message}`);
-      }
-    }));
-    tbody.querySelectorAll('.deleteThread').forEach(btn => btn.addEventListener('click', async (ev) => {
-      const tr = ev.currentTarget.closest('tr');
-      const tid = tr.dataset.id;
-      const isDeleted = !(tr.dataset.deleted === 'true');
-      const note = prompt('Reason (optional):');
-      try {
-        await api(`/api/admin/threads/${tid}/delete`, { method: 'POST', body: { deleted: isDeleted, reason: note } });
-        loadThreads();
-      } catch (e) {
-        showErr(`Failed to delete/restore: ${e?.error || e?.message}`);
-      }
-    }));
+    bindThreadActions(tbody);
+
   } catch (e) {
     renderErrorRow('#threadsTable', `Error loading threads: ${e?.error || e?.message}`, 7);
   }
 }
 
+function bindThreadActions(tbody) {
+  tbody.querySelectorAll('.viewThread').forEach(btn => btn.addEventListener('click', ev => {
+    const tr = ev.currentTarget.closest('tr');
+    const tid= tr?.dataset.id;
+    if (tid) window.open(`thread.html?id=${encodeURIComponent(tid)}`, '_blank');
+  }));
+
+  tbody.querySelectorAll('.pinBtn').forEach(btn => btn.addEventListener('click', async ev => {
+    const tr   = ev.currentTarget.closest('tr');
+    const tid  = tr?.dataset.id;
+    if (!tid) return;
+    const note = prompt('Note (optional):');
+    try {
+      await api(`/api/admin/threads/${encodeURIComponent(tid)}/pin`, { method: 'POST', body: { note } });
+      loadThreads();
+    } catch (e) {
+      showErr(`Failed to pin/unpin: ${e?.error || e?.message}`);
+    }
+  }));
+
+  tbody.querySelectorAll('.lockBtn').forEach(btn => btn.addEventListener('click', async ev => {
+    const tr  = ev.currentTarget.closest('tr');
+    const tid = tr?.dataset.id;
+    if (!tid) return;
+    const note= prompt('Note (optional):');
+    try {
+      await api(`/api/admin/threads/${encodeURIComponent(tid)}/lock`, { method: 'POST', body: { note } });
+      loadThreads();
+    } catch (e) {
+      showErr(`Failed to lock/unlock: ${e?.error || e?.message}`);
+    }
+  }));
+
+  tbody.querySelectorAll('.deleteThread').forEach(btn => btn.addEventListener('click', async ev => {
+    const tr     = ev.currentTarget.closest('tr');
+    const tid    = tr?.dataset.id;
+    if (!tid) return;
+    const reason = prompt('Reason (optional):');
+    try {
+      await api(`/api/admin/threads/${encodeURIComponent(tid)}/delete`, { method: 'POST', body: { reason } });
+      loadThreads();
+    } catch (e) {
+      showErr(`Failed to delete/restore: ${e?.error || e?.message}`);
+    }
+  }));
+}
+
 // --- COMMENTS Section ---
-async function loadComments() {
+async function loadAdminComments() {
+  clearErrs();
   const tbody = ensureTbody('#commentsTable');
   if (!tbody) return;
+
   try {
     const includeDeleted = q('#cIncludeDeleted')?.checked;
-    const params = new URLSearchParams();
+    const params         = new URLSearchParams();
     params.set('t', String(Date.now()));
     if (includeDeleted) params.set('includeDeleted', '1');
-    const url = `/api/admin/search?type=comments&${params.toString()}`;
+    const url  = `/api/admin/search?type=comments&${params.toString()}`;
     const resp = await api(url, { nocache: true, skipHtmlRedirect: true });
-    const { results } = resp;
+    const results = resp.results || [];
+
     tbody.innerHTML = '';
-    if (!Array.isArray(results) || !results.length) {
+    if (!results.length) {
       tbody.innerHTML = '<tr><td colspan="7">No comments found.</td></tr>';
       return;
     }
-    for (const c of results) {
-      const tr = document.createElement('tr');
-      tr.dataset.id = c._id;
-      const authorDisplay = c.author
-        ? `${escapeHTML(c.author.name || '')} (${escapeHTML(c.author.email || '')})`
-        : escapeHTML(c.authorId || '');
-      tr.innerHTML = `
-        <td>${new Date(c.createdAt).toLocaleString()}</td>
+
+    results.forEach(c => {
+      const tr          = document.createElement('tr');
+      tr.dataset.id     = c._id;
+      const author      = c.author?.name || c.author?.email || c.authorId || '';
+      tr.innerHTML      = `
+        <td>${escapeHTML(new Date(c.createdAt || Date.now()).toLocaleString())}</td>
         <td>${escapeHTML(c.snippet || '')}</td>
-        <td>${authorDisplay}</td>
+        <td>${escapeHTML(author)}</td>
         <td>${escapeHTML(c.thread || '')}</td>
-        <td>${c.upvoteCount ?? 0}</td>
-        <td>${escapeHTML(c.isDeleted ? 'Deleted' : '')}</td>
+        <td>${Number(c.upvoteCount ?? 0)}</td>
+        <td>${c.isDeleted ? 'Deleted' : ''}</td>
         <td class="row gap-05">
           <button class="btn tiny viewComment">View</button>
           <button class="btn tiny replyComment">Reply</button>
           <button class="btn tiny editComment">Edit</button>
-          <button class="btn tiny delRestoreComment">Delete/Restore</button>
+          <button class="btn tiny delRestoreComment">${c.isDeleted ? 'Restore' : 'Delete'}</button>
         </td>
       `;
       tbody.appendChild(tr);
-    }
-
-    tbody.querySelectorAll('.viewComment').forEach(btn => {
-      btn.addEventListener('click', ev => {
-        const tr = ev.currentTarget.closest('tr');
-        const tid = tr.querySelector('td:nth-child(4)')?.textContent?.trim();
-        if (tid) {
-          window.open(`thread.html?id=${encodeURIComponent(tid)}`, '_blank');
-        }
-      });
     });
 
-    tbody.querySelectorAll('.replyComment').forEach(btn => {
-      btn.addEventListener('click', ev => {
-        const tr = ev.currentTarget.closest('tr');
-        const cid = tr.dataset.id;
-        showReplyEditor(tr, cid);
-      });
-    });
-    tbody.querySelectorAll('.editComment').forEach(btn => {
-      btn.addEventListener('click', ev => {
-        const tr = ev.currentTarget.closest('tr');
-        const cid = tr.dataset.id;
-        const originalBody = tr.querySelector('td:nth-child(2)')?.textContent || '';
-        showEditEditor(tr, cid, originalBody);
-      });
-    });
+    bindCommentAdminActions(tbody);
 
-    tbody.querySelectorAll('.delRestoreComment').forEach(btn => btn.addEventListener('click', async (ev) => {
-      const tr = ev.currentTarget.closest('tr');
-      const cid = tr.dataset.id;
-      const toDeleted = !(tr.dataset.deleted === 'true');
-      const reason = prompt('Reason (optional):');
-      try {
-        await api(`/api/admin/comments/${cid}/delete`, { method: 'POST', body: { deleted: toDeleted, reason } });
-        loadComments();
-      } catch (e) {
-        showErr(`Failed comment delete/restore: ${e?.error || e?.message}`);
-      }
-    }));
   } catch (e) {
     renderErrorRow('#commentsTable', `Error loading comments: ${e?.error || e?.message}`, 7);
   }
 }
 
-function showEditEditor(tr, cid, originalBody) {
-  const tdBody = tr.querySelector('td:nth-child(2)');
-  const textarea = document.createElement('textarea');
-  textarea.value = originalBody;
-  textarea.style.width = '100%';
-  tdBody.innerHTML = '';
-  tdBody.appendChild(textarea);
-  const btn = document.createElement('button');
-  btn.textContent = 'Save';
-  btn.className = 'btn tiny';
-  tdBody.appendChild(btn);
-  btn.addEventListener('click', async () => {
-    const newBody = textarea.value.trim();
+function bindCommentAdminActions(tbody) {
+  tbody.querySelectorAll('.viewComment').forEach(btn => btn.addEventListener('click', ev => {
+    const tr = ev.currentTarget.closest('tr');
+    const tid= tr.querySelector('td:nth-child(4)')?.textContent?.trim();
+    if (tid) window.open(`thread.html?id=${encodeURIComponent(tid)}`, '_blank');
+  }));
+
+  tbody.querySelectorAll('.replyComment').forEach(btn => btn.addEventListener('click', ev => {
+    const tr = ev.currentTarget.closest('tr');
+    const cid= tr?.dataset.id;
+    if (cid) showReplyEditor(tr, cid);
+  }));
+
+  tbody.querySelectorAll('.editComment').forEach(btn => btn.addEventListener('click', ev => {
+    const tr    = ev.currentTarget.closest('tr');
+    const cid   = tr?.dataset.id;
+    const body  = tr.querySelector('td:nth-child(2)')?.textContent?.trim() || '';
+    if (cid) showEditEditor(tr, cid, body);
+  }));
+
+  tbody.querySelectorAll('.delRestoreComment').forEach(btn => btn.addEventListener('click', async ev => {
+    const tr  = ev.currentTarget.closest('tr');
+    const cid = tr?.dataset.id;
+    if (!cid) return;
+    const toDeleted = !(tr.dataset.deleted === 'true');
+    const reason    = prompt('Reason (optional):');
     try {
-      await api(`/api/admin/comments/${cid}/edit`, {
-        method: 'POST',
-        body: { body: newBody }
-      });
-      loadComments();  // reload or update
+      await api(`/api/admin/comments/${encodeURIComponent(cid)}/delete`, { method: 'POST', body: { reason } });
+      loadAdminComments();
     } catch (e) {
-      showErr(`Edit failed: ${e?.error || e?.message}`);
+      showErr(`Failed comment delete/restore: ${e?.error || e?.message}`);
     }
-  });
-}
-
-function showReplyEditor(tr, cid) {
-  const td = tr.querySelector('td:nth-child(2)');
-  const textarea = document.createElement('textarea');
-  textarea.placeholder = 'Write your reply...';
-  textarea.style.width = '100%';
-  tr.after(document.createElement('tr'));  
-  // Simpler: append reply UI right after this row
-  const replyRow = tr.nextElementSibling;
-  replyRow.innerHTML = `<td colspan="${tr.children.length}">
-    <textarea style="width:100%;" placeholder="Reply..."></textarea>
-    <br>
-    <button class="btn tiny replySave">Post Reply</button>
-    <button class="btn tiny replyCancel">Cancel</button>
-  </td>`;
-  const textarea2 = replyRow.querySelector('textarea');
-  const btnSave = replyRow.querySelector('.replySave');
-  const btnCancel = replyRow.querySelector('.replyCancel');
-
-  btnSave.addEventListener('click', async () => {
-    const newBody = textarea2.value.trim();
-    if (!newBody) {
-      showErr('Reply body required.');
-      return;
-    }
-    try {
-      await api(`/api/admin/comments/${cid}/reply`, {
-        method: 'POST',
-        body: { body: newBody }
-      });
-      loadComments();
-    } catch (e) {
-      showErr(`Reply failed: ${e?.error || e?.message}`);
-    }
-  });
-
-  btnCancel.addEventListener('click', () => {
-    replyRow.remove();
-  });
+  }));
 }
 
 // --- REPORTS Section ---
 async function loadReports() {
+  clearErrs();
   const tbody = ensureTbody('#reportsTable');
   if (!tbody) return;
+
   try {
     const status = q('#rFilter')?.value || 'open';
-    const group = q('#rGroup')?.checked;
-    const params = new URLSearchParams();
+    const group  = q('#rGroup')?.checked;
+    const params= new URLSearchParams();
     params.set('t', String(Date.now()));
     params.set('status', status);
     const path = group ? 'reports/grouped' : 'reports';
-    const url = `/api/admin/${path}?${params.toString()}`;
+    const url  = `/api/admin/${path}?${params.toString()}`;
     const resp = await api(url, { nocache: true, skipHtmlRedirect: true });
-    const list = resp[group ? 'groups' : 'reports'];
+    const list = resp[group ? 'groups' : 'reports'] || [];
+
     tbody.innerHTML = '';
-    if (!Array.isArray(list) || !list.length) {
+    if (!list.length) {
       tbody.innerHTML = '<tr><td colspan="9">No reports found.</td></tr>';
       return;
     }
-    for (const r of list) {
-      const tr = document.createElement('tr');
-      const reportId = r._id || (r.ids && r.ids.length ? r.ids[0] : '');
-      tr.dataset.id = reportId;
-      const reporterName = r.reporter?.name || r.reporter?.email || '(unknown)';
-      tr.innerHTML = `
-        <td><input type="checkbox" class="rSelect" data-id="${reportId}"></td>
-        <td>${new Date(r.latestAt || r.createdAt).toLocaleString()}</td>
+
+    list.forEach(r => {
+      const tr        = document.createElement('tr');
+      const reportId  = r._id || (Array.isArray(r.ids) ? r.ids[0] : '');
+      tr.dataset.id   = reportId;
+      const reporter  = r.reporter?.name || r.reporter?.email || r.reporterId || '';
+      tr.innerHTML    = `
+        <td><input type="checkbox" class="rSelect" data-id="${escapeHTML(reportId)}"></td>
+        <td>${escapeHTML(new Date(r.latestAt || r.createdAt || Date.now()).toLocaleString())}</td>
         <td>${escapeHTML(r.targetType || '')}</td>
         <td>${escapeHTML(r.snippet || '')}</td>
         <td>${escapeHTML(r.category || '')}</td>
-        <td>${escapeHTML(reporterName)}</td>
+        <td>${escapeHTML(reporter)}</td>
         <td>${escapeHTML(r.status || '')}</td>
-        <td>
+        <td class="row gap-05">
           <button class="btn tiny viewReport">View</button>
           <button class="btn tiny resolveOne">Resolve</button>
         </td>
       `;
       tbody.appendChild(tr);
-    }
-
-    tbody.querySelectorAll('.viewReport').forEach(btn => {
-      btn.addEventListener('click', ev => {
-        ev.stopPropagation();
-        const tr = btn.closest('tr');
-        const id = tr?.dataset.id;
-        if (id) openReportDetail(id);
-      });
     });
 
-    tbody.querySelectorAll('.resolveOne').forEach(btn => {
-      btn.addEventListener('click', async ev => {
-        ev.stopPropagation();
-        const tr = btn.closest('tr');
-        const id = tr?.dataset.id;
-        const note = prompt('Resolution note (optional):');
-        if (!id) return;
-        try {
-          const res = await api(`/api/admin/reports/${id}/resolve`, { method: 'POST', body: { resolutionNote: note || '' } });
-          if (res.ok) {
-            loadReports();
-          } else {
-            showErr(`Resolve failed: ${res.error || 'Unknown'}`);
-          }
-        } catch (e) {
-          showErr(`Resolve error: ${e?.message || e}`);
-        }
-      });
-    });
+    bindReportActions(tbody);
 
   } catch (e) {
     renderErrorRow('#reportsTable', `Error loading reports: ${e?.error || e?.message}`, 9);
   }
 }
 
+function bindReportActions(tbody) {
+  tbody.querySelectorAll('.viewReport').forEach(btn => btn.addEventListener('click', ev => {
+    const tr = ev.currentTarget.closest('tr');
+    const id = tr?.dataset.id;
+    if (id) openReportDetail(id);
+  }));
+
+  tbody.querySelectorAll('.resolveOne').forEach(btn => btn.addEventListener('click', async ev => {
+    const tr = ev.currentTarget.closest('tr');
+    const id = tr?.dataset.id;
+    if (!id) return;
+    const note = prompt('Resolution note (optional):');
+    try {
+      const res = await api(`/api/admin/reports/${encodeURIComponent(id)}/resolve`, { method: 'POST', body: { resolutionNote: note || '' } });
+      if (res.ok) loadReports();
+      else showErr(`Resolve failed: ${res.error || 'Unknown'}`);
+    } catch (e) {
+      showErr(`Resolve error: ${e?.error || e?.message}`);
+    }
+  }));
+}
+
 async function openReportDetail(reportId) {
   try {
-    const resp = await api(`/api/admin/reports/${reportId}?t=${Date.now()}`, {
-      nocache: true,
-      skipHtmlRedirect: true
-    });
-
+    const resp = await api(`/api/admin/reports/${encodeURIComponent(reportId)}?t=${Date.now()}`, { nocache: true, skipHtmlRedirect: true });
     const report = resp.report;
     if (!report) {
       showErr('Report not found');
@@ -591,19 +552,17 @@ async function openReportDetail(reportId) {
     }
 
     let original = null;
-    let originalMeta = null;
-
     if (report.targetType === 'thread') {
-      original = await api(`/api/threads/${report.targetId}`, { skipHtmlRedirect: true });
-      originalMeta = original.thread ?? original;
+      const r2 = await api(`/api/threads/${encodeURIComponent(report.targetId)}`, { skipHtmlRedirect: true });
+      original   = r2.thread || r2;
     } else if (report.targetType === 'comment') {
-      original = await api(`/api/comments/${report.targetId}`, { skipHtmlRedirect: true });
-      originalMeta = original.comment ?? original;
+      const r2 = await api(`/api/comments/${encodeURIComponent(report.targetId)}`, { skipHtmlRedirect: true });
+      original   = r2.comment || r2;
     }
 
-    showReportDetailModal(report, originalMeta);
+    showReportDetailModal(report, original);
+
   } catch (e) {
-    console.error('openReportDetail error', e);
     showErr(`Failed to load report detail: ${e?.error || e?.message}`);
   }
 }
@@ -611,58 +570,49 @@ async function openReportDetail(reportId) {
 function showReportDetailModal(report, original) {
   const modal = q('#adminReportModal');
   if (!modal) {
-    console.error('Modal container not found in DOM');
+    showErr('Modal container not found');
     return;
   }
   const backdrop = modal.querySelector('.report-backdrop');
-  const body = modal.querySelector('#reportDetailBody');
+  const body     = modal.querySelector('#reportDetailBody');
   const btnClose = modal.querySelector('#adminReportClose');
   if (!backdrop || !body || !btnClose) {
-    console.error('Modal structure invalid');
+    showErr('Modal structure invalid');
     return;
   }
 
   backdrop.style.display = 'flex';
   btnClose.onclick = () => { backdrop.style.display = 'none'; };
 
-  const reporterName = report.reporter?.name || report.reporter?.email || report.reporterId || '(unknown)';
-  const createdAt = new Date(report.createdAt).toLocaleString();
-  const updatedAt = report.updatedAt ? new Date(report.updatedAt).toLocaleString() : null;
-
-  const category = escapeHTML(report.category || '');
-  const details = escapeHTML(report.details || '');
-  const status = escapeHTML(report.status || '');
-  const resolutionNote = escapeHTML(report.resolutionNote || '');
+  const reporterName  = report.reporter?.name || report.reporter?.email || report.reporterId || '';
+  const createdAt     = new Date(report.createdAt).toLocaleString();
+  const updatedAt     = report.updatedAt ? new Date(report.updatedAt).toLocaleString() : '';
+  const category      = escapeHTML(report.category || '');
+  const details       = escapeHTML(report.details || '');
+  const status        = escapeHTML(report.status || '');
+  const resolutionNote= escapeHTML(report.resolutionNote || '');
 
   let originalHtml = '';
   if (original) {
-    const titleOrSnippet = original.title
-      ? original.title
-      : original.snippet
-        ? original.snippet
-        : original.body || original.content || '(no content)';
-
-    let origAuthor = '(unknown)';
-    if (original.author && typeof original.author === 'object') {
-      origAuthor = original.author.name || original.author.email || String(original.author._id || '');
-    } else if (typeof original.author === 'string') {
-      origAuthor = original.author;
-    }
+    const titleOrSnippet = original.title ? original.title : original.snippet ? original.snippet : original.body || original.content || '(no content)';
+    const origAuthor     = (original.author && typeof original.author === 'object')
+                           ? (original.author.name || original.author.email || String(original.author._id || ''))
+                           : (original.author || '');
 
     if (report.targetType === 'thread') {
       originalHtml += `<p><strong>Thread title:</strong> <a href="thread.html?id=${encodeURIComponent(original._id)}" target="_blank">${escapeHTML(titleOrSnippet)}</a></p>`;
       originalHtml += `<p><strong>Author:</strong> ${escapeHTML(origAuthor)}</p>`;
-      originalHtml += `<div style="padding:.75rem; border:1px solid #ccc; border-radius:4px; margin-top:.5rem;">
-          <pre style="white-space:pre-wrap;">${escapeHTML(original.body || original.content || '')}</pre>
-        </div>`;
+      originalHtml += `<div style="padding:.75rem;border:1px solid #ccc;border-radius:4px;margin-top:.5rem;">
+        <pre style="white-space:pre-wrap;">${escapeHTML(original.body || original.content || '')}</pre>
+      </div>`;
     } else if (report.targetType === 'comment') {
       originalHtml += `<p><strong>Author:</strong> ${escapeHTML(origAuthor)}</p>`;
       if (original.thread) {
         originalHtml += `<p><strong>Thread:</strong> <a href="thread.html?id=${encodeURIComponent(original.thread)}" target="_blank">${escapeHTML(String(original.thread))}</a></p>`;
       }
-      originalHtml += `<div style="padding:.75rem; border:1px solid #ccc; border-radius:4px; margin-top:.5rem;">
-          <pre style="white-space:pre-wrap;">${escapeHTML(original.body || original.content || '')}</pre>
-        </div>`;
+      originalHtml += `<div style="padding:.75rem;border:1px solid #ccc;border-radius:4px;margin-top:.5rem;">
+        <pre style="white-space:pre-wrap;">${escapeHTML(original.body || original.content || '')}</pre>
+      </div>`;
     } else {
       originalHtml = `<em>(Original content unavailable or unknown type)</em>`;
     }
@@ -670,8 +620,8 @@ function showReportDetailModal(report, original) {
     originalHtml = `<em>(Original content not found)</em>`;
   }
 
-  const resolveBtnHtml = (report.status !== 'resolved' && report.status !== 'closed')
-    ? `<button id="modalResolveBtn" class="btn tiny" style="margin-top: 1rem;">Resolve</button>`
+  const resolveBtnHtml = (report.status !== 'resolved' && report.status !== 'closed') 
+    ? `<button id="modalResolveBtn" class="btn tiny" style="margin-top:1rem;">Resolve</button>` 
     : '';
 
   body.innerHTML = `
@@ -680,7 +630,7 @@ function showReportDetailModal(report, original) {
     ${updatedAt ? `<p><strong>Last Updated:</strong> ${updatedAt}</p>` : ''}
     <p><strong>Category:</strong> ${category}</p>
     <p><strong>Details:</strong></p>
-    <div style="padding:.5rem; border:1px solid #ddd; border-radius:4px; background:#f9f9f9;">
+    <div style="padding:.5rem;border:1px solid #ddd;border-radius:4px;background:#f9f9f9;">
       <pre style="white-space:pre-wrap;">${details}</pre>
     </div>
     <p><strong>Status:</strong> ${status}</p>
@@ -696,23 +646,23 @@ function showReportDetailModal(report, original) {
     modalResolveBtn.onclick = async () => {
       const note = prompt('Resolution note (optional):');
       try {
-        const res = await api(`/api/admin/reports/${report._id}/resolve`, {
-          method: 'POST',
-          body: { resolutionNote: note || '' }
+        const res = await api(`/api/admin/reports/${encodeURIComponent(report._id)}/resolve`, {
+          method: 'POST', body: { resolutionNote: note || '' }
         });
-        if (res.ok || res.report) {
+        if (res.ok) {
           backdrop.style.display = 'none';
           loadReports();
         } else {
           showErr(`Resolve failed: ${res.error || 'Unknown'}`);
         }
       } catch (e) {
-        showErr(`Resolve error: ${e?.error || e?.message || e}`);
+        showErr(`Resolve error: ${e?.error || e?.message}`);
       }
     };
   }
 }
 
+// Bulk resolve action
 async function bulkResolveSelected() {
   const cbs = qa('#reportsTable tbody .rSelect:checked');
   const ids = cbs.map(cb => cb.dataset.id).filter(Boolean);
@@ -729,51 +679,45 @@ async function bulkResolveSelected() {
   }
 }
 
-function exportCommentsCSV() {
-  window.location.href = `/api/admin/comments/export.csv?t=${Date.now()}`;
+function exportCSV(path) {
+  window.location.href = `/api/admin/${path}/export.csv?t=${Date.now()}`;
 }
 
-function exportUsersCSV() {
-  window.location.href = `/api/admin/users/export.csv?t=${Date.now()}`;
-}
-
-function exportReportsCSV() {
-  window.location.href = `/api/admin/reports/export.csv?t=${Date.now()}`;
-}
-
-// --- SEARCH ---
+// --- SEARCH (generic) ---
 async function doSearch() {
-  const qstr = (q('#sQ')?.value || '').trim();
-  const type = (q('#sType')?.value || 'all').toLowerCase();
-  const status = (q('#sStatus')?.value || '').toLowerCase();
-  const from = q('#sFrom')?.value;
-  const to = q('#sTo')?.value;
-  const minUp = q('#sMinUp')?.value;
+  const qstr     = (q('#sQ')?.value || '').trim();
+  const type     = (q('#sType')?.value  || 'all').toLowerCase();
+  const status   = (q('#sStatus')?.value || '').toLowerCase();
+  const from     = q('#sFrom')?.value;
+  const to       = q('#sTo')?.value;
+  const minUp    = q('#sMinUp')?.value;
   const category = q('#sCategory')?.value;
 
-  const params = new URLSearchParams();
+  const params   = new URLSearchParams();
   params.set('t', String(Date.now()));
-  if (qstr) params.set('q', qstr);
-  if (type) params.set('type', type);
-  if (status) params.set('status', status);
-  if (from) params.set('from', from);
-  if (to) params.set('to', to);
-  if (minUp) params.set('minUp', minUp);
+  if (qstr)     params.set('q', qstr);
+  if (type)     params.set('type', type);
+  if (status)   params.set('status', status);
+  if (from)     params.set('from', from);
+  if (to)       params.set('to', to);
+  if (minUp)    params.set('minUp', minUp);
   if (category) params.set('category', category);
 
   const resp = await api(`/api/admin/search?${params.toString()}`, { nocache: true, skipHtmlRedirect: true });
-  const { results } = resp;
+  const results = resp.results || [];
+  const tbody   = ensureTbody('#searchTable');
+  if (!tbody) return;
 
-  const tbody = ensureTbody('#searchTable');
   tbody.innerHTML = '';
-  if (!Array.isArray(results) || !results.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty">No results</td></tr>';
+  if (!results.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty">No results</td></tr>`;
     return;
   }
-  for (const r of results) {
+
+  results.forEach(r => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${new Date(r.createdAt).toLocaleString()}</td>
+      <td>${escapeHTML(new Date(r.createdAt || Date.now()).toLocaleString())}</td>
       <td>${escapeHTML(r.type || '')}</td>
       <td>${escapeHTML(r.title || '')}</td>
       <td>${escapeHTML(r.snippet || '')}</td>
@@ -781,35 +725,35 @@ async function doSearch() {
       <td>${escapeHTML(r.link || '')}</td>
     `;
     tbody.appendChild(tr);
-  }
+  });
 }
 
 // --- INIT ---
 async function init() {
-  console.log('admin init running');
+  console.log('Admin UI init');
   try {
     await refreshMe();
     meUser = meVar;
 
-    await api(`/api/admin/ping?t=${Date.now()}`);
+    await api(`/api/admin/ping?t=${Date.now()}`, { nocache: true });
 
-    q('#uRefresh')?.addEventListener('click', () => { state.users.page = 1; loadUsers(); });
+    q('#uRefresh')?.addEventListener('click',   () => { state.users.page = 1; loadUsers(); });
     q('#uSearch')?.addEventListener('input', debounce(() => { state.users.page = 1; loadUsers(); }));
 
     q('#tRefresh')?.addEventListener('click', loadThreads);
     q('#tIncludeDeleted')?.addEventListener('change', loadThreads);
 
-    q('#cRefresh')?.addEventListener('click', loadComments);
-    q('#cIncludeDeleted')?.addEventListener('change', loadComments);
+    q('#cRefresh')?.addEventListener('click', loadAdminComments);
+    q('#cIncludeDeleted')?.addEventListener('change', loadAdminComments);
 
     q('#rRefresh')?.addEventListener('click', loadReports);
     q('#rGroup')?.addEventListener('change', loadReports);
     q('#rFilter')?.addEventListener('change', loadReports);
     q('#rBulkResolve')?.addEventListener('click', bulkResolveSelected);
 
-    q('#rExport')?.addEventListener('click', exportReportsCSV);
-    q('#cExport')?.addEventListener('click', exportCommentsCSV);
-    q('#uExport')?.addEventListener('click', exportUsersCSV);
+    q('#rExport')?.addEventListener('click',   () => exportCSV('reports'));
+    q('#cExport')?.addEventListener('click',   () => exportCSV('comments'));
+    q('#uExport')?.addEventListener('click',   () => exportCSV('users'));
 
     q('#rSelectAll')?.addEventListener('change', () => {
       const checked = q('#rSelectAll')?.checked;
@@ -827,15 +771,14 @@ async function init() {
       q('#sCategory').value = '';
       doSearch();
     });
-    q('#sQ')?.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') doSearch();
-    });
+    q('#sQ')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
 
-    loadMetrics().catch(console.error);
-    loadThreads().catch(console.error);
-    loadComments().catch(console.error);
-    loadReports().catch(console.error);
-    loadUsers().catch(console.error);
+    await loadMetrics();
+    await loadUsers();
+    await loadThreads();
+    await loadAdminComments();
+    await loadReports();
+
   } catch (err) {
     showErr(`Init failed: ${err?.message || err}`);
     console.error('Init error', err);

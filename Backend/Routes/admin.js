@@ -449,7 +449,9 @@ router.post('/comments/:commentId/reply', requireAdmin, async (req, res) => {
   }
 });
 
-// Edit a comment
+// in admin.js, after your existing comment routes
+
+// Edit a comment body
 router.post('/comments/:commentId/edit', requireAdmin, async (req, res) => {
   try {
     const cid = req.params.commentId;
@@ -457,23 +459,86 @@ router.post('/comments/:commentId/edit', requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Invalid comment ID' });
     }
     const { body } = req.body;
-    if (!body || typeof body !== 'string') {
+    if (typeof body !== 'string' || body.trim().length < 1) {
       return res.status(400).json({ error: 'New body required' });
     }
     const comment = await Comment.findById(cid);
-    if (!comment) {
-      return res.status(404).json({ error: 'Comment not found' });
-    }
+    if (!comment) return res.status(404).json({ error: 'Comment not found' });
 
     comment.body     = body.trim();
     comment.editedAt = new Date();
     comment.editedBy = req.user.uid;
     await comment.save();
 
-    return res.json({ comment });
+    res.json({ ok: true, comment: comment.toObject() });
   } catch (e) {
     console.error('[admin] edit comment error:', e);
-    return res.status(500).json({ error: 'Failed to edit comment', detail: String(e) });
+    res.status(500).json({ error: 'Failed to edit comment', detail: String(e) });
+  }
+});
+
+// Soft‑delete a comment
+router.post('/comments/:commentId/delete', requireAdmin, async (req, res) => {
+  try {
+    const cid = req.params.commentId;
+    if (!mongoose.isValidObjectId(cid)) {
+      return res.status(400).json({ error: 'Invalid comment ID' });
+    }
+    const comment = await Comment.findById(cid);
+    if (!comment) return res.status(404).json({ error: 'Comment not found' });
+
+    await comment.softDelete(req.user.uid, req.body.reason || '');
+    res.json({ ok: true, comment: comment.toObject() });
+  } catch (e) {
+    console.error('[admin] delete comment error:', e);
+    res.status(500).json({ error: 'Failed to delete comment', detail: String(e) });
+  }
+});
+
+// Restore a soft‑deleted comment
+router.post('/comments/:commentId/restore', requireAdmin, async (req, res) => {
+  try {
+    const cid = req.params.commentId;
+    if (!mongoose.isValidObjectId(cid)) {
+      return res.status(400).json({ error: 'Invalid comment ID' });
+    }
+    const comment = await Comment.findById(cid);
+    if (!comment) return res.status(404).json({ error: 'Comment not found' });
+
+    await comment.restore();
+    res.json({ ok: true, comment: comment.toObject() });
+  } catch (e) {
+    console.error('[admin] restore comment error:', e);
+    res.status(500).json({ error: 'Failed to restore comment', detail: String(e) });
+  }
+});
+
+// Bulk action
+router.post('/comments/bulk', requireAdmin, async (req, res) => {
+  try {
+    const { commentIds, action } = req.body;
+    if (!Array.isArray(commentIds) || commentIds.length === 0) {
+      return res.status(400).json({ error: 'No comment IDs provided' });
+    }
+    const validIds = commentIds.filter(id => mongoose.isValidObjectId(id));
+    let result;
+    if (action === 'delete') {
+      result = await Comment.updateMany(
+        { _id: { $in: validIds } },
+        { $set: { isDeleted: true, deletedAt: new Date(), deletedBy: req.user.uid } }
+      );
+    } else if (action === 'restore') {
+      result = await Comment.updateMany(
+        { _id: { $in: validIds } },
+        { $set: { isDeleted: false, deletedAt: undefined, deletedBy: undefined, deleteReason: '' } }
+      );
+    } else {
+      return res.status(400).json({ error: 'Invalid action' });
+    }
+    res.json({ ok: true, modified: result.nModified });
+  } catch (e) {
+    console.error('[admin] bulk comments action error:', e);
+    res.status(500).json({ error: 'Failed bulk comment action', detail: String(e) });
   }
 });
 

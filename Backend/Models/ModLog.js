@@ -2,57 +2,43 @@
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
-// Small normalizers
-const toStr = (v) => (v == null ? '' : String(v));
+// Helpers
+const toStr   = (v) => (v == null ? '' : String(v));
 const toLower = (v) => toStr(v).toLowerCase();
-
-// Flexible ID type: allow ObjectId or string (for legacy data)
 const IdMixed = Schema.Types.Mixed;
 
 /**
- * ModLog — generic moderation / audit log
+ * ModLog — generic moderation & admin audit logs.
  *
- * Examples:
- *  - Thread pin:   { type: 'thread_pinned',   targetType: 'thread', targetId, actorId, note, meta:{before,after} }
- *  - Thread lock:  { type: 'thread_locked',   targetType: 'thread', targetId, actorId, note, meta:{before,after} }
- *  - Soft delete:  { type: 'thread_deleted',  targetType: 'thread', targetId, actorId, note, meta:{before,after} }
- *  - Report done:  { type: 'report_resolved', targetType: 'report', targetId:<reportId>, actorId, note, meta:{link,targetType,targetId} }
- *  - Comment del:  { type: 'comment_deleted', targetType: 'comment', targetId, actorId, note, meta:{before,after} }
- *  - User ban:     { type: 'user_banned',     targetType: 'user',   targetId:<userId>, actorId, note }
+ * Supports all moderation types: thread, comment, report, user.
+ * Allows rich metadata (before/after snapshots, links, actions).
  */
-const ModLogSchema = new Schema(
-  {
-    type:       { type: String, required: true },  // e.g., 'thread_locked', 'report_resolved'
-    targetType: { type: String, required: true },  // 'report' | 'thread' | 'comment' | 'user'
-    targetId:   { type: IdMixed, required: true }, // ObjectId or string
-    actorId:    { type: IdMixed, required: true }, // admin/mod user id (ObjectId or string)
-    note:       { type: String, default: '' },
-    meta:       { type: Schema.Types.Mixed, default: {} },
-  },
-  {
-    timestamps: { createdAt: true, updatedAt: false },
-    minimize: true,
-    versionKey: false,
-  }
-);
+const ModLogSchema = new Schema({
+  type:       { type: String, required: true },  // e.g. 'thread_locked'
+  targetType: { type: String, required: true },  // 'thread' | 'comment' | 'report' | 'user'
+  targetId:   { type: IdMixed, required: true }, // ObjectId or string
+  actorId:    { type: IdMixed, required: true }, // Admin/mod ID
+  note:       { type: String, default: '' },
+  meta:       { type: Schema.Types.Mixed, default: {} },
+}, {
+  timestamps: { createdAt: true, updatedAt: false },
+  minimize: true,
+  versionKey: false,
+});
 
-/* ------------------------------- Indexes ------------------------------- */
+// Indexes for fast admin queries
 ModLogSchema.index({ createdAt: -1 });
-ModLogSchema.index({ targetType: 1, targetId: 1, createdAt: -1 });
 ModLogSchema.index({ type: 1, createdAt: -1 });
-// helpful when filtering by moderator
+ModLogSchema.index({ targetType: 1, targetId: 1, createdAt: -1 });
 ModLogSchema.index({ actorId: 1, createdAt: -1 });
 
-/* ------------------------------- Setters ------------------------------- */
+// Normalize fields
 ModLogSchema.path('type').set(toLower);
 ModLogSchema.path('targetType').set(toLower);
 
-/* ------------------------------ Statics -------------------------------- */
-/**
- * Log a thread moderation action with before/after flags.
- * action: 'pin'|'unpin'|'lock'|'unlock'|'delete'|'restore'
- * meta.before/after: { pinned?:bool, locked?:bool, deleted?:bool }
- */
+/* ===================== STATIC HELPERS ===================== */
+
+/** Thread action log (e.g., pin, lock, delete) */
 ModLogSchema.statics.logThreadAction = async function ({
   threadId,
   action,
@@ -72,18 +58,7 @@ ModLogSchema.statics.logThreadAction = async function ({
     restore: 'thread_restored',
   };
   const type = typeMap[action] || `thread_${toLower(action)}`;
-
   const bool = (v) => v === true;
-  const safeBefore = {
-    pinned:  bool(!!(before.isPinned || before.pinned)),
-    locked:  bool(!!(before.isLocked || before.locked)),
-    deleted: bool(!!before.isDeleted),
-  };
-  const safeAfter = {
-    pinned:  bool(!!(after.isPinned || after.pinned)),
-    locked:  bool(!!(after.isLocked || after.locked)),
-    deleted: bool(!!after.isDeleted),
-  };
 
   return this.create({
     type,
@@ -91,14 +66,22 @@ ModLogSchema.statics.logThreadAction = async function ({
     targetId: threadId,
     actorId: adminId,
     note: toStr(note).slice(0, 2000),
-    meta: { before: safeBefore, after: safeAfter },
+    meta: {
+      before: {
+        pinned:  bool(before.isPinned || before.pinned),
+        locked:  bool(before.isLocked || before.locked),
+        deleted: bool(before.isDeleted),
+      },
+      after: {
+        pinned:  bool(after.isPinned || after.pinned),
+        locked:  bool(after.isLocked || after.locked),
+        deleted: bool(after.isDeleted),
+      },
+    },
   });
 };
 
-/**
- * Log a report resolution event.
- * Example meta: { link, targetType:'thread'|'comment', targetId:<contentId> }
- */
+/** Report resolution log */
 ModLogSchema.statics.logReportResolved = async function ({
   reportId,
   adminId,
@@ -118,38 +101,36 @@ ModLogSchema.statics.logReportResolved = async function ({
     note: toStr(note).slice(0, 2000),
     meta: {
       link: toStr(link),
-      targetType: toLower(targetType || ''),
-      targetId: targetId || '',
+      targetType: toLower(targetType),
+      targetId,
       bulk: !!bulk,
     },
   });
 };
 
-/**
- * OPTIONAL helper: log multiple reports resolved in one action (single log entry).
- * Stores just counts and a few ids to keep meta small.
- */
+/** Bulk report resolution log */
 ModLogSchema.statics.logReportsBulkResolved = async function ({
   reportIds = [],
   adminId,
   note = '',
 }) {
   if (!adminId || !Array.isArray(reportIds) || reportIds.length === 0) return null;
-  const ids = reportIds.map(String);
+
   return this.create({
     type: 'reports_bulk_resolved',
     targetType: 'report',
     targetId: 'bulk',
     actorId: adminId,
     note: toStr(note).slice(0, 2000),
-    meta: { idsSample: ids.slice(0, 10), idsCount: ids.length, bulk: true },
+    meta: {
+      idsSample: reportIds.map(String).slice(0, 10),
+      idsCount: reportIds.length,
+      bulk: true,
+    },
   });
 };
 
-/**
- * OPTIONAL helper: log a comment moderation action (delete/restore)
- * action: 'delete'|'restore'
- */
+/** Comment moderation log */
 ModLogSchema.statics.logCommentAction = async function ({
   commentId,
   action,
@@ -165,10 +146,7 @@ ModLogSchema.statics.logCommentAction = async function ({
     restore: 'comment_restored',
   };
   const type = typeMap[action] || `comment_${toLower(action)}`;
-
   const bool = (v) => v === true;
-  const safeBefore = { deleted: bool(!!before.isDeleted) };
-  const safeAfter  = { deleted: bool(!!after.isDeleted) };
 
   return this.create({
     type,
@@ -176,13 +154,14 @@ ModLogSchema.statics.logCommentAction = async function ({
     targetId: commentId,
     actorId: adminId,
     note: toStr(note).slice(0, 2000),
-    meta: { before: safeBefore, after: safeAfter },
+    meta: {
+      before: { deleted: bool(before.isDeleted) },
+      after:  { deleted: bool(after.isDeleted) },
+    },
   });
 };
 
-/**
- * OPTIONAL helper: log user ban toggles.
- */
+/** User ban/unban log */
 ModLogSchema.statics.logUserBanToggle = async function ({
   userId,
   adminId,
@@ -190,6 +169,7 @@ ModLogSchema.statics.logUserBanToggle = async function ({
   note = '',
 }) {
   if (!userId || !adminId) return null;
+
   return this.create({
     type: isBanned ? 'user_banned' : 'user_unbanned',
     targetType: 'user',

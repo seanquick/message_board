@@ -3,14 +3,14 @@
 import { api, escapeHTML, timeAgo, q, $, me, refreshMe } from './main.js';
 import { initReportUI, openReportModal } from './report.js';
 
-let THREAD_ID = null;
-let THREAD    = null;
+let THREAD_ID  = null;
+let THREAD     = null;
 let commentState = {
   comments:   [],
   nextCursor: null,
-  hasMore:     false,
-  loading:     false,
-  limit:       20
+  hasMore:    false,
+  loading:    false,
+  limit:      20
 };
 
 /* --- Helpers --- */
@@ -72,7 +72,7 @@ async function init() {
     renderThread(THREAD);
 
     // If thread is locked: disable composer
-    if (THREAD.flags?.locked) {
+    if (THREAD.flags?.locked || THREAD.isLocked || THREAD.locked) {
       safeSetHTML('#lockBanner', `<strong>Notice:</strong> This thread is locked — no new comments allowed.`);
       safeShow('#lockBanner', true);
       safeShow('#replyForm', false);
@@ -98,7 +98,7 @@ function ensureScaffold() {
 
   if (!q('#threadHeader')) {
     const header = document.createElement('section');
-    header.id = 'threadHeader';
+    header.id    = 'threadHeader';
     header.className = 'card';
     header.innerHTML = `
       <header class="toolbar between">
@@ -164,9 +164,9 @@ function renderThread(t) {
   if (t.flags?.locked || t.isLocked || t.locked) badges.push(lockBadge());
   safeSetHTML('#threadBadges', badges.join(''));
 
-  const author    = escapeHTML(t.author_display || 'Unknown');
-  const when      = timeAgo(t.createdAt);
-  const upvotes   = Number(t.upvoteCount ?? t.thumbsUp ?? t.upvotes ?? t.score ?? 0);
+  const author  = escapeHTML(t.author_display || 'Unknown');
+  const when    = timeAgo(t.createdAt);
+  const upvotes = Number(t.upvoteCount ?? t.thumbsUp ?? t.upvotes ?? t.score ?? 0);
   safeSetHTML('#threadMeta', `${author} • ${when} • ▲ ${upvotes}`);
 
   safeSetHTML('#threadBody', safeParagraphs(t.body ?? t.content ?? ''));
@@ -176,11 +176,11 @@ function renderThread(t) {
 
 /* --- Toolbar with Report / Upvote --- */
 function buildToolbar() {
-  const host   = q('#threadToolbar');
+  const host     = q('#threadToolbar');
   if (!host) return;
 
-  const loggedIn = !!me?.id;
-  const isOwn    = loggedIn && (me.id === THREAD.author || me.id === THREAD.authorId);
+  const loggedIn  = !!me?.id;
+  const isOwn     = loggedIn && (me.id === THREAD.author || me.id === THREAD.authorId);
   const canReport = loggedIn && !isOwn;
 
   const tooltip = !loggedIn
@@ -188,10 +188,10 @@ function buildToolbar() {
     : (isOwn ? 'Cannot report your own thread' : 'Report this thread');
 
   host.innerHTML = `
-    <button id="threadUpvote" class="btn tiny" ${!loggedIn ? 'disabled':''} title="${loggedIn ? 'Upvote':'Login required'}">
+    <button id="threadUpvote" class="btn tiny"${!loggedIn ? ' disabled':''} title="${escapeAttr(loggedIn ? 'Upvote':'Login required')}">
       ▲ Upvote <span id="threadUpCount" class="mono">${Number(THREAD.upvoteCount || 0)}</span>
     </button>
-    <button id="reportThreadBtn" class="btn tiny danger" ${canReport ? '' : 'disabled'} title="${tooltip}" data-thread-id="${THREAD._id}">
+    <button id="reportThreadBtn" class="btn tiny danger"${canReport ? '' : ' disabled'} title="${escapeAttr(tooltip)}" data-thread-id="${escapeAttr(THREAD._id)}">
       Report Thread
     </button>
   `;
@@ -208,9 +208,7 @@ function buildToolbar() {
 
 async function onUpvoteThread() {
   try {
-    const res = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}/upvote`, {
-      method: 'POST'
-    });
+    const res = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}/upvote`, { method: 'POST' });
     safeSetText('#threadUpCount', Number(res?.upvoteCount || 0));
   } catch (e) {
     alert(e?.error || e?.message || 'Failed to upvote.');
@@ -249,7 +247,6 @@ async function loadComments(reset = false) {
     renderCommentsTree(commentState.comments);
     renderLoadMoreCommentsButton();
     initReportUI();
-
   } catch (e) {
     safeSetHTML('#comments', `<div class="err">${escapeHTML(e?.error || e?.message || 'Failed to load comments.')}</div>`);
   } finally {
@@ -262,7 +259,7 @@ function renderLoadMoreCommentsButton() {
   if (!btn) return;
   if (commentState.hasMore) {
     btn.style.display = '';
-    btn.disabled = commentState.loading;
+    btn.disabled     = commentState.loading;
   } else {
     btn.style.display = 'none';
   }
@@ -286,10 +283,10 @@ function renderCommentsTree(nodes = []) {
   host.querySelectorAll('.replyBtn').forEach(b => b.addEventListener('click', onReplyClick));
   host.querySelectorAll('.c-upvote').forEach(b => b.addEventListener('click', onUpvoteComment));
   host.querySelectorAll('.c-report').forEach(b => {
-    const btn  = b;
-    const cid  = btn.dataset.commentId;
+    const btn = b;
+    const cid = btn.dataset.commentId;
     if (!btn.disabled && cid) {
-      btn.addEventListener('click', ev => openReportModal('comment', cid));
+      btn.addEventListener('click', () => openReportModal('comment', cid));
     }
   });
 
@@ -297,24 +294,33 @@ function renderCommentsTree(nodes = []) {
 }
 
 function renderCommentNode(c) {
-  const el = document.createElement('article');
-  el.className = 'comment';
-  el.id = `c-${escapeAttr(String(c._id))}`;
-  el.dataset.id = String(c._id);
+  const el        = document.createElement('article');
+  el.className    = 'comment';
+  el.id           = `c-${escapeAttr(String(c._id))}`;
+  el.dataset.id   = String(c._id);
   const isDeleted = !!c.isDeleted;
 
-  const author = escapeHTML(c.author_display || 'Unknown');
-  const when   = timeAgo(c.createdAt);
-  const up     = Number(c.upvoteCount ?? c.score ?? 0);
-  const body   = isDeleted ? '<em class="meta">[deleted]</em>' : escapeHTML(c.body || '');
+  const author    = escapeHTML(c.author_display || 'Unknown');
+  const when      = timeAgo(c.createdAt);
+  const up        = Number(c.upvoteCount ?? c.score ?? 0);
+  const body      = isDeleted ? '<em class="meta">[deleted]</em>' : escapeHTML(c.body || '');
 
-  const loggedIn = !!me?.id;
-  const isOwn    = loggedIn && (c.authorId === me.id);
+  const loggedIn  = !!me?.id;
+  const isOwn     = loggedIn && (String(c.authorId) === String(me.id));
   const canReport = loggedIn && !isOwn;
 
-  const tooltip = !loggedIn
+  const tooltip   = !loggedIn
     ? 'Login required'
     : (isOwn ? 'Cannot report your own comment' : 'Report this comment');
+
+  // Edited metadata
+  let editedHtml = '';
+  if (!isDeleted && c.editedAt) {
+    editedHtml = `<div class="meta" style="font-size:.85rem; color:var(--muted)">
+      Edited • ${timeAgo(c.editedAt)}
+      ${c.editedBy ? ` by ${escapeHTML(c.editedByName || c.editedBy)}` : ''}
+    </div>`;
+  }
 
   const childrenHTML = Array.isArray(c.children) && c.children.length
     ? `<div class="children">${c.children.map(renderCommentChildHTML).join('')}</div>`
@@ -323,10 +329,13 @@ function renderCommentNode(c) {
   el.innerHTML = `
     <header class="meta">${author} • ${when}</header>
     <div class="c-body">${body}</div>
+    ${editedHtml}
     <div class="row wrap" style="gap:.5rem; margin-top:.35rem">
-      <button class="btn tiny c-upvote" ${isDeleted ? 'disabled' : ''}>▲ ${up}</button>
-      <button class="btn tiny replyBtn" ${isDeleted ? 'disabled' : ''}>Reply</button>
-      <button class="btn tiny danger c-report" ${canReport ? '' : 'disabled'} title="${tooltip}" data-comment-id="${c._id}">Report</button>
+      <button class="btn tiny c-upvote"${isDeleted ? ' disabled':''}>▲ ${up}</button>
+      <button class="btn tiny replyBtn"${isDeleted ? ' disabled':''}>Reply</button>
+      <button class="btn tiny danger c-report"${canReport ? '' : ' disabled'} title="${escapeAttr(tooltip)}" data-comment-id="${escapeAttr(c._id)}">
+        Report
+      </button>
     </div>
     ${childrenHTML}
   `;
@@ -334,24 +343,40 @@ function renderCommentNode(c) {
 }
 
 function renderCommentChildHTML(child) {
-  const id     = escapeAttr(String(child._id));
-  const author = escapeHTML(child.author_display || 'Unknown');
-  const when   = timeAgo(child.createdAt);
-  const up     = Number(child.upvoteCount ?? child.score ?? 0);
-  const body   = !!child.isDeleted ? '<em class="meta">[deleted]</em>' : escapeHTML(child.body || '');
+  const id         = escapeAttr(String(child._id));
+  const author     = escapeHTML(child.author_display || 'Unknown');
+  const when       = timeAgo(child.createdAt);
+  const up         = Number(child.upvoteCount ?? child.score ?? 0);
+  const body       = !!child.isDeleted ? '<em class="meta">[deleted]</em>' : escapeHTML(child.body || '');
 
-  const loggedIn = !!me?.id;
-  const isOwn    = loggedIn && (child.authorId === me.id);
-  const canReport = loggedIn && !isOwn;
+  const loggedIn   = !!me?.id;
+  const isOwn      = loggedIn && (String(child.authorId) === String(me.id));
+  const canReport  = loggedIn && !isOwn;
+
+  const tooltip    = !loggedIn
+    ? 'Login required'
+    : (isOwn ? 'Cannot report your own comment' : 'Report this comment');
+
+  // Edited metadata
+  let editedHtml = '';
+  if (!child.isDeleted && child.editedAt) {
+    editedHtml = `<div class="meta" style="font-size:.85rem; color:var(--muted)">
+      Edited • ${timeAgo(child.editedAt)}
+      ${child.editedBy ? ` by ${escapeHTML(child.editedByName || child.editedBy)}` : ''}
+    </div>`;
+  }
 
   return `
     <article class="comment" id="c-${id}" data-id="${id}">
       <header class="meta">${author} • ${when}</header>
       <div class="c-body">${body}</div>
+      ${editedHtml}
       <div class="row wrap" style="gap:.5rem; margin-top:.35rem">
-        <button class="btn tiny c-upvote" ${child.isDeleted ? 'disabled':''}>▲ ${up}</button>
-        <button class="btn tiny replyBtn" ${child.isDeleted ? 'disabled':''}>Reply</button>
-        <button class="btn tiny danger c-report" ${canReport ? '' : 'disabled'} title="${tooltip}" data-comment-id="${child._id}">Report</button>
+        <button class="btn tiny c-upvote"${child.isDeleted ? ' disabled':''}>▲ ${up}</button>
+        <button class="btn tiny replyBtn"${child.isDeleted ? ' disabled':''}>Reply</button>
+        <button class="btn tiny danger c-report"${canReport ? '' : ' disabled'} title="${escapeAttr(tooltip)}" data-comment-id="${escapeAttr(child._id)}">
+          Report
+        </button>
       </div>
     </article>
   `;
@@ -362,16 +387,16 @@ function onReplyClick(ev) {
   const btn       = ev.currentTarget;
   const commentId = btn.closest('.comment')?.dataset.id;
   if (commentId) {
-    q('#parentId').value        = commentId;
+    q('#parentId').value         = commentId;
     q('#replyingTo').textContent = 'Replying…';
     q('#replyingTo').style.display = '';
-    q('#cancelReply').style.display = '';
+    q('#cancelReply').style.display  = '';
     q('#replyBody')?.focus();
   }
 }
 
 function clearReplyTarget() {
-  q('#parentId').value        = '';
+  q('#parentId').value         = '';
   q('#replyingTo').textContent = '';
   q('#replyingTo').style.display = 'none';
   q('#cancelReply').style.display = 'none';
@@ -386,14 +411,14 @@ function bindComposer() {
   form.addEventListener('submit', async ev => {
     ev.preventDefault();
 
-    // If locked, guard early (just in case)
-    if (THREAD.flags?.locked) {
+    // If locked, guard early
+    if (THREAD.flags?.locked || THREAD.isLocked || THREAD.locked) {
       alert('Thread is locked. New comments are disabled.');
       return;
     }
 
-    const body       = (q('#replyBody')?.value || '').trim();
-    const parentId   = (q('#parentId')?.value || '').trim();
+    const body        = (q('#replyBody')?.value || '').trim();
+    const parentId    = (q('#parentId')?.value || '').trim();
     const isAnonymous = !!q('#isAnonymous')?.checked;
 
     if (!me?.id) {
@@ -434,14 +459,14 @@ function onUpvoteComment(ev) {
   const commentId = btn.closest('.comment')?.dataset.id;
   if (!commentId) return;
 
-  api(`/api/comments/${encodeURIComponent(commentId)}/upvote`, {
-    method: 'POST'
-  }).then(res => {
-    if (res?.ok && typeof res.upvoteCount === 'number') {
-      btn.innerHTML = `▲ ${res.upvoteCount}`;
-    }
-  }).catch(err => {
-    console.error('Upvote comment failed', err);
-    alert('Failed to upvote comment.');
-  });
+  api(`/api/comments/${encodeURIComponent(commentId)}/upvote`, { method: 'POST' })
+    .then(res => {
+      if (res?.ok && typeof res.upvoteCount === 'number') {
+        btn.innerHTML = `▲ ${res.upvoteCount}`;
+      }
+    })
+    .catch(err => {
+      console.error('Upvote comment failed', err);
+      alert('Failed to upvote comment.');
+    });
 }

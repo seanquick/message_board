@@ -1,197 +1,183 @@
-// Backend/Models/Comment.js
-/**
- * Comment model (backwards-compatible + upvotes + soft-delete)
- *
- * Legacy fields:
- *  - content (String)    ← legacy body
- *  - userId  (ObjectId)  ← legacy author
- *  - parentId (ObjectId) ← parent comment for replies
- *  - thread  (ObjectId)  ← owning thread
- *
- * Canonical:
- *  - body (String)       ← mirrored to/from `content`
- *  - author (ObjectId)   ← mirrored to/from `userId`
- *  - author_name (String)
- *  - isAnonymous (Boolean)
- *
- * Features:
- *  - Upvotes: upvoters[], upvoteCount; toggleUpvote(userId)
- *  - Soft delete: isDeleted, deletedAt, deletedBy, deleteReason; softDelete()/restore()
- */
-
+// backend/routes/comments.js
+const express = require('express');
+const router  = express.Router();
 const mongoose = require('mongoose');
-const { Schema } = mongoose;
 
-const CommentSchema = new Schema(
-  {
-    // ----- Ownership / hierarchy -----
-    thread:   { type: Schema.Types.ObjectId, ref: 'Thread', required: true, index: true },
-    parentId: { type: Schema.Types.ObjectId, ref: 'Comment', default: null, index: true },
+const Comment = require('../Models/Comment'); // adjust path if different
+const Thread  = require('../Models/Thread');
+const { requireAuth, requireAdmin } = require('../middleware/auth'); // adjust your auth middleware names
 
-    // ----- Content -----
-    body:     { type: String, trim: true, default: '' }, // canonical
-    content:  { type: String, trim: true, default: '' }, // legacy mirror
+// — Create a new comment under a thread
+router.post('/threads/:threadId/comments', requireAuth, async (req, res) => {
+  try {
+    const threadId = req.params.threadId;
+    if (!mongoose.isValidObjectId(threadId)) {
+      return res.status(400).json({ error: 'Invalid thread ID' });
+    }
 
-    // ----- Author -----
-    author:       { type: Schema.Types.ObjectId, ref: 'User' },  // canonical
-    userId:       { type: Schema.Types.ObjectId, ref: 'User' },  // legacy
-    author_name:  { type: String, trim: true, default: '' },
-    isAnonymous:  { type: Boolean, default: false },
+    const thread = await Thread.findById(threadId);
+    if (!thread) {
+      return res.status(404).json({ error: 'Thread not found' });
+    }
 
-    // ----- Upvotes (thumbs up) -----
-    upvoters:    [{ type: Schema.Types.ObjectId, ref: 'User' }],
-    upvoteCount: { type: Number, default: 0 },
-    // legacy aggregate for older code
-    score:       { type: Number, default: 0 },
+    const body       = (req.body.body || '').trim();
+    const parentId   = req.body.parentId?.trim() || null;
+    const isAnonymous= !!req.body.isAnonymous;
 
-    // ----- Soft delete (visible to admins) -----
-    isDeleted:    { type: Boolean, default: false, index: true },
-    deletedAt:    { type: Date },
-    deletedBy:    { type: Schema.Types.ObjectId, ref: 'User' },
-    deleteReason: { type: String, trim: true, maxlength: 1000 },
-  },
-  { timestamps: true, minimize: false }
-);
+    if (!body) {
+      return res.status(400).json({ error: 'Comment body cannot be empty' });
+    }
 
-/* =====================================================================
- * HOOKS: keep mirrors and denormalized counters consistent
- * =================================================================== */
+    const newCommentData = {
+      thread: thread._id,
+      body,
+      author:   req.user.id,
+      author_name: req.user.name || req.user.email || 'Unknown',
+      isAnonymous,
+    };
 
-// Mirror legacy/new fields & basic validation before validate
-CommentSchema.pre('validate', function (next) {
-  // Mirror body/content
-  if (!this.body && this.content) this.body = this.content;
-  if (!this.content && this.body) this.content = this.body;
+    if (parentId) {
+      if (!mongoose.isValidObjectId(parentId)) {
+        return res.status(400).json({ error: 'Invalid parent comment ID' });
+      }
+      newCommentData.parentId = parentId;
+    }
 
-  // Mirror author/userId
-  if (!this.author && this.userId) this.author = this.userId;
-  if (!this.userId && this.author) this.userId = this.author;
-
-  // Content length rule (allow very short, just not empty)
-  const text = (this.body || this.content || '').trim();
-  if (text.length < 1) {
-    return next(new Error('Comment cannot be empty.'));
+    const comment = await Comment.create(newCommentData);
+    res.status(201).json({ ok: true, comment });
+  } catch (err) {
+    console.error('[comments] create error', err);
+    res.status(500).json({ error: 'Failed to create comment', detail: err.message });
   }
-
-  if (!this.author_name) this.author_name = 'Unknown';
-  next();
 });
 
-// Maintain upvoteCount/score + mirrors before save
-CommentSchema.pre('save', function (next) {
-  // De-duplicate upvoters and sync upvoteCount/score
-  if (this.isModified('upvoters')) {
-    const unique = Array.from(new Set((this.upvoters || []).map(String)))
-      .map(id => new mongoose.Types.ObjectId(id));
-    this.upvoters = unique;
-    const n = unique.length;
-    this.upvoteCount = n;
-    this.score = n; // legacy mirror
-  }
+// — Edit a comment (body) — allowed for author or admin
+router.put('/:commentId', requireAuth, async (req, res) => {
+  try {
+    const cid = req.params.commentId;
+    if (!mongoose.isValidObjectId(cid)) {
+      return res.status(400).json({ error: 'Invalid comment ID' });
+    }
 
-  // Mirror again for safety
-  if (this.isModified('body') && typeof this.body === 'string' && this.body !== this.content) {
-    this.content = this.body;
-  }
-  if (this.isModified('content') && typeof this.content === 'string' && this.content !== this.body) {
-    this.body = this.content;
-  }
-  if (this.isModified('author') && this.author && String(this.author) !== String(this.userId || '')) {
-    this.userId = this.author;
-  }
-  if (this.isModified('userId') && this.userId && String(this.userId) !== String(this.author || '')) {
-    this.author = this.userId;
-  }
+    const comment = await Comment.findById(cid);
+    if (!comment) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
 
-  next();
+    // Only author or admin can edit
+    if (String(comment.author) !== String(req.user.id) && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Not authorized to edit this comment' });
+    }
+
+    const body = (req.body.body || '').trim();
+    if (!body) {
+      return res.status(400).json({ error: 'Comment body cannot be empty' });
+    }
+
+    comment.body     = body;
+    comment.editedBy = req.user.id;
+    comment.editedAt = new Date();
+
+    await comment.save();
+    res.json({ ok: true, comment });
+  } catch (err) {
+    console.error('[comments] edit error', err);
+    res.status(500).json({ error: 'Failed to edit comment', detail: err.message });
+  }
 });
 
-/* =====================================================================
- * INSTANCE METHODS
- * =================================================================== */
+// — Soft delete a comment (only admin)
+router.post('/:commentId/delete', requireAdmin, async (req, res) => {
+  try {
+    const cid = req.params.commentId;
+    if (!mongoose.isValidObjectId(cid)) {
+      return res.status(400).json({ error: 'Invalid comment ID' });
+    }
 
-/**
- * toggleUpvote(userId)
- * - Adds the user to upvoters if not present; removes if already present.
- * - Keeps upvoteCount + score in sync.
- * - Returns { upvoted: boolean, upvoteCount: number }.
- */
-CommentSchema.methods.toggleUpvote = async function(userId) {
-  const uid = String(userId);
-  const set = new Set((this.upvoters || []).map(v => String(v)));
+    const comment = await Comment.findById(cid);
+    if (!comment) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
 
-  let upvoted;
-  if (set.has(uid)) {
-    set.delete(uid);
-    upvoted = false;
-  } else {
-    set.add(uid);
-    upvoted = true;
+    await comment.softDelete(req.user.id, req.body.reason || '');
+    res.json({ ok: true, comment });
+  } catch (err) {
+    console.error('[comments] delete error', err);
+    res.status(500).json({ error: 'Failed to delete comment', detail: err.message });
   }
+});
 
-  this.upvoters = Array.from(set).map(id => new mongoose.Types.ObjectId(id));
-  const n = this.upvoters.length;
-  this.upvoteCount = n;
-  this.score = n; // legacy
+// — Restore a soft‑deleted comment (only admin)
+router.post('/:commentId/restore', requireAdmin, async (req, res) => {
+  try {
+    const cid = req.params.commentId;
+    if (!mongoose.isValidObjectId(cid)) {
+      return res.status(400).json({ error: 'Invalid comment ID' });
+    }
 
-  await this.save();
-  return { upvoted, upvoteCount: n };
-};
+    const comment = await Comment.findById(cid);
+    if (!comment) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
 
-/**
- * softDelete(byUserId, reason)
- * - Marks the comment as deleted but keeps it in DB for admins.
- */
-CommentSchema.methods.softDelete = async function(byUserId, reason = '') {
-  this.isDeleted = true;
-  this.deletedAt = new Date();
-  this.deletedBy = byUserId || this.deletedBy;
-  this.deleteReason = String(reason || '').slice(0, 1000);
-  await this.save();
-  return this;
-};
+    await comment.restore();
+    res.json({ ok: true, comment });
+  } catch (err) {
+    console.error('[comments] restore error', err);
+    res.status(500).json({ error: 'Failed to restore comment', detail: err.message });
+  }
+});
 
-/**
- * restore()
- * - Restores a soft-deleted comment.
- */
-CommentSchema.methods.restore = async function() {
-  this.isDeleted = false;
-  this.deletedAt = undefined;
-  this.deletedBy = undefined;
-  this.deleteReason = undefined;
-  await this.save();
-  return this;
-};
+// — Bulk actions (delete / restore) — only admin
+router.post('/bulk', requireAdmin, async (req, res) => {
+  try {
+    const commentIds = Array.isArray(req.body.commentIds) ? req.body.commentIds : [];
+    const action     = req.body.action;
 
-/* =====================================================================
- * STATIC HELPERS (optional sugar)
- * =================================================================== */
+    if (!commentIds.length) {
+      return res.status(400).json({ error: 'No comment IDs provided' });
+    }
+    if (!['delete','restore'].includes(action)) {
+      return res.status(400).json({ error: 'Invalid action' });
+    }
 
-/**
- * upvoteById(commentId, userId)
- * - Convenience wrapper to toggle upvote by ids.
- */
-CommentSchema.statics.upvoteById = async function(commentId, userId) {
-  const c = await this.findById(commentId);
-  if (!c) return null;
-  return c.toggleUpvote(userId);
-};
+    const validIds = commentIds.filter(id => mongoose.isValidObjectId(id));
+    if (!validIds.length) {
+      return res.status(400).json({ error: 'No valid comment IDs provided' });
+    }
 
-/* =====================================================================
- * INDEXES
- * =================================================================== */
+    let result;
+    if (action === 'delete') {
+      result = await Comment.updateMany(
+        { _id: { $in: validIds } },
+        {
+          $set: {
+            isDeleted:    true,
+            deletedAt:    new Date(),
+            deletedBy:    req.user.id,
+          }
+        }
+      );
+    } else {
+      // restore
+      result = await Comment.updateMany(
+        { _id: { $in: validIds } },
+        {
+          $set: {
+            isDeleted:    false,
+            deletedAt:    undefined,
+            deletedBy:    undefined,
+            deleteReason: ''
+          }
+        }
+      );
+    }
 
-// Fast tree traversal & per-thread queries
-CommentSchema.index({ thread: 1, parentId: 1, createdAt: 1 });
+    res.json({ ok: true, modifiedCount: result.modifiedCount });
+  } catch (err) {
+    console.error('[comments] bulk action error', err);
+    res.status(500).json({ error: 'Failed to perform bulk action', detail: err.message });
+  }
+});
 
-// Sorting newest then most upvotes within a thread
-CommentSchema.index({ thread: 1, createdAt: -1, upvoteCount: -1 });
-
-// Basic text search (body)
-CommentSchema.index({ body: 'text' });
-
-// Already have isDeleted index above; keep createdAt global too
-CommentSchema.index({ createdAt: -1 });
-
-module.exports = mongoose.models.Comment || mongoose.model('Comment', CommentSchema);
+module.exports = router;
