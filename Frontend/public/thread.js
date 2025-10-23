@@ -61,9 +61,7 @@ async function loadComments(reset = false) {
 
   const params = new URLSearchParams();
   params.set('limit', String(commentState.limit));
-  if (commentState.nextCursor) {
-    params.set('after', commentState.nextCursor);
-  }
+  if (commentState.nextCursor) params.set('after', commentState.nextCursor);
   params.set('t', String(Date.now()));
 
   try {
@@ -111,40 +109,35 @@ function renderCommentsTree(nodes = []) {
   }
 
   host.innerHTML = '';
-  for (const c of nodes) {
-    host.appendChild(renderCommentNode(c));
-  }
+  for (const c of nodes) host.appendChild(renderCommentNode(c));
 
   host.querySelectorAll('.replyBtn').forEach(b => b.addEventListener('click', onReplyClick));
   host.querySelectorAll('.c-upvote').forEach(b => b.addEventListener('click', onUpvoteComment));
   host.querySelectorAll('.c-report').forEach(b => {
-    const btn = b;
-    const cid = btn.dataset.commentId;
-    if (!btn.disabled && cid) {
-      btn.addEventListener('click', () => openReportModal('comment', cid));
-    }
+    const cid = b.dataset.commentId;
+    if (!b.disabled && cid) b.addEventListener('click', () => openReportModal('comment', cid));
   });
 
   renderLoadMoreCommentsButton();
 }
 
 function renderCommentNode(c) {
-  const el        = document.createElement('article');
-  el.className    = 'comment';
-  el.id           = `c-${escapeAttr(String(c._id))}`;
-  el.dataset.id   = String(c._id);
+  const el = document.createElement('article');
+  el.className = 'comment';
+  el.id = `c-${escapeAttr(String(c._id))}`;
+  el.dataset.id = String(c._id);
   const isDeleted = !!c.isDeleted;
 
-  const author    = escapeHTML(c.author_display || 'Unknown');
-  const when      = timeAgo(c.createdAt);
-  const up        = Number(c.upvoteCount ?? c.score ?? 0);
-  const body      = isDeleted ? '<em class="meta">[deleted]</em>' : escapeHTML(c.body || '');
+  const author = escapeHTML(c.author_display || 'Unknown');
+  const when = timeAgo(c.createdAt);
+  const up = Number(c.upvoteCount ?? c.score ?? 0);
+  const body = isDeleted ? '<em class="meta">[deleted]</em>' : escapeHTML(c.body || '');
 
-  const loggedIn  = !!me?.id;
-  const isOwn     = loggedIn && (String(c.authorId) === String(me.id));
+  const loggedIn = !!me?.id;
+  const isOwn = loggedIn && (String(c.authorId) === String(me.id));
   const canReport = loggedIn && !isOwn;
 
-  const tooltip   = !loggedIn
+  const tooltip = !loggedIn
     ? 'Login required'
     : (isOwn ? 'Cannot report your own comment' : 'Report this comment');
 
@@ -177,17 +170,17 @@ function renderCommentNode(c) {
 }
 
 function renderCommentChildHTML(child) {
-  const id         = escapeAttr(String(child._id));
-  const author     = escapeHTML(child.author_display || 'Unknown');
-  const when       = timeAgo(child.createdAt);
-  const up         = Number(child.upvoteCount ?? child.score ?? 0);
-  const body       = !!child.isDeleted ? '<em class="meta">[deleted]</em>' : escapeHTML(child.body || '');
+  const id = escapeAttr(String(child._id));
+  const author = escapeHTML(child.author_display || 'Unknown');
+  const when = timeAgo(child.createdAt);
+  const up = Number(child.upvoteCount ?? child.score ?? 0);
+  const body = !!child.isDeleted ? '<em class="meta">[deleted]</em>' : escapeHTML(child.body || '');
 
-  const loggedIn   = !!me?.id;
-  const isOwn      = loggedIn && (String(child.authorId) === String(me.id));
-  const canReport  = loggedIn && !isOwn;
+  const loggedIn = !!me?.id;
+  const isOwn = loggedIn && (String(child.authorId) === String(me.id));
+  const canReport = loggedIn && !isOwn;
 
-  const tooltip    = !loggedIn
+  const tooltip = !loggedIn
     ? 'Login required'
     : (isOwn ? 'Cannot report your own comment' : 'Report this comment');
 
@@ -199,15 +192,15 @@ function renderCommentChildHTML(child) {
     </div>`;
   }
 
-  return `  
+  return `
     <article class="comment" id="c-${id}" data-id="${id}">
       <header class="meta">${author} • ${when}</header>
       <div class="c-body">${body}</div>
       ${editedHtml}
       <div class="row wrap" style="gap:.5rem; margin-top:.35rem">
-        <button class="btn tiny c-upvote"${child.isDeleted ? ' disabled':''}>▲ ${up}</button>
+        <button class="btn tiny c‑upvote"${child.isDeleted ? ' disabled':''}>▲ ${up}</button>
         <button class="btn tiny replyBtn"${child.isDeleted ? ' disabled':''}>Reply</button>
-        <button class="btn tiny danger c-report"${canReport ? '' : ' disabled'} title="${escapeAttr(tooltip)}" data-comment-id="${escapeAttr(child._id)}">
+        <button class="btn tiny danger c‑report"${canReport ? '' : ' disabled'} title="${escapeAttr(tooltip)}" data-comment-id="${escapeAttr(child._id)}">
           Report
         </button>
       </div>
@@ -217,21 +210,20 @@ function renderCommentChildHTML(child) {
 
 /* --- Reply / Composer Logic --- */
 function onReplyClick(ev) {
-  const btn       = ev.currentTarget;
-  const commentId = btn.closest('.comment')?.dataset.id;
+  const commentId = ev.currentTarget.closest('.comment')?.dataset.id;
   if (commentId) {
-    q('#parentId').value         = commentId;
+    q('#parentId').value = commentId;
     q('#replyingTo').textContent = 'Replying…';
-    q('#replyingTo').style.display = '';
-    q('#cancelReply').style.display  = '';
+    safeShow('#replyingTo', true);
+    safeShow('#cancelReply', true);
     q('#replyBody')?.focus();
   }
 }
 function clearReplyTarget() {
-  q('#parentId').value         = '';
+  q('#parentId').value = '';
   q('#replyingTo').textContent = '';
-  q('#replyingTo').style.display = 'none';
-  q('#cancelReply').style.display  = 'none';
+  safeShow('#replyingTo', false);
+  safeShow('#cancelReply', false);
 }
 function bindComposer() {
   const form = q('#replyForm');
@@ -239,7 +231,7 @@ function bindComposer() {
 
   $('#cancelReply')?.addEventListener('click', clearReplyTarget);
 
-  form.addEventListener('submit', async (ev) => {
+  form.addEventListener('submit', async ev => {
     ev.preventDefault();
 
     if (THREAD.flags?.locked || THREAD.isLocked || THREAD.locked) {
@@ -247,8 +239,8 @@ function bindComposer() {
       return;
     }
 
-    const body        = (q('#replyBody')?.value || '').trim();
-    const parentId    = (q('#parentId')?.value || '').trim();
+    const body = (q('#replyBody')?.value || '').trim();
+    const parentId = (q('#parentId')?.value || '').trim();
     const isAnonymous = !!q('#isAnonymous')?.checked;
 
     if (!me?.id) {
@@ -267,7 +259,7 @@ function bindComposer() {
       console.log('[thread.js] Posting comment payload:', payload);
       await api(`/api/comments/${encodeURIComponent(THREAD_ID)}`, {
         method: 'POST',
-        body:   payload
+        body: payload
       });
       q('#replyBody').value = '';
       clearReplyTarget();
@@ -285,15 +277,13 @@ function bindComposer() {
   });
 }
 function onUpvoteComment(ev) {
-  const btn       = ev.currentTarget;
-  const commentId = btn.closest('.comment')?.dataset.id;
+  const commentId = ev.currentTarget.closest('.comment')?.dataset.id;
   if (!commentId) return;
 
   api(`/api/comments/${encodeURIComponent(commentId)}/upvote`, { method: 'POST' })
     .then(res => {
-      if (res?.ok && typeof res.upvoteCount === 'number') {
-        btn.innerHTML = `▲ ${res.upvoteCount}`;
-      }
+      if (res?.ok && typeof res.upvoteCount === 'number')
+        ev.currentTarget.innerHTML = `▲ ${res.upvoteCount}`;
     })
     .catch(err => {
       console.error('Upvote comment failed', err);
@@ -311,66 +301,43 @@ function renderLoading() {
 }
 function renderThread(t) {
   safeSetHTML('#threadTitle', escapeHTML(t.title || '(untitled)'));
-
   const badges = [];
   if (t.flags?.pinned || t.isPinned || t.pinned) badges.push(pinBadge());
   if (t.flags?.locked || t.isLocked || t.locked) badges.push(lockBadge());
   safeSetHTML('#threadBadges', badges.join(''));
-
-  const author  = escapeHTML(t.author_display || 'Unknown');
-  const when    = timeAgo(t.createdAt);
-  const upvotes = Number(t.upvoteCount ?? t.thumbsUp ?? t.upvotes ?? t.score ?? 0);
-  safeSetHTML('#threadMeta', `${author} • ${when} • ▲ ${upvotes}`);
-
-  safeSetHTML('#threadBody', safeParagraphs(t.body ?? t.content ?? ''));
-
+  safeSetHTML('#threadMeta', `${escapeHTML(t.author_display || 'Unknown')} • ${timeAgo(t.createdAt)} • ▲ ${Number(t.upvoteCount ?? 0)}`);
+  safeSetHTML('#threadBody', safeParagraphs(t.body ?? ''));
   buildToolbar();
 }
 function buildToolbar() {
-  const host     = q('#threadToolbar');
+  const host = q('#threadToolbar');
   if (!host) return;
-
-  const loggedIn  = !!me?.id;
-  const isOwn     = loggedIn && (me.id === THREAD.author || me.id === THREAD.authorId);
+  const loggedIn = !!me?.id;
+  const isOwn = loggedIn && (me.id === THREAD.author || me.id === THREAD.authorId);
   const canReport = loggedIn && !isOwn;
-
-  const tooltip = !loggedIn
-    ? 'Login required'
-    : (isOwn ? 'Cannot report your own thread' : 'Report this thread');
-
   host.innerHTML = `
-    <button id="threadUpvote" class="btn tiny"${!loggedIn ? ' disabled':''} title="${escapeAttr(loggedIn ? 'Upvote':'Login required')}">
-      ▲ Upvote <span id="threadUpCount" class="mono">${Number(THREAD.upvoteCount || 0)}</span>
-    </button>
-    <button id="reportThreadBtn" class="btn tiny danger"${canReport ? '' : ' disabled'} title="${escapeAttr(tooltip)}" data-thread‑id="${escapeAttr(THREAD._id)}">
-      Report Thread
-    </button>
+    <button id="threadUpvote" class="btn tiny"${!loggedIn ? ' disabled':''}>▲ Upvote <span id="threadUpCount" class="mono">${Number(THREAD.upvoteCount || 0)}</span></button>
+    <button id="reportThreadBtn" class="btn tiny danger"${canReport ? '' : ' disabled'} data-thread-id="${escapeAttr(THREAD._id)}">Report Thread</button>
   `;
-
   $('#threadUpvote')?.addEventListener('click', onUpvoteThread);
-  $('#reportThreadBtn')?.addEventListener('click', () => {
-    if (canReport) {
-      openReportModal('thread', THREAD_ID);
-    }
-  });
+  $('#reportThreadBtn')?.addEventListener('click', () => canReport && openReportModal('thread', THREAD_ID));
 }
 async function onUpvoteThread() {
   try {
-    const res = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}/upvote`, { method: 'POST'});
+    const res = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}/upvote`, { method: 'POST' });
     safeSetText('#threadUpCount', Number(res?.upvoteCount || 0));
   } catch (e) {
     console.error('[thread.js] Upvote thread error', e);
-    alert(e?.error || e?.message || 'Failed to upvote.');
+    alert('Failed to upvote.');
   }
 }
 
 /* --- Scaffold Markup --- */
 function ensureScaffold() {
   const main = document.querySelector('main') || document.body;
-
   if (!q('#threadHeader')) {
     const header = document.createElement('section');
-    header.id    = 'threadHeader';
+    header.id = 'threadHeader';
     header.className = 'card';
     header.innerHTML = `
       <header class="toolbar between">
@@ -379,12 +346,11 @@ function ensureScaffold() {
       </header>
       <div id="threadMeta" class="meta" style="margin-top:.25rem"></div>
       <div id="threadBody" style="margin-top:.75rem"></div>
-      <div id="lockBanner" style="display:none; margin-top:.75rem"></div>
-      <div id="threadToolbar" class="row" style="gap:.5rem; margin-top:.75rem"></div>
+      <div id="lockBanner" style="display:none;margin-top:.75rem"></div>
+      <div id="threadToolbar" class="row" style="gap:.5rem;margin-top:.75rem"></div>
     `;
     main.prepend(header);
   }
-
   if (!q('#commentsSection')) {
     const sec = document.createElement('section');
     sec.id = 'commentsSection';
@@ -392,28 +358,23 @@ function ensureScaffold() {
     sec.innerHTML = `
       <h2>Comments</h2>
       <div id="comments"></div>
-      <button id="loadMoreCommentsBtn" class="btn ghost mt-1" style="display:none">Load More Comments</button>
+      <button id="loadMoreCommentsBtn" class="btn ghost mt-1" style="display:none">Load More</button>
       <div class="composer">
         <form id="replyForm">
-          <div id="replyingTo" class="meta" style="display:none; margin-bottom:.35rem"></div>
+          <div id="replyingTo" class="meta" style="display:none"></div>
           <textarea name="body" id="replyBody" placeholder="Write a comment…"></textarea>
           <input type="hidden" name="parentId" id="parentId" />
-          <div class="row" style="margin-top:.5rem; justify-content:space-between">
-            <label class="inline">
-              <input type="checkbox" id="isAnonymous" name="isAnonymous" />
-              <span>Post as Anonymous</span>
-            </label>
+          <div class="row between">
+            <label><input type="checkbox" id="isAnonymous" /> <span>Post as Anonymous</span></label>
             <div class="row" style="gap:.5rem">
-              <button type="button" id="cancelReply" class="btn tiny" style="display:none">Cancel reply</button>
-              <button type="submit" class="btn tiny primary">Post comment</button>
+              <button type="button" id="cancelReply" class="btn tiny" style="display:none">Cancel</button>
+              <button type="submit" class="btn tiny primary">Post</button>
             </div>
           </div>
         </form>
-        <div id="loginHint" class="meta" style="display:none; margin-top:.5rem">Please log in to comment.</div>
       </div>
     `;
     main.appendChild(sec);
-
     q('#loadMoreCommentsBtn')?.addEventListener('click', () => loadComments(false));
   }
 }
@@ -437,8 +398,16 @@ async function init() {
   }
 
   if (!me?.id) {
-    console.error('[thread.js:init] Not logged in, redirecting');
-    alert('Session not valid — redirecting to login.');
+    console.error('[thread.js:init] Not logged in — redirecting soon');
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position:fixed;top:0;left:0;width:100%;background:#ffcccc;
+      color:#000;padding:10px;z-index:9999;text-align:center;font-weight:bold;
+    `;
+    overlay.textContent = '⚠️ Not logged in — redirecting to login in 3 seconds…';
+    document.body.appendChild(overlay);
+
+    await new Promise(resolve => setTimeout(resolve, 3000));
     window.location.href = '/login.html';
     return;
   }
