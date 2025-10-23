@@ -28,12 +28,12 @@ export async function api(url, opts = {}) {
   const finalHeaders = { ...JSON_HEADERS, ...headers };
   const upper = String(method).toUpperCase();
 
-  if (!['GET', 'HEAD', 'OPTIONS'].includes(upper)) {
-    const csrf = getCsrfToken();
+  const csrf = getCsrfToken();
     if (csrf) {
       finalHeaders['X-CSRF-Token'] = csrf;
     }
-  }
+
+  
 
   const fullUrl = makeUrl(url, params);
 
