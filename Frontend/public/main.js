@@ -14,6 +14,25 @@ function makeUrl(url, params = {}) {
   return url + (url.includes('?') ? '&' : '?') + query;
 }
 
+// … within api(url, opts = {}) { … }
+const fullUrl = makeUrl(url, params);
+console.log(`[api] ${upper} ${fullUrl} (skipHtmlRedirect=${skipHtmlRedirect})`);
+
+// … after doing fetch and reading text …
+const ct     = res.headers.get('content-type') || '';
+const isJson = ct.includes('application/json');
+const isHtml = ct.includes('text/html');
+
+console.log(`[api] Response status=${res.status}, content-type=${ct.substring(0,50)} ...`);
+if (!skipHtmlRedirect && isHtml &&
+    (text.includes('<title>Sign in') ||
+     (text.includes('input') && text.includes('password') && text.includes('email'))) ) {
+  console.warn(`[api] Detected login HTML at ${fullUrl} → redirecting to login`);
+  window.location.href = '/login.html';
+  return {};
+}
+
+
 export async function api(url, opts = {}) {
   const {
     method = 'GET',

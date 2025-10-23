@@ -66,7 +66,7 @@ async function loadComments(reset = false) {
 
   try {
     console.log('[thread.js] loadComments request for thread', THREAD_ID);
-    const resp = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}/comments?${params.toString()}`, { nocache: true });
+    const resp = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}/comments?${params.toString()}`, { nocache: true, skipHtmlRedirect: true });
     console.log('[thread.js] loadComments response:', resp);
     const newComments = Array.isArray(resp?.comments) ? resp.comments : [];
     const hasMore     = !!resp?.hasMore;
@@ -417,7 +417,7 @@ async function init() {
 
   try {
     console.log('[thread.js:init] Fetching thread data…');
-    const resp = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}`, { nocache: true });
+    const resp = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}`, { nocache: true, skipHtmlRedirect: true });
     console.log('[thread.js:init] thread API response:', resp);
 
     THREAD = resp.thread ?? null;
