@@ -3,14 +3,14 @@
 import { api, escapeHTML, timeAgo, q, $, me, refreshMe } from './main.js';
 import { initReportUI, openReportModal } from './report.js';
 
-let THREAD_ID = null;
-let THREAD = null;
+let THREAD_ID  = null;
+let THREAD     = null;
 let commentState = {
-  comments: [],
+  comments:   [],
   nextCursor: null,
-  hasMore: false,
-  loading: false,
-  limit: 20
+  hasMore:    false,
+  loading:    false,
+  limit:      20
 };
 
 /* --- Helpers --- */
@@ -67,7 +67,9 @@ async function loadComments(reset = false) {
   params.set('t', String(Date.now()));
 
   try {
+    console.log('[thread.js] loadComments request for thread', THREAD_ID);
     const resp = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}/comments?${params.toString()}`, { nocache: true });
+    console.log('[thread.js] loadComments response:', resp);
     const newComments = Array.isArray(resp?.comments) ? resp.comments : [];
     const hasMore     = !!resp?.hasMore;
     const nextCursor  = resp?.nextCursor || null;
@@ -80,6 +82,7 @@ async function loadComments(reset = false) {
     renderLoadMoreCommentsButton();
     initReportUI();
   } catch (e) {
+    console.error('[thread.js] loadComments error', e);
     safeSetHTML('#comments', `<div class="err">${escapeHTML(e?.error || e?.message || 'Failed to load comments.')}</div>`);
   } finally {
     commentState.loading = false;
@@ -196,7 +199,7 @@ function renderCommentChildHTML(child) {
     </div>`;
   }
 
-  return `
+  return `  
     <article class="comment" id="c-${id}" data-id="${id}">
       <header class="meta">${author} • ${when}</header>
       <div class="c-body">${body}</div>
@@ -236,7 +239,7 @@ function bindComposer() {
 
   $('#cancelReply')?.addEventListener('click', clearReplyTarget);
 
-  form.addEventListener('submit', async ev => {
+  form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
 
     if (THREAD.flags?.locked || THREAD.isLocked || THREAD.locked) {
@@ -261,6 +264,7 @@ function bindComposer() {
     if (parentId) payload.parentId = parentId;
 
     try {
+      console.log('[thread.js] Posting comment payload:', payload);
       await api(`/api/comments/${encodeURIComponent(THREAD_ID)}`, {
         method: 'POST',
         body:   payload
@@ -270,6 +274,7 @@ function bindComposer() {
       await loadComments(true);
       initReportUI();
     } catch (e) {
+      console.error('[thread.js] Post comment error', e);
       const msg = e?.error || e?.message || 'Failed to post comment.';
       if (/locked|forbidden|423/i.test(msg)) {
         alert('Thread is locked. New comments are disabled.');
@@ -337,7 +342,7 @@ function buildToolbar() {
     <button id="threadUpvote" class="btn tiny"${!loggedIn ? ' disabled':''} title="${escapeAttr(loggedIn ? 'Upvote':'Login required')}">
       ▲ Upvote <span id="threadUpCount" class="mono">${Number(THREAD.upvoteCount || 0)}</span>
     </button>
-    <button id="reportThreadBtn" class="btn tiny danger"${canReport ? '' : ' disabled'} title="${escapeAttr(tooltip)}" data-thread-id="${escapeAttr(THREAD._id)}">
+    <button id="reportThreadBtn" class="btn tiny danger"${canReport ? '' : ' disabled'} title="${escapeAttr(tooltip)}" data-thread‑id="${escapeAttr(THREAD._id)}">
       Report Thread
     </button>
   `;
@@ -351,9 +356,10 @@ function buildToolbar() {
 }
 async function onUpvoteThread() {
   try {
-    const res = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}/upvote`, { method: 'POST' });
+    const res = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}/upvote`, { method: 'POST'});
     safeSetText('#threadUpCount', Number(res?.upvoteCount || 0));
   } catch (e) {
+    console.error('[thread.js] Upvote thread error', e);
     alert(e?.error || e?.message || 'Failed to upvote.');
   }
 }
@@ -420,14 +426,19 @@ async function init() {
   THREAD_ID = params.get('id') || '';
   if (!THREAD_ID) return showFatal('Missing thread id.');
 
+  console.log('[thread.js:init] THREAD_ID =', THREAD_ID);
+  console.log('[thread.js:init] Cookies =', document.cookie);
+
   try {
     await refreshMe();
+    console.log('[thread.js:init] after refreshMe, me =', me);
   } catch (err) {
-    console.warn('refreshMe failed', err);
+    console.warn('[thread.js:init] refreshMe failed:', err);
   }
 
-  if (!me) {
-    console.warn('Not logged in — redirecting to login.html');
+  if (!me?.id) {
+    console.error('[thread.js:init] Not logged in, redirecting');
+    alert('Session not valid — redirecting to login.');
     window.location.href = '/login.html';
     return;
   }
@@ -436,7 +447,10 @@ async function init() {
   renderLoading();
 
   try {
+    console.log('[thread.js:init] Fetching thread data…');
     const resp = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}`, { nocache: true });
+    console.log('[thread.js:init] thread API response:', resp);
+
     THREAD = resp.thread ?? null;
     if (!THREAD) return showFatal('Thread not found.');
 
@@ -454,8 +468,9 @@ async function init() {
     await loadComments(true);
     bindComposer();
     initReportUI();
+    console.log('[thread.js:init] Complete: thread & comments loaded.');
   } catch (e) {
-    console.error('error loading thread:', e);
+    console.error('[thread.js:init] Error loading thread:', e);
     showFatal(e?.error || e?.message || 'Failed to load thread.');
   }
 }
