@@ -66,11 +66,32 @@ async function loadComments(reset = false) {
 
   try {
     console.log('[thread.js] loadComments request for thread', THREAD_ID);
-    const resp = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}/comments?${params.toString()}`, { nocache: true, skipHtmlRedirect: true });
-    console.log('[thread.js] loadComments response:', resp);
+   const resp = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}/comments?${params.toString()}`, {
+      nocache: true,
+      skipHtmlRedirect: true
+    });
+
+    console.log('[thread.js] loadComments raw response:', resp);
+
+    // Defensive check for expected response shape
+    if (!resp || typeof resp !== 'object') {
+      console.warn('[thread.js] Invalid response shape:', resp);
+      safeSetHTML('#comments', `<div class="err">Unexpected server response.</div>`);
+      return;
+    }
+
+    // Debugging: show comments array and pagination info
+    console.log('[thread.js] resp.comments:', resp.comments);
+    console.log('[thread.js] hasMore:', resp.hasMore, 'nextCursor:', resp.nextCursor);
+
+    // Handle comments array safely
     const newComments = Array.isArray(resp?.comments) ? resp.comments : [];
+    if (!newComments.length) {
+      console.warn('[thread.js] No comments received, but expected some.');
+    }
     const hasMore     = !!resp?.hasMore;
     const nextCursor  = resp?.nextCursor || null;
+
 
     commentState.comments   = reset ? newComments : commentState.comments.concat(newComments);
     commentState.hasMore    = hasMore;
