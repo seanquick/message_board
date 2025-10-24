@@ -66,10 +66,8 @@ async function loadComments(reset = false) {
 
   try {
     console.log('[thread.js] loadComments request for thread', THREAD_ID);
-   const resp = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}/comments?${params.toString()}`, {
-      nocache: true,
-      skipHtmlRedirect: true
-    });
+   const resp = await api(`/api/comments/${encodeURIComponent(THREAD_ID)}`, { params, nocache: true });
+
 
     console.log('[thread.js] loadComments raw response:', resp);
 
