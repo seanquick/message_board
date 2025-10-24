@@ -14,7 +14,7 @@
  *  - **PUT** /api/comments/:id                 → Edit a comment body (author or admin)
  */
 
-const router = require('express').Router();
+const router   = require('express').Router();
 const mongoose = require('mongoose');
 
 const Comment = require('../Models/Comment');
@@ -22,8 +22,8 @@ const Thread  = require('../Models/Thread');
 const User    = require('../Models/User');
 const Report  = require('../Models/Report');
 
-const { requireAuth, requireAdmin } = require('../Middleware/auth');
-const ensureThreadUnlocked = require('../Middleware/ensureThreadUnlocked');
+const { requireAuth, requireAdmin }           = require('../Middleware/auth');
+const ensureThreadUnlocked                   = require('../Middleware/ensureThreadUnlocked');
 
 // Optional anti‑abuse guards (if missing, everything still works)
 let rateLimitByUserAndIP, contentRules;
@@ -40,8 +40,11 @@ function normStr(v) { return (v ?? '').toString().trim(); }
 /** Validate ObjectId‑looking strings safely */
 function toId(maybeId) {
   if (!maybeId) return null;
-  try { return new mongoose.Types.ObjectId(String(maybeId)); }
-  catch { return null; }
+  try {
+    return new mongoose.Types.ObjectId(String(maybeId));
+  } catch {
+    return null;
+  }
 }
 
 /** Guard: parent comment must belong to the same thread */
@@ -52,7 +55,9 @@ async function assertParentInThread(parentId, threadId) {
 }
 
 /** Standard error helper */
-function bad(res, code, msg) { return res.status(code).json({ error: msg }); }
+function bad(res, code, msg) {
+  return res.status(code).json({ error: msg });
+}
 
 /** Filter comments not deleted (for non‑admin) */
 function notDeletedFilter(field = 'isDeleted') {
@@ -68,7 +73,7 @@ router.get('/:threadId', async (req, res) => {
     if (!mongoose.isValidObjectId(rawThreadId)) {
       return bad(res, 400, 'Invalid thread id.');
     }
-    const threadId = mongoose.Types.ObjectId(rawThreadId);
+    const threadId = new mongoose.Types.ObjectId(rawThreadId);
 
     const thread = await Thread.findById(threadId).select('_id isDeleted isLocked').lean();
     if (!thread || thread.isDeleted) {
@@ -86,7 +91,7 @@ router.get('/:threadId', async (req, res) => {
 
     // Cursor‑based pagination: if after is provided, load comments _before_ that comment
     if (req.query.after && mongoose.isValidObjectId(req.query.after)) {
-      filter._id = { $lt: mongoose.Types.ObjectId(req.query.after) };
+      filter._id = { $lt: new mongoose.Types.ObjectId(req.query.after) };
     }
 
     const docs = await Comment.find(filter)
@@ -94,12 +99,12 @@ router.get('/:threadId', async (req, res) => {
       .limit(limit + 1)
       .lean();
 
-    const hasMore = docs.length > limit;
+    const hasMore   = docs.length > limit;
     if (hasMore) docs.pop();
 
     const nextCursor = hasMore ? String(docs[docs.length - 1]._id) : null;
 
-    res.json({ comments: docs, hasMore, nextCursor });
+    return res.json({ comments: docs, hasMore, nextCursor });
   } catch (e) {
     console.error('[comments] list error:', e);
     return bad(res, 500, 'Failed to list comments');
@@ -147,14 +152,14 @@ router.post('/:threadId', creationMiddleware, async (req, res) => {
     }
 
     const c = await Comment.create({
-      thread:       threadId,
-      parentId:     parentId || null,
-      body:         finalBody,
-      content:      finalBody,
-      isAnonymous:  !!isAnonymous,
-      author:       req.user.uid,
-      userId:       req.user.uid,
-      author_name:  me.name
+      thread:      threadId,
+      parentId:    parentId || null,
+      body:        finalBody,
+      content:     finalBody,
+      isAnonymous: !!isAnonymous,
+      author:      req.user.uid,
+      userId:      req.user.uid,
+      author_name: me.name
     });
 
     return res.status(201).json({ id: c._id });
@@ -251,7 +256,7 @@ router.post('/:id/report', requireAuth, validate({ reason: s.optional(s.string({
     await Report.create({
       targetType: 'comment',
       targetId:   c._id,
-      reason,
+      reason:     reason,
       reporterId: req.user.uid
     });
 
