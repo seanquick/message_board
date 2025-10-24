@@ -80,4 +80,7 @@ ThreadSchema.index({ createdAt: -1 });
 ThreadSchema.index({ isDeleted: 1, createdAt: -1 });
 ThreadSchema.index({ author: 1, createdAt: -1 });
 
+// ✅ Full-text search index
+ThreadSchema.index({ title: 'text', body: 'text' });
+
 module.exports = mongoose.models.Thread || mongoose.model('Thread', ThreadSchema);

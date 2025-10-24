@@ -109,21 +109,44 @@ router.get('/metrics', requireAdmin, async (_req, res) => {
 router.get('/search', requireAdmin, async (req, res) => {
   try {
     const type = (req.query.type || '').toLowerCase();
+    const q = (req.query.q || '').trim();
     const includeDeleted = toBool(req.query.includeDeleted);
     let results = [];
 
+    if (!['threads', 'comments'].includes(type)) {
+      return res.status(400).json({ error: 'Invalid search type.' });
+    }
+
+    if (!q) {
+      return res.status(400).json({ error: 'Search query required.' });
+    }
+
     if (type === 'threads') {
-      const filter = includeDeleted ? {} : notDeleted('isDeleted');
-      results = await Thread.find(filter)
-        .sort({ createdAt: -1 })
+      const filter = {
+        $text: { $search: q },
+        ...(includeDeleted ? {} : notDeleted('isDeleted')),
+      };
+
+      results = await Thread.find(filter, {
+        score: { $meta: 'textScore' }
+      })
+        .sort({ score: { $meta: 'textScore' } })
         .limit(100)
         .select('_id title author createdAt isDeleted isPinned pinned isLocked locked upvoteCount commentCount status')
         .populate('author', 'name email')
         .lean();
-    } else if (type === 'comments') {
-      const filter = includeDeleted ? {} : notDeleted('isDeleted');
-      results = await Comment.find(filter)
-        .sort({ createdAt: -1 })
+    }
+
+    if (type === 'comments') {
+      const filter = {
+        $text: { $search: q },
+        ...(includeDeleted ? {} : notDeleted('isDeleted')),
+      };
+
+      results = await Comment.find(filter, {
+        score: { $meta: 'textScore' }
+      })
+        .sort({ score: { $meta: 'textScore' } })
         .limit(100)
         .select('_id thread author createdAt body isDeleted upvoteCount')
         .populate('author', 'name email')
@@ -141,6 +164,8 @@ router.get('/search', requireAdmin, async (req, res) => {
     res.status(500).json({ error: 'Search failed', detail: String(e) });
   }
 });
+
+
 
 // ===== EXPORT REPORTS (CSV) =====
 router.get('/reports/export.csv', requireAdmin, async (_req, res) => {
