@@ -108,54 +108,84 @@ router.get('/metrics', requireAdmin, async (_req, res) => {
 // ===== SEARCH =====
 router.get('/search', requireAdmin, async (req, res) => {
   try {
-    const type = (req.query.type || '').toLowerCase();
-    const q = (req.query.q || '').trim();
+    const type = (req.query.type || '').toLowerCase();      // "threads", "comments", or "all"
+    const q = (req.query.q || '').trim();                   // search term
     const includeDeleted = toBool(req.query.includeDeleted);
     let results = [];
 
-    if (!['threads', 'comments'].includes(type)) {
-      return res.status(400).json({ error: 'Invalid search type.' });
-    }
-
+    // --- Validation ---
     if (!q) {
-      return res.status(400).json({ error: 'Search query required.' });
+      return res.status(400).json({ error: 'Missing search term (q).' });
     }
 
-    if (type === 'threads') {
-      const filter = {
-        $text: { $search: q },
-        ...(includeDeleted ? {} : notDeleted('isDeleted')),
-      };
+    if (!['threads', 'comments', 'all'].includes(type)) {
+      return res.status(400).json({ error: 'Invalid search type. Must be "threads", "comments", or "all".' });
+    }
 
-      results = await Thread.find(filter, {
-        score: { $meta: 'textScore' }
-      })
+    // --- Build filters ---
+    const threadFilter = {
+      $text: { $search: q },
+      ...(includeDeleted ? {} : notDeleted('isDeleted')),
+    };
+
+    const commentFilter = {
+      $text: { $search: q },
+      ...(includeDeleted ? {} : notDeleted('isDeleted')),
+    };
+
+    // --- Search Threads ---
+    async function searchThreads() {
+      const docs = await Thread.find(threadFilter, { score: { $meta: 'textScore' } })
         .sort({ score: { $meta: 'textScore' } })
         .limit(100)
         .select('_id title author createdAt isDeleted isPinned pinned isLocked locked upvoteCount commentCount status')
         .populate('author', 'name email')
         .lean();
+      return docs.map(t => ({
+        type: 'thread',
+        _id: t._id,
+        title: t.title,
+        author: t.author,
+        createdAt: t.createdAt,
+        score: t.score,
+        snippet: (t.body || t.content || '').slice(0, 120),
+        isDeleted: t.isDeleted,
+      }));
     }
 
-    if (type === 'comments') {
-      const filter = {
-        $text: { $search: q },
-        ...(includeDeleted ? {} : notDeleted('isDeleted')),
-      };
-
-      results = await Comment.find(filter, {
-        score: { $meta: 'textScore' }
-      })
+    // --- Search Comments ---
+    async function searchComments() {
+      const docs = await Comment.find(commentFilter, { score: { $meta: 'textScore' } })
         .sort({ score: { $meta: 'textScore' } })
         .limit(100)
         .select('_id thread author createdAt body isDeleted upvoteCount')
         .populate('author', 'name email')
         .lean();
-
-      results = results.map(c => ({
-        ...c,
-        snippet: (c.body || '').slice(0, 120)
+      return docs.map(c => ({
+        type: 'comment',
+        _id: c._id,
+        thread: c.thread,
+        author: c.author,
+        createdAt: c.createdAt,
+        score: c.score,
+        snippet: (c.body || '').slice(0, 120),
+        isDeleted: c.isDeleted,
       }));
+    }
+
+    // --- Execute Search ---
+    if (type === 'threads') {
+      results = await searchThreads();
+    } else if (type === 'comments') {
+      results = await searchComments();
+    } else if (type === 'all') {
+      const [threads, comments] = await Promise.all([
+        searchThreads(),
+        searchComments()
+      ]);
+      results = [...threads, ...comments]
+        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .slice(0, 150);
     }
 
     res.json({ results });

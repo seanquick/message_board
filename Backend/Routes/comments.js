@@ -137,12 +137,12 @@ router.post('/:threadId', creationMiddleware, async (req, res) => {
 
     const threadId = toId(req.params.threadId);
     if (!threadId) return bad(res, 400, 'Invalid thread id.');
-    const thread   = await Thread.findById(threadId).select('_id isDeleted').lean();
+    const thread = await Thread.findById(threadId).select('_id isDeleted').lean();
     if (!thread || thread.isDeleted) return bad(res, 404, 'Thread not found');
 
     const { body, content, parentId: rawParentId, isAnonymous } = req.body || {};
     const finalBody = normStr(body ?? content);
-    const parentId  = toId(rawParentId);
+    const parentId = toId(rawParentId);
 
     if (!finalBody) return bad(res, 400, 'Comment cannot be empty.');
     if (finalBody.length > 10000) return bad(res, 400, 'Comment too long.');
@@ -151,16 +151,27 @@ router.post('/:threadId', creationMiddleware, async (req, res) => {
       return bad(res, 400, 'Parent comment does not belong to this thread.');
     }
 
-    const c = await Comment.create({
-      thread:      threadId,
-      parentId:    parentId || null,
-      body:        finalBody,
-      content:     finalBody,
-      isAnonymous: !!isAnonymous,
-      author:      req.user.uid,
-      userId:      req.user.uid,
+    // ✅ Handle anonymous posts properly
+    const isAnon = !!isAnonymous;
+    const newCommentData = {
+      thread: threadId,
+      parentId: parentId || null,
+      body: finalBody,
+      content: finalBody,
+      isAnonymous: isAnon,
+      author: req.user.uid,
+      userId: req.user.uid,
       author_name: me.name
-    });
+    };
+
+    if (isAnon) {
+      // Hide identity and label as Anonymous
+      newCommentData.author = null;
+      newCommentData.userId = null;
+      newCommentData.author_name = 'Anonymous';
+    }
+
+    const c = await Comment.create(newCommentData);
 
     return res.status(201).json({ id: c._id });
   } catch (e) {
@@ -168,6 +179,7 @@ router.post('/:threadId', creationMiddleware, async (req, res) => {
     return bad(res, 500, 'Failed to create comment');
   }
 });
+
 
 // ===================================================================
 // PUT /api/comments/:id — edit comment body (author or admin)
