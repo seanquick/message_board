@@ -147,7 +147,11 @@ function renderCommentNode(c) {
   el.dataset.id = String(c._id);
   const isDeleted = !!c.isDeleted;
 
-  const author = escapeHTML(c.author_display || 'Unknown');
+  // ✅ Corrected author display logic
+  const author = c.isAnonymous
+    ? 'Anonymous'
+    : escapeHTML(c.author_display || c.author_name || 'Unknown');
+
   const when = timeAgo(c.createdAt);
   const up = Number(c.upvoteCount ?? c.score ?? 0);
   const body = isDeleted ? '<em class="meta">[deleted]</em>' : escapeHTML(c.body || '');
@@ -187,6 +191,7 @@ function renderCommentNode(c) {
   `;
   return el;
 }
+
 
 function renderCommentChildHTML(child) {
   const id = escapeAttr(String(child._id));
@@ -320,14 +325,23 @@ function renderLoading() {
 }
 function renderThread(t) {
   safeSetHTML('#threadTitle', escapeHTML(t.title || '(untitled)'));
+
   const badges = [];
   if (t.flags?.pinned || t.isPinned || t.pinned) badges.push(pinBadge());
   if (t.flags?.locked || t.isLocked || t.locked) badges.push(lockBadge());
   safeSetHTML('#threadBadges', badges.join(''));
-  safeSetHTML('#threadMeta', `${escapeHTML(t.author_display || 'Unknown')} • ${timeAgo(t.createdAt)} • ▲ ${Number(t.upvoteCount ?? 0)}`);
+
+  // ✅ Fix: Show "Anonymous" for anonymous threads
+  const author = t.isAnonymous
+    ? 'Anonymous'
+    : escapeHTML(t.author_display || t.author_name || 'Unknown');
+
+  safeSetHTML('#threadMeta', `${author} • ${timeAgo(t.createdAt)} • ▲ ${Number(t.upvoteCount ?? 0)}`);
   safeSetHTML('#threadBody', safeParagraphs(t.body ?? ''));
+
   buildToolbar();
 }
+
 function buildToolbar() {
   const host = q('#threadToolbar');
   if (!host) return;
