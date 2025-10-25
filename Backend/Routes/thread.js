@@ -267,22 +267,33 @@ router.post(
       const { title, body, content, isAnonymous } = req.body || {};
       const finalTitle = String(title || '').trim();
       const finalBody  = String(body ?? content ?? '').trim();
+      const isAnon     = !!isAnonymous;
 
       if (finalTitle.length < 3) return res.status(400).json({ error: 'Title must be at least 3 characters.' });
       if (finalBody.length  < 10) return res.status(400).json({ error: 'Content must be at least 10 characters.' });
 
-      const t = await Thread.create({
+      // Prepare new thread object
+      const newThreadData = {
         title:       finalTitle,
         body:        finalBody,
         content:     finalBody,
-        isAnonymous: !!isAnonymous,
-        author:      req.user.uid,
-        userId:      req.user.uid,
-        author_name: req.user.name,
+        isAnonymous: isAnon,
         upvoters:    [],
         upvoteCount: 0,
         thumbsUp:    0
-      });
+      };
+
+      if (isAnon) {
+        newThreadData.author = null;
+        newThreadData.userId = null;
+        newThreadData.author_name = 'Anonymous';
+      } else {
+        newThreadData.author = req.user.uid;
+        newThreadData.userId = req.user.uid;
+        newThreadData.author_name = author.name;
+      }
+
+      const t = await Thread.create(newThreadData);
 
       res.status(201).json({ thread: { id: t._id } });
     } catch (e) {
@@ -291,6 +302,7 @@ router.post(
     }
   }
 );
+
 
 /* ============================== UPVOTE ============================== */
 router.post('/:id/upvote', requireAuth, async (req, res) => {
