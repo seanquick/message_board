@@ -265,13 +265,21 @@ router.post(
       if (user.isBanned) return res.status(403).json({ error: 'Account is banned from posting.' });
 
       const { title, body, content, isAnonymous } = req.body || {};
+
+      // 🔍 Add this log line to see what the backend actually receives
+      console.log('[threads] Received req.body.isAnonymous:', isAnonymous);
+
       const finalTitle = String(title || '').trim();
-      const finalBody = String(body ?? content ?? '').trim();
+      const finalBody  = String(body ?? content ?? '').trim();
 
       if (finalTitle.length < 3) return res.status(400).json({ error: 'Title must be at least 3 characters.' });
-      if (finalBody.length < 10) return res.status(400).json({ error: 'Content must be at least 10 characters.' });
+      if (finalBody.length  < 10) return res.status(400).json({ error: 'Content must be at least 10 characters.' });
 
-      const isAnon = !!isAnonymous;
+      // ✅ Coerce to boolean safely (accounts for "true", true, "on", etc.)
+      const isAnon = isAnonymous === true || isAnonymous === 'true' || isAnonymous === 'on';
+
+      // 🔍 Log the interpreted boolean value
+      console.log('[threads] Interpreted isAnon value:', isAnon);
 
       const threadData = {
         title: finalTitle,
@@ -281,13 +289,10 @@ router.post(
         upvoters: [],
         upvoteCount: 0,
         thumbsUp: 0,
-
-        // Always store author internally for admins
         realAuthor: req.user.uid,
       };
 
       if (isAnon) {
-        // Anonymous public view
         threadData.author = null;
         threadData.userId = null;
         threadData.author_name = 'Anonymous';
@@ -298,8 +303,8 @@ router.post(
       }
 
       console.log('[threads] Final threadData:', threadData);
-      const t = await Thread.create(threadData);
 
+      const t = await Thread.create(threadData);
       res.status(201).json({ thread: { id: t._id } });
 
     } catch (e) {
@@ -308,6 +313,7 @@ router.post(
     }
   }
 );
+
 
 
 /* ============================== UPVOTE ============================== */
