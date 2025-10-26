@@ -8,6 +8,7 @@ const ThreadSchema = new Schema({
   content:      { type: String, default: '' },
 
   author:       { type: Schema.Types.ObjectId, ref: 'User', index: true },
+  realAuthor: { type: Schema.Types.ObjectId, ref: 'User' },
   userId:       { type: Schema.Types.ObjectId, ref: 'User' },
   author_name:  { type: String, default: '' },
   isAnonymous:  { type: Boolean, default: false },

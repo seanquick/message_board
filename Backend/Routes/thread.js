@@ -297,7 +297,9 @@ router.post(
         threadData.author_name = user.name;
       }
 
+      console.log('[threads] Final threadData:', threadData);
       const t = await Thread.create(threadData);
+
       res.status(201).json({ thread: { id: t._id } });
 
     } catch (e) {
@@ -306,8 +308,6 @@ router.post(
     }
   }
 );
-
-
 
 
 /* ============================== UPVOTE ============================== */

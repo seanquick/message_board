@@ -398,7 +398,7 @@ function ensureScaffold() {
           <textarea name="body" id="replyBody" placeholder="Write a comment…"></textarea>
           <input type="hidden" name="parentId" id="parentId" />
           <div class="row between">
-            <label><input type="checkbox" id="isAnonymous" /> <span>Post as Anonymous</span></label>
+            <label><input type="checkbox" name="isAnonymous" id="threadIsAnonymous"> Post as Anonymous</label>
             <div class="row" style="gap:.5rem">
               <button type="button" id="cancelReply" class="btn tiny" style="display:none">Cancel</button>
               <button type="submit" class="btn tiny primary">Post</button>
