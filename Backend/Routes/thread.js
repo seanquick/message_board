@@ -254,54 +254,60 @@ router.post(
   requireAuth,
   validate({
     title: s.string({ min: 3, max: 200 }),
-    body:    s.optional(s.string({ min: 0, max: 10000 })),
+    body: s.optional(s.string({ min: 0, max: 10000 })),
     content: s.optional(s.string({ min: 0, max: 10000 })),
     isAnonymous: s.optional(s.boolean()),
   }),
   async (req, res) => {
     try {
-      const author = await User.findById(req.user.uid).select('name isBanned').lean();
-      if (!author) return res.status(401).json({ error: 'Unauthorized' });
-      if (author.isBanned) return res.status(403).json({ error: 'Account is banned from posting.' });
+      const user = await User.findById(req.user.uid).select('name isBanned').lean();
+      if (!user) return res.status(401).json({ error: 'Unauthorized' });
+      if (user.isBanned) return res.status(403).json({ error: 'Account is banned from posting.' });
 
       const { title, body, content, isAnonymous } = req.body || {};
       const finalTitle = String(title || '').trim();
-      const finalBody  = String(body ?? content ?? '').trim();
-      const isAnon     = !!isAnonymous;
+      const finalBody = String(body ?? content ?? '').trim();
 
       if (finalTitle.length < 3) return res.status(400).json({ error: 'Title must be at least 3 characters.' });
-      if (finalBody.length  < 10) return res.status(400).json({ error: 'Content must be at least 10 characters.' });
+      if (finalBody.length < 10) return res.status(400).json({ error: 'Content must be at least 10 characters.' });
 
-      // Prepare new thread object
-      const newThreadData = {
-        title:       finalTitle,
-        body:        finalBody,
-        content:     finalBody,
+      const isAnon = !!isAnonymous;
+
+      const threadData = {
+        title: finalTitle,
+        body: finalBody,
+        content: finalBody,
         isAnonymous: isAnon,
-        upvoters:    [],
+        upvoters: [],
         upvoteCount: 0,
-        thumbsUp:    0
+        thumbsUp: 0,
+
+        // Always store author internally for admins
+        realAuthor: req.user.uid,
       };
 
       if (isAnon) {
-        newThreadData.author = null;
-        newThreadData.userId = null;
-        newThreadData.author_name = 'Anonymous';
+        // Anonymous public view
+        threadData.author = null;
+        threadData.userId = null;
+        threadData.author_name = 'Anonymous';
       } else {
-        newThreadData.author = req.user.uid;
-        newThreadData.userId = req.user.uid;
-        newThreadData.author_name = author.name;
+        threadData.author = req.user.uid;
+        threadData.userId = req.user.uid;
+        threadData.author_name = user.name;
       }
 
-      const t = await Thread.create(newThreadData);
-
+      const t = await Thread.create(threadData);
       res.status(201).json({ thread: { id: t._id } });
+
     } catch (e) {
       console.error('[threads] create error:', e);
       res.status(500).json({ error: 'Failed to create thread' });
     }
   }
 );
+
+
 
 
 /* ============================== UPVOTE ============================== */
