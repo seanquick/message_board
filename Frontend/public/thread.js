@@ -66,30 +66,22 @@ async function loadComments(reset = false) {
 
   try {
     console.log('[thread.js] loadComments request for thread', THREAD_ID);
-   const resp = await api(`/api/comments/${encodeURIComponent(THREAD_ID)}`, { params, nocache: true });
-
+    const resp = await api(`/api/comments/${encodeURIComponent(THREAD_ID)}`, { params, nocache: true });
 
     console.log('[thread.js] loadComments raw response:', resp);
 
-    // Defensive check for expected response shape
     if (!resp || typeof resp !== 'object') {
       console.warn('[thread.js] Invalid response shape:', resp);
       safeSetHTML('#comments', `<div class="err">Unexpected server response.</div>`);
       return;
     }
 
-    // Debugging: show comments array and pagination info
     console.log('[thread.js] resp.comments:', resp.comments);
     console.log('[thread.js] hasMore:', resp.hasMore, 'nextCursor:', resp.nextCursor);
 
-    // Handle comments array safely
-    const newComments = Array.isArray(resp?.comments) ? resp.comments : [];
-    if (!newComments.length) {
-      console.warn('[thread.js] No comments received, but expected some.');
-    }
-    const hasMore     = !!resp?.hasMore;
-    const nextCursor  = resp?.nextCursor || null;
-
+    const newComments = Array.isArray(resp.comments) ? resp.comments : [];
+    const hasMore      = !!resp.hasMore;
+    const nextCursor   = resp.nextCursor || null;
 
     commentState.comments   = reset ? newComments : commentState.comments.concat(newComments);
     commentState.hasMore    = hasMore;
@@ -128,13 +120,17 @@ function renderCommentsTree(nodes = []) {
   }
 
   host.innerHTML = '';
-  for (const c of nodes) host.appendChild(renderCommentNode(c));
+  for (const c of nodes) {
+    host.appendChild(renderCommentNode(c));
+  }
 
   host.querySelectorAll('.replyBtn').forEach(b => b.addEventListener('click', onReplyClick));
   host.querySelectorAll('.c-upvote').forEach(b => b.addEventListener('click', onUpvoteComment));
   host.querySelectorAll('.c-report').forEach(b => {
     const cid = b.dataset.commentId;
-    if (!b.disabled && cid) b.addEventListener('click', () => openReportModal('comment', cid));
+    if (!b.disabled && cid) {
+      b.addEventListener('click', () => openReportModal('comment', cid));
+    }
   });
 
   renderLoadMoreCommentsButton();
@@ -143,21 +139,20 @@ function renderCommentsTree(nodes = []) {
 function renderCommentNode(c) {
   const el = document.createElement('article');
   el.className = 'comment';
-  el.id = `c-${escapeAttr(String(c._id))}`;
+  el.id       = `c-${escapeAttr(String(c._id))}`;
   el.dataset.id = String(c._id);
   const isDeleted = !!c.isDeleted;
 
-  // ✅ Corrected author display logic
   const author = c.isAnonymous
     ? 'Anonymous'
     : escapeHTML(c.author_display || c.author_name || 'Unknown');
 
   const when = timeAgo(c.createdAt);
-  const up = Number(c.upvoteCount ?? c.score ?? 0);
+  const up   = Number(c.upvoteCount ?? c.score ?? 0);
   const body = isDeleted ? '<em class="meta">[deleted]</em>' : escapeHTML(c.body || '');
 
   const loggedIn = !!me?.id;
-  const isOwn = loggedIn && (String(c.authorId) === String(me.id));
+  const isOwn    = loggedIn && (String(c.authorId) === String(me.id));
   const canReport = loggedIn && !isOwn;
 
   const tooltip = !loggedIn
@@ -192,16 +187,15 @@ function renderCommentNode(c) {
   return el;
 }
 
-
 function renderCommentChildHTML(child) {
-  const id = escapeAttr(String(child._id));
+  const id     = escapeAttr(String(child._id));
   const author = escapeHTML(child.author_display || 'Unknown');
-  const when = timeAgo(child.createdAt);
-  const up = Number(child.upvoteCount ?? child.score ?? 0);
-  const body = !!child.isDeleted ? '<em class="meta">[deleted]</em>' : escapeHTML(child.body || '');
+  const when   = timeAgo(child.createdAt);
+  const up     = Number(child.upvoteCount ?? child.score ?? 0);
+  const body   = !!child.isDeleted ? '<em class="meta">[deleted]</em>' : escapeHTML(child.body || '');
 
   const loggedIn = !!me?.id;
-  const isOwn = loggedIn && (String(child.authorId) === String(me.id));
+  const isOwn    = loggedIn && (String(child.authorId) === String(me.id));
   const canReport = loggedIn && !isOwn;
 
   const tooltip = !loggedIn
@@ -236,7 +230,7 @@ function renderCommentChildHTML(child) {
 function onReplyClick(ev) {
   const commentId = ev.currentTarget.closest('.comment')?.dataset.id;
   if (commentId) {
-    q('#parentId').value = commentId;
+    q('#parentId').value       = commentId;
     q('#replyingTo').textContent = 'Replying…';
     safeShow('#replyingTo', true);
     safeShow('#cancelReply', true);
@@ -244,7 +238,7 @@ function onReplyClick(ev) {
   }
 }
 function clearReplyTarget() {
-  q('#parentId').value = '';
+  q('#parentId').value       = '';
   q('#replyingTo').textContent = '';
   safeShow('#replyingTo', false);
   safeShow('#cancelReply', false);
@@ -263,8 +257,8 @@ function bindComposer() {
       return;
     }
 
-    const body = (q('#replyBody')?.value || '').trim();
-    const parentId = (q('#parentId')?.value || '').trim();
+    const body        = (q('#replyBody')?.value || '').trim();
+    const parentId    = (q('#parentId')?.value || '').trim();
     const isAnonymous = !!q('#isAnonymous')?.checked;
 
     if (!me?.id) {
@@ -279,8 +273,9 @@ function bindComposer() {
     const payload = { body, isAnonymous };
     if (parentId) payload.parentId = parentId;
 
+    console.log('[thread.js] Posting comment payload:', payload);
+
     try {
-      console.log('[thread.js] Posting comment payload:', payload);
       await api(`/api/comments/${encodeURIComponent(THREAD_ID)}`, {
         method: 'POST',
         body: payload
@@ -306,8 +301,9 @@ function onUpvoteComment(ev) {
 
   api(`/api/comments/${encodeURIComponent(commentId)}/upvote`, { method: 'POST' })
     .then(res => {
-      if (res?.ok && typeof res.upvoteCount === 'number')
+      if (res?.ok && typeof res.upvoteCount === 'number') {
         ev.currentTarget.innerHTML = `▲ ${res.upvoteCount}`;
+      }
     })
     .catch(err => {
       console.error('Upvote comment failed', err);
@@ -331,7 +327,6 @@ function renderThread(t) {
   if (t.flags?.locked || t.isLocked || t.locked) badges.push(lockBadge());
   safeSetHTML('#threadBadges', badges.join(''));
 
-  // ✅ Fix: Show "Anonymous" for anonymous threads
   const author = t.isAnonymous
     ? 'Anonymous'
     : escapeHTML(t.author_display || t.author_name || 'Unknown');
@@ -343,10 +338,10 @@ function renderThread(t) {
 }
 
 function buildToolbar() {
-  const host = q('#threadToolbar');
+  const host     = q('#threadToolbar');
   if (!host) return;
   const loggedIn = !!me?.id;
-  const isOwn = loggedIn && (me.id === THREAD.author || me.id === THREAD.authorId);
+  const isOwn    = loggedIn && (me.id === THREAD.author || me.id === THREAD.authorId);
   const canReport = loggedIn && !isOwn;
   host.innerHTML = `
     <button id="threadUpvote" class="btn tiny"${!loggedIn ? ' disabled':''}>▲ Upvote <span id="threadUpCount" class="mono">${Number(THREAD.upvoteCount || 0)}</span></button>
@@ -360,7 +355,7 @@ async function onUpvoteThread() {
     const res = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}/upvote`, { method: 'POST' });
     safeSetText('#threadUpCount', Number(res?.upvoteCount || 0));
   } catch (e) {
-    console.error('[thread.js] Upvote thread error', e);
+    console.error('[thread.js]init] Upvote thread error', e);
     alert('Failed to upvote.');
   }
 }
