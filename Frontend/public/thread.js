@@ -250,50 +250,51 @@ function bindComposer() {
   $('#cancelReply')?.addEventListener('click', clearReplyTarget);
 
   form.addEventListener('submit', async ev => {
-    ev.preventDefault();
+  ev.preventDefault();
 
-    if (THREAD.flags?.locked || THREAD.isLocked || THREAD.locked) {
+  if (THREAD.flags?.locked || THREAD.isLocked || THREAD.locked) {
+    alert('Thread is locked. New comments are disabled.');
+    return;
+  }
+
+  const body        = (q('#replyBody')?.value || '').trim();
+  const parentId    = (q('#parentId')?.value || '').trim();
+  const isAnonymous = !!q('#threadIsAnonymous')?.checked; // ✅ fixed selector
+
+  if (!me?.id) {
+    alert('Please log in to comment.');
+    return;
+  }
+  if (!body) {
+    alert('Comment cannot be empty.');
+    return;
+  }
+
+  const payload = { body, isAnonymous };
+  if (parentId) payload.parentId = parentId;
+
+  console.log('[thread.js] Posting comment payload:', payload); // for debugging
+
+  try {
+    await api(`/api/comments/${encodeURIComponent(THREAD_ID)}`, {
+      method: 'POST',
+      body: payload
+    });
+    q('#replyBody').value = '';
+    clearReplyTarget();
+    await loadComments(true);
+    initReportUI();
+  } catch (e) {
+    console.error('[thread.js] Post comment error', e);
+    const msg = e?.error || e?.message || 'Failed to post comment.';
+    if (/locked|forbidden|423/i.test(msg)) {
       alert('Thread is locked. New comments are disabled.');
-      return;
+    } else {
+      alert(msg);
     }
+  }
+});
 
-    const body        = (q('#replyBody')?.value || '').trim();
-    const parentId    = (q('#parentId')?.value || '').trim();
-    const isAnonymous = !!q('#isAnonymous')?.checked;
-
-    if (!me?.id) {
-      alert('Please log in to comment.');
-      return;
-    }
-    if (!body) {
-      alert('Comment cannot be empty.');
-      return;
-    }
-
-    const payload = { body, isAnonymous };
-    if (parentId) payload.parentId = parentId;
-
-    console.log('[thread.js] Posting comment payload:', payload);
-
-    try {
-      await api(`/api/comments/${encodeURIComponent(THREAD_ID)}`, {
-        method: 'POST',
-        body: payload
-      });
-      q('#replyBody').value = '';
-      clearReplyTarget();
-      await loadComments(true);
-      initReportUI();
-    } catch (e) {
-      console.error('[thread.js] Post comment error', e);
-      const msg = e?.error || e?.message || 'Failed to post comment.';
-      if (/locked|forbidden|423/i.test(msg)) {
-        alert('Thread is locked. New comments are disabled.');
-      } else {
-        alert(msg);
-      }
-    }
-  });
 }
 function onUpvoteComment(ev) {
   const commentId = ev.currentTarget.closest('.comment')?.dataset.id;
