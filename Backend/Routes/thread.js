@@ -253,10 +253,10 @@ router.post(
   '/',
   requireAuth,
   validate({
-    title: s.string({ min: 3, max: 200 }),
-    body: s.optional(s.string({ min: 0, max: 10000 })),
-    content: s.optional(s.string({ min: 0, max: 10000 })),
-    isAnonymous: s.optional(s.boolean()),
+    title:        s.string({ min: 3, max: 200 }),
+    body:         s.optional(s.string({ min: 0, max: 10000 })),
+    content:      s.optional(s.string({ min: 0, max: 10000 })),
+    isAnonymous:  s.optional(s.boolean()),
   }),
   async (req, res) => {
     try {
@@ -265,9 +265,7 @@ router.post(
       if (user.isBanned) return res.status(403).json({ error: 'Account is banned from posting.' });
 
       const { title, body, content, isAnonymous } = req.body || {};
-
-      // 🔍 Add this log line to see what the backend actually receives
-      console.log('[threads] Received req.body.isAnonymous:', isAnonymous);
+      console.log('[threads] Received req.body:', { title, body, isAnonymous });
 
       const finalTitle = String(title || '').trim();
       const finalBody  = String(body ?? content ?? '').trim();
@@ -275,44 +273,43 @@ router.post(
       if (finalTitle.length < 3) return res.status(400).json({ error: 'Title must be at least 3 characters.' });
       if (finalBody.length  < 10) return res.status(400).json({ error: 'Content must be at least 10 characters.' });
 
-      // ✅ Coerce to boolean safely (accounts for "true", true, "on", etc.)
+      // Determine whether user requested anonymity
       const isAnon = isAnonymous === true || isAnonymous === 'true' || isAnonymous === 'on';
-
-      // 🔍 Log the interpreted boolean value
-      console.log('[threads] Interpreted isAnon value:', isAnon);
+      console.log('[threads] Interpreted isAnon:', isAnon);
 
       const threadData = {
-        title: finalTitle,
-        body: finalBody,
-        content: finalBody,
+        title:       finalTitle,
+        body:        finalBody,
+        content:     finalBody,
         isAnonymous: isAnon,
-        upvoters: [],
+        upvoters:    [],
         upvoteCount: 0,
-        thumbsUp: 0,
-        realAuthor: req.user.uid,
+        thumbsUp:    0,
+        realAuthor:  req.user.uid,   // hidden field for admin
       };
 
       if (isAnon) {
-        threadData.author = null;
-        threadData.userId = null;
+        threadData.author      = null;
+        threadData.userId      = null;
         threadData.author_name = 'Anonymous';
       } else {
-        threadData.author = req.user.uid;
-        threadData.userId = req.user.uid;
+        threadData.author      = req.user.uid;
+        threadData.userId      = req.user.uid;
         threadData.author_name = user.name;
       }
 
-      console.log('[threads] Final threadData:', threadData);
+      console.log('[threads] Final threadData to create:', threadData);
 
       const t = await Thread.create(threadData);
-      res.status(201).json({ thread: { id: t._id } });
 
+      return res.status(201).json({ thread: { id: t._id } });
     } catch (e) {
       console.error('[threads] create error:', e);
-      res.status(500).json({ error: 'Failed to create thread' });
+      return res.status(500).json({ error: 'Failed to create thread' });
     }
   }
 );
+
 
 
 

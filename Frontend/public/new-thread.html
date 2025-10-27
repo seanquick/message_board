@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>New Thread</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main class="card" style="max-width:600px;margin:2rem auto;padding:2rem">
+    <h1>Create a New Thread</h1>
+
+    <form id="createThreadForm">
+      <div style="margin-bottom:1rem">
+        <label for="threadTitleInput">Title</label><br />
+        <input type="text" id="threadTitleInput" required style="width:100%" />
+      </div>
+
+      <div style="margin-bottom:1rem">
+        <label for="threadBodyInput">Content</label><br />
+        <textarea id="threadBodyInput" rows="8" required style="width:100%"></textarea>
+      </div>
+
+      <div style="margin-bottom:1rem">
+        <label>
+          <input type="checkbox" id="threadIsAnonymous" />
+          Post as Anonymous
+        </label>
+      </div>
+
+      <div style="margin-bottom:1rem">
+        <button type="submit" class="btn primary">Create Thread</button>
+      </div>
+
+      <div id="formError" class="err" style="display:none"></div>
+    </form>
+  </main>
+
+  <script type="module" src="./new-thread.js"></script>
+</body>
+</html>

@@ -134,32 +134,34 @@ router.get('/search', requireAdmin, async (req, res) => {
     };
 
     // --- Search Threads ---
-    async function searchThreads() {
-      const docs = await Thread.find(threadFilter, { score: { $meta: 'textScore' } })
-        .sort({ score: { $meta: 'textScore' } })
+    // ✅ Admin search — threads listing
+    if (type === 'threads') {
+      const filter = includeDeleted ? {} : { isDeleted: { $ne: true } };
+
+      results = await Thread.find(filter)
+        .sort({ createdAt: -1 })
         .limit(100)
-        .select('_id title author createdAt isDeleted isPinned pinned isLocked locked upvoteCount commentCount status')
+        .select(
+          '_id title author author_name isAnonymous realAuthor createdAt ' +
+          'isDeleted isPinned pinned isLocked locked upvoteCount commentCount status'
+        )
+        // Populate both realAuthor and author for admin view
+        .populate('realAuthor', 'name email')
         .populate('author', 'name email')
         .lean();
-      return docs.map(t => ({
-        type: 'thread',
-        _id: t._id,
-        title: t.title,
-        author: t.author,
-        createdAt: t.createdAt,
-        score: t.score,
-        snippet: (t.body || t.content || '').slice(0, 120),
-        isDeleted: t.isDeleted,
-      }));
+
+      return res.json({ results });
     }
+
 
     // --- Search Comments ---
     async function searchComments() {
       const docs = await Comment.find(commentFilter, { score: { $meta: 'textScore' } })
         .sort({ score: { $meta: 'textScore' } })
         .limit(100)
-        .select('_id thread author createdAt body isDeleted upvoteCount')
-        .populate('author', 'name email')
+        .select('_id title author author_name isAnonymous realAuthor createdAt isDeleted isPinned pinned isLocked locked upvoteCount commentCount status')  // include isAnonymous & realAuthor
+        .populate('realAuthor', 'name email')  // get admin view info only
+        .populate('author', 'name email')      // optional
         .lean();
       return docs.map(c => ({
         type: 'comment',

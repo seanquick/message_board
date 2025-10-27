@@ -311,13 +311,26 @@ async function loadThreads() {
     }
 
     results.forEach(t => {
-      const tr       = document.createElement('tr');
-      tr.dataset.id  = t._id;
-      const author   = t.author?.name  || t.author?.email || t.authorId || '';
-      tr.innerHTML   = `
+      const tr      = document.createElement('tr');
+      tr.dataset.id = t._id;
+
+      // Determine public vs internal author display
+      const publicAuthor  = t.isAnonymous
+        ? 'Anonymous'
+        : (t.author_name || (t.author?.name || ''));
+
+      const internalAuthor = t.realAuthor
+        ? (t.realAuthor.name || t.realAuthor.email || '')
+        : '';
+
+      const displayAuthor = t.isAnonymous
+        ? `${publicAuthor} (internal: ${escapeHTML(internalAuthor)})`
+        : escapeHTML(publicAuthor);
+
+      tr.innerHTML = `
         <td>${escapeHTML(new Date(t.createdAt || Date.now()).toLocaleString())}</td>
         <td>${escapeHTML(t.title || '(no title)')}</td>
-        <td>${escapeHTML(author)}</td>
+        <td>${displayAuthor}</td>
         <td>${Number(t.upvoteCount ?? t.upvotes ?? 0)}</td>
         <td>${Number(t.commentCount ?? 0)}</td>
         <td>${escapeHTML(t.status || '')}</td>
@@ -341,9 +354,11 @@ async function loadThreads() {
 function bindThreadActions(tbody) {
   tbody.querySelectorAll('.viewThread').forEach(btn => btn.addEventListener('click', ev => {
     const tr = ev.currentTarget.closest('tr');
-    const tid= tr?.dataset.id;
+    const tid = tr?.dataset.id;
     if (tid) window.open(`thread.html?id=${encodeURIComponent(tid)}`, '_blank');
   }));
+}
+
 
   tbody.querySelectorAll('.pinBtn').forEach(btn => btn.addEventListener('click', async ev => {
     const tr   = ev.currentTarget.closest('tr');
@@ -383,7 +398,7 @@ function bindThreadActions(tbody) {
       showErr(`Failed to delete/restore: ${e?.error || e?.message}`);
     }
   }));
-}
+
 
 // --- COMMENTS Section ---
 async function loadAdminComments() {
