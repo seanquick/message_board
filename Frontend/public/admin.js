@@ -698,7 +698,22 @@ function exportCSV(path) {
   window.location.href = `/api/admin/${path}/export.csv?t=${Date.now()}`;
 }
 
-// --- SEARCH (generic) ---
+// ===== SEARCH (Admin UI) =====
+
+function bindSearchForm() {
+  const btn = document.querySelector('#searchBtn');
+  if (!btn) {
+    console.warn('[AdminSearch] #searchBtn not found in DOM');
+    return;
+  }
+
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    console.log('[AdminSearch] Search button clicked');
+    doSearch();
+  });
+}
+
 async function doSearch() {
   const qstr     = (q('#sQ')?.value || '').trim();
   const type     = (q('#sType')?.value  || 'all').toLowerCase();
@@ -708,7 +723,9 @@ async function doSearch() {
   const minUp    = q('#sMinUp')?.value;
   const category = q('#sCategory')?.value;
 
-  const params   = new URLSearchParams();
+  console.log('[AdminSearch] doSearch() called with:', { qstr, type, status, from, to, minUp, category });
+
+  const params = new URLSearchParams();
   params.set('t', String(Date.now()));
   if (qstr)     params.set('q', qstr);
   if (type)     params.set('type', type);
@@ -718,30 +735,42 @@ async function doSearch() {
   if (minUp)    params.set('minUp', minUp);
   if (category) params.set('category', category);
 
-  const resp = await api(`/api/admin/search?${params.toString()}`, { nocache: true, skipHtmlRedirect: true });
-  const results = resp.results || [];
-  const tbody   = ensureTbody('#searchTable');
-  if (!tbody) return;
+  try {
+    const resp = await api(`/api/admin/search?${params.toString()}`, { nocache: true, skipHtmlRedirect: true });
+    const results = resp.results || [];
 
-  tbody.innerHTML = '';
-  if (!results.length) {
-    tbody.innerHTML = `<tr><td colspan="6" class="empty">No results</td></tr>`;
-    return;
+    console.log('[AdminSearch] Results:', results);
+
+    const tbody = ensureTbody('#searchTable');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    if (!results.length) {
+      tbody.innerHTML = `<tr><td colspan="6" class="empty">No results</td></tr>`;
+      return;
+    }
+
+    results.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${escapeHTML(new Date(r.createdAt || Date.now()).toLocaleString())}</td>
+        <td>${escapeHTML(r.type || '')}</td>
+        <td>${escapeHTML(r.title || '')}</td>
+        <td>${escapeHTML(r.snippet || '')}</td>
+        <td>${escapeHTML(String(r.upvotes || ''))}</td>
+        <td>${escapeHTML(r.link || '')}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } catch (err) {
+    console.error('[AdminSearch] Search failed:', err);
+    alert('Search failed: ' + (err?.error || err?.message || 'Unknown error'));
   }
-
-  results.forEach(r => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${escapeHTML(new Date(r.createdAt || Date.now()).toLocaleString())}</td>
-      <td>${escapeHTML(r.type || '')}</td>
-      <td>${escapeHTML(r.title || '')}</td>
-      <td>${escapeHTML(r.snippet || '')}</td>
-      <td>${escapeHTML(String(r.upvotes || ''))}</td>
-      <td>${escapeHTML(r.link || '')}</td>
-    `;
-    tbody.appendChild(tr);
-  });
 }
+
+// Initialize the search form bindings when the page is ready
+document.addEventListener('DOMContentLoaded', bindSearchForm);
+
 
 // --- INIT ---
 async function init() {
