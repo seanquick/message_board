@@ -49,6 +49,14 @@ function lockBadge() {
 
 /* --- Comments List & Pagination Logic --- */
 async function loadComments(reset = false) {
+  console.log('[thread.js] loadComments called. reset =', reset);
+  console.log('[thread.js] Current commentState:', {
+    loading: commentState.loading,
+    comments: commentState.comments.length,
+    nextCursor: commentState.nextCursor,
+    hasMore: commentState.hasMore
+  });
+
   if (commentState.loading) return;
   commentState.loading = true;
 
@@ -94,9 +102,10 @@ async function loadComments(reset = false) {
     console.error('[thread.js] loadComments error', e);
     safeSetHTML('#comments', `<div class="err">${escapeHTML(e?.error || e?.message || 'Failed to load comments.')}</div>`);
   } finally {
-  state.loading = false;
-  renderLoadMoreButton(); // <- This ensures the button is re-enabled
+  commentState.loading = false;
+  renderLoadMoreCommentsButton(); // correct function for this file
 }
+
 
 }
 
