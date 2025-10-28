@@ -21,7 +21,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const title = q('#threadTitleInput')?.value.trim();
     const body = q('#threadBodyInput')?.value.trim();
-    const isAnonymous = !!q('#threadIsAnonymous')?.checked;
+    const anonymous = !!q('#threadIsAnonymous')?.checked;
+    const payload = { title, body, isAnonymous: anonymous };
+
 
     if (!title || !body) {
       q('#formError').textContent = 'Title and body are required.';
@@ -29,7 +31,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    const payload = { title, body, isAnonymous };
+    
     console.log('[new-thread.js] Submitting payload:', payload);
 
     try {
