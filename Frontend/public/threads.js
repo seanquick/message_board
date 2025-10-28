@@ -37,24 +37,25 @@ function wireCreateThreadForm() {
 
   btn.addEventListener('click', async (e) => {
     e.preventDefault();
-    const titleEl = q('input[name="title"]');
-    const bodyEl = q('textarea[name="body"]');
-    const anonEl = q('input[name="anonymous"]');
+      const titleEl = q('input[name="title"]');
+      const bodyEl = q('textarea[name="body"]');
+      const anonEl = q('input[name="anonymous"]');
 
-    const title = titleEl?.value.trim();
-    const body = bodyEl?.value.trim();
-    const anonymous = !!anonEl?.checked;
+      const title = titleEl?.value.trim();
+      const body = bodyEl?.value.trim();
+      const isAnonymous = !!anonEl?.checked;  // ✅ Rename for clarity
 
-    if (!title || !body) {
-      alert('Please enter a title and body for your thread.');
-      return;
-    }
+      if (!title || !body) {
+        alert('Please enter a title and body for your thread.');
+        return;
+      }
 
-    try {
-      const thread = await api('/api/threads', {
-        method: 'POST',
-        body: { title, body, anonymous }
-      });
+      try {
+        const thread = await api('/api/threads', {
+          method: 'POST',
+          body: { title, body, isAnonymous }  // ✅ Use correct field name
+        });
+
 
       const id = thread?._id || thread?.id || thread?.thread?._id || thread?.thread?.id;
       if (id) {
@@ -68,6 +69,7 @@ function wireCreateThreadForm() {
     }
   });
 }
+
 
 async function loadThreads(reset = false) {
   if (state.loading) return;
