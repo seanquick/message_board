@@ -136,13 +136,15 @@ function renderLoadMoreButton() {
     container.appendChild(btn);
     btn.addEventListener('click', () => loadThreads(false));
   }
+
   if (state.hasMore) {
     btn.style.display = '';
-    btn.disabled = state.loading;
+    btn.disabled = state.loading;  // Only disable while loading
   } else {
-    btn.style.display = 'none';
+    btn.style.display = 'none';   // Hide completely if no more threads
   }
 }
+
 
 function ensureListHost() {
   let host = q('#list') || q('#threadsList');
