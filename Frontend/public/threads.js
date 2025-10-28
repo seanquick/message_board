@@ -72,8 +72,17 @@ function wireCreateThreadForm() {
 
 
 async function loadThreads(reset = false) {
+  console.log('[loadThreads] Called with reset =', reset);
+  console.log('[loadThreads] Current state:', JSON.stringify({
+    loading: state.loading,
+    threads: state.threads.length,
+    nextCursor: state.nextCursor,
+    hasMore: state.hasMore
+  }));
+
   if (state.loading) return;
   state.loading = true;
+
 
   if (reset) {
     state.threads = [];
@@ -126,30 +135,37 @@ async function loadThreads(reset = false) {
 }
 }
 
-  function renderLoadMoreButton() {
-    let btn = q('#loadMoreThreadsBtn');
-    if (!btn) {
-      const container = q('#threadsList') || document.querySelector('main') || document.body;
-      btn = document.createElement('button');
-      btn.id = 'loadMoreThreadsBtn';
-      btn.className = 'btn ghost mt-1';
-      btn.textContent = 'Load More Threads';
-      container.appendChild(btn);
-      
-      // 🧪 ADD THIS:
-      btn.addEventListener('click', () => {
-        console.log('[LoadMore] Button clicked');
-        loadThreads(false);
-      });
-    }
+ function renderLoadMoreButton() {
+  let btn = q('#loadMoreThreadsBtn');
+  const container = q('#threadsList') || document.querySelector('main') || document.body;
 
-    if (state.hasMore) {
-      btn.style.display = '';
-      btn.disabled = state.loading;
-    } else {
-      btn.style.display = 'none';
-    }
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.id = 'loadMoreThreadsBtn';
+    btn.className = 'btn ghost mt-1';
+    btn.textContent = 'Load More Threads';
+    container.appendChild(btn);
+
+    console.log('[renderLoadMoreButton] Created new button');
+  } else {
+    console.log('[renderLoadMoreButton] Button already exists');
   }
+
+  btn.onclick = () => {
+    console.log('[LoadMoreButton] Clicked');
+    loadThreads(false);
+  };
+
+  if (state.hasMore) {
+    btn.style.display = '';
+    btn.disabled = state.loading;
+    console.log('[renderLoadMoreButton] Enabled button — hasMore:', state.hasMore);
+  } else {
+    btn.style.display = 'none';
+    console.log('[renderLoadMoreButton] Hiding button — hasMore:', state.hasMore);
+  }
+}
+
 
 
 
