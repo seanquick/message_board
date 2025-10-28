@@ -126,25 +126,31 @@ async function loadThreads(reset = false) {
 }
 }
 
-function renderLoadMoreButton() {
-  let btn = q('#loadMoreThreadsBtn');
-  if (!btn) {
-    const container = q('#threadsList') || document.querySelector('main') || document.body;
-    btn = document.createElement('button');
-    btn.id = 'loadMoreThreadsBtn';
-    btn.className = 'btn ghost mt-1';
-    btn.textContent = 'Load More Threads';
-    container.appendChild(btn);
-    btn.addEventListener('click', () => loadThreads(false));
+  function renderLoadMoreButton() {
+    let btn = q('#loadMoreThreadsBtn');
+    if (!btn) {
+      const container = q('#threadsList') || document.querySelector('main') || document.body;
+      btn = document.createElement('button');
+      btn.id = 'loadMoreThreadsBtn';
+      btn.className = 'btn ghost mt-1';
+      btn.textContent = 'Load More Threads';
+      container.appendChild(btn);
+      
+      // 🧪 ADD THIS:
+      btn.addEventListener('click', () => {
+        console.log('[LoadMore] Button clicked');
+        loadThreads(false);
+      });
+    }
+
+    if (state.hasMore) {
+      btn.style.display = '';
+      btn.disabled = state.loading;
+    } else {
+      btn.style.display = 'none';
+    }
   }
 
-  if (state.hasMore) {
-    btn.style.display = '';
-    btn.disabled = state.loading;  // Only disable while loading
-  } else {
-    btn.style.display = 'none';   // Hide completely if no more threads
-  }
-}
 
 
 function ensureListHost() {
