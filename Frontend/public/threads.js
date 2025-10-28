@@ -39,7 +39,7 @@ function wireCreateThreadForm() {
     e.preventDefault();
       const titleEl = q('input[name="title"]');
       const bodyEl = q('textarea[name="body"]');
-      const anonEl = q('input[name="anonymous"]');
+      const anonEl = q('input[name="isAnonymous"]');
 
       const title = titleEl?.value.trim();
       const body = bodyEl?.value.trim();
