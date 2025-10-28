@@ -121,8 +121,9 @@ async function loadThreads(reset = false) {
   } catch (e) {
     renderError(e?.error || e?.message || 'Failed to load threads.');
   } finally {
-    state.loading = false;
-  }
+  state.loading = false;
+  renderLoadMoreButton(); // <- This ensures the button is re-enabled
+}
 }
 
 function renderLoadMoreButton() {

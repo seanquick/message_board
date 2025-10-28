@@ -94,8 +94,10 @@ async function loadComments(reset = false) {
     console.error('[thread.js] loadComments error', e);
     safeSetHTML('#comments', `<div class="err">${escapeHTML(e?.error || e?.message || 'Failed to load comments.')}</div>`);
   } finally {
-    commentState.loading = false;
-  }
+  state.loading = false;
+  renderLoadMoreButton(); // <- This ensures the button is re-enabled
+}
+
 }
 
 function renderLoadMoreCommentsButton() {
@@ -294,7 +296,6 @@ function bindComposer() {
     }
   }
 });
-
 }
 function onUpvoteComment(ev) {
   const commentId = ev.currentTarget.closest('.comment')?.dataset.id;
