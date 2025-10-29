@@ -7,12 +7,12 @@ const JSON_HEADERS = { 'Content-Type': 'application/json' };
 function makeUrl(url, params = {}) {
   const keys = Object.keys(params);
   if (keys.length === 0) return url;
-  const esc = encodeURIComponent;
-  const query = keys
-    .map(k => `${esc(k)}=${esc(params[k])}`)
-    .join('&');
-  return url + (url.includes('?') ? '&' : '?') + query;
+
+  const u = new URL(url, window.location.origin);
+  keys.forEach(k => u.searchParams.set(k, params[k]));
+  return u.toString();
 }
+
 
 
 export async function api(url, opts = {}) {

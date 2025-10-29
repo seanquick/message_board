@@ -134,35 +134,41 @@ router.get('/search', requireAdmin, async (req, res) => {
     };
 
     // --- Search Threads ---
-    // ✅ Admin search — threads listing
-    if (type === 'threads') {
-      const filter = includeDeleted ? {} : { isDeleted: { $ne: true } };
-
-      results = await Thread.find(filter)
-        .sort({ createdAt: -1 })
+    async function searchThreads() {
+      const docs = await Thread.find(threadFilter, { score: { $meta: 'textScore' } })
+        .sort({ score: { $meta: 'textScore' } })
         .limit(100)
         .select(
           '_id title author author_name isAnonymous realAuthor createdAt ' +
           'isDeleted isPinned pinned isLocked locked upvoteCount commentCount status'
         )
-        // Populate both realAuthor and author for admin view
         .populate('realAuthor', 'name email')
         .populate('author', 'name email')
         .lean();
 
-      return res.json({ results });
+      return docs.map(t => ({
+        type: 'thread',
+        _id: t._id,
+        title: t.title,
+        author: t.author,
+        createdAt: t.createdAt,
+        score: t.score,
+        snippet: (t.title || '').slice(0, 120),
+        upvoteCount: t.upvoteCount ?? 0,
+        isDeleted: t.isDeleted,
+      }));
     }
-
 
     // --- Search Comments ---
     async function searchComments() {
       const docs = await Comment.find(commentFilter, { score: { $meta: 'textScore' } })
         .sort({ score: { $meta: 'textScore' } })
         .limit(100)
-        .select('_id title author author_name isAnonymous realAuthor createdAt isDeleted isPinned pinned isLocked locked upvoteCount commentCount status')  // include isAnonymous & realAuthor
-        .populate('realAuthor', 'name email')  // get admin view info only
-        .populate('author', 'name email')      // optional
+        .select('_id thread body author author_name isAnonymous realAuthor createdAt isDeleted upvoteCount')
+        .populate('realAuthor', 'name email')
+        .populate('author', 'name email')
         .lean();
+
       return docs.map(c => ({
         type: 'comment',
         _id: c._id,
@@ -196,6 +202,7 @@ router.get('/search', requireAdmin, async (req, res) => {
     res.status(500).json({ error: 'Search failed', detail: String(e) });
   }
 });
+
 
 
 
@@ -707,6 +714,59 @@ router.get('/users/:userId/content', requireAdmin, async (req, res) => {
   } catch (e) {
     console.error('[admin] user content error:', e);
     return res.status(500).json({ error: 'Failed to load user content', detail: String(e) });
+  }
+});
+
+// ===== THREADS LIST (admin) =====
+router.get('/threads', requireAdmin, async (req, res) => {
+  try {
+    const includeDeleted = toBool(req.query.includeDeleted);
+    const filter = includeDeleted ? {} : notDeleted('isDeleted');
+
+    const threads = await Thread.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(200)                           // adjust limit as needed
+      .select('_id title author author_name isAnonymous realAuthor createdAt isDeleted isPinned pinned isLocked locked upvoteCount commentCount status')
+      .populate('realAuthor', 'name email')
+      .populate('author', 'name email')
+      .lean();
+
+    res.json({ threads });
+  } catch (e) {
+    console.error('[admin] threads list error:', e);
+    res.status(500).json({ error: 'Failed to load threads', detail: String(e) });
+  }
+});
+
+// ===== COMMENTS LIST (admin) =====
+router.get('/comments', requireAdmin, async (req, res) => {
+  try {
+    const includeDeleted = toBool(req.query.includeDeleted);
+    const filter = includeDeleted ? {} : notDeleted('isDeleted');
+
+    const comments = await Comment.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(200)                           // adjust limit as needed
+      .select('_id thread body author author_name isAnonymous realAuthor createdAt isDeleted upvoteCount')
+      .populate('realAuthor', 'name email')
+      .populate('author', 'name email')
+      .lean();
+
+    // Optionally map snippet field for frontend
+    const results = comments.map(c => ({
+      _id:        c._id,
+      thread:     c.thread,
+      snippet:    (c.body || '').slice(0, 120),
+      author:     c.author,
+      createdAt:  c.createdAt,
+      upvoteCount:c.upvoteCount,
+      isDeleted:  c.isDeleted
+    }));
+
+    res.json({ results });
+  } catch (e) {
+    console.error('[admin] comments list error:', e);
+    res.status(500).json({ error: 'Failed to load comments', detail: String(e) });
   }
 });
 
