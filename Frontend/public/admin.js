@@ -1,4 +1,5 @@
 // frontend/public/admin.js
+console.log('[admin.js] script loaded');
 
 import { api, escapeHTML, timeAgo, q, qa, refreshMe, me as meVar } from './main.js';
 
