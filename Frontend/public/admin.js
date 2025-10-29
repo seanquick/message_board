@@ -783,6 +783,39 @@ async function init() {
   console.log('[admin.js] init complete');
 }
 
+async function doSearch() {
+  const qVal = document.querySelector('#sQ')?.value?.trim();
+  const type = document.querySelector('#sType')?.value || 'all';
+
+  if (!qVal) {
+    showErr('Please enter a search term.');
+    return;
+  }
+
+  try {
+    const params = new URLSearchParams();
+    params.set('q', qVal);
+    params.set('type', type);
+    params.set('t', Date.now());  // prevent caching
+
+    const includeDeleted = document.querySelector('#tIncludeDeleted')?.checked;
+    if (includeDeleted) params.set('includeDeleted', '1');
+
+    const url = `/api/admin/search?${params.toString()}`;
+    console.log(`[AdminSearch] Fetching: ${url}`);
+
+    const resp = await api(url);
+    console.log('[AdminSearch] Results:', resp);
+
+    // Update your UI here — for now, just log them
+    alert(`Found ${resp?.results?.length || 0} result(s). Check console.`);
+
+  } catch (e) {
+    console.error('[AdminSearch] Failed:', e);
+    showErr(e?.error || e?.message || 'Search failed');
+  }
+}
+
 // Run init when DOM is ready
 document.addEventListener('DOMContentLoaded', init);
 
