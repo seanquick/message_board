@@ -727,8 +727,7 @@ router.get('/threads', requireAdmin, async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(200)                           // adjust limit as needed
       .select('_id title author author_name isAnonymous realAuthor createdAt isDeleted isPinned pinned isLocked locked upvoteCount commentCount status')
-      .populate('realAuthor', 'name email')
-      .populate('author', 'name email')
+      .populate('author', 'name email') // Good ✅
       .lean();
 
     res.json({ threads });
@@ -748,8 +747,7 @@ router.get('/comments', requireAdmin, async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(200)                           // adjust limit as needed
       .select('_id thread body author author_name isAnonymous realAuthor createdAt isDeleted upvoteCount')
-      .populate('realAuthor', 'name email')
-      .populate('author', 'name email')
+      .populate('author', 'name email') // Good ✅
       .lean();
 
     // Optionally map snippet field for frontend
