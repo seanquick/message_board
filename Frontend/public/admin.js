@@ -358,8 +358,6 @@ function bindThreadActions(tbody) {
     const tid = tr?.dataset.id;
     if (tid) window.open(`thread.html?id=${encodeURIComponent(tid)}`, '_blank');
   }));
-}
-
 
   tbody.querySelectorAll('.pinBtn').forEach(btn => btn.addEventListener('click', async ev => {
     const tr   = ev.currentTarget.closest('tr');
@@ -399,6 +397,8 @@ function bindThreadActions(tbody) {
       showErr(`Failed to delete/restore: ${e?.error || e?.message}`);
     }
   }));
+}
+
 
 
 // --- COMMENTS Section ---
