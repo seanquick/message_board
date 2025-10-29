@@ -845,4 +845,21 @@ async function init() {
 if (document.readyState !== 'loading') {
   init();
 }
+function init() {
+  const btn = document.querySelector('#sGo');
+  if (btn) {
+    btn.addEventListener('click', async () => {
+      console.log('[admin.js] Search button clicked');
+      await doSearch();
+    });
+  } else {
+    console.error('[admin.js] Search button #sGo not found on page.');
+  }
+
+  // You can attach other event listeners or setup code here as well
+}
+
+// ✅ Run init() after DOM is ready
 document.addEventListener('DOMContentLoaded', init);
+
+
