@@ -301,9 +301,11 @@ async function loadThreads() {
     const params         = new URLSearchParams();
     params.set('t', String(Date.now()));
     if (includeDeleted) params.set('includeDeleted', '1');
-    const url  = `/api/admin/search?type=threads&${params.toString()}`;
+
+    // ✅ Corrected endpoint
+    const url  = `/api/admin/threads?${params.toString()}`;
     const resp = await api(url, { nocache: true, skipHtmlRedirect: true });
-    const results = resp.results || [];
+    const results = Array.isArray(resp.threads) ? resp.threads : [];
 
     tbody.innerHTML = '';
     if (!results.length) {
@@ -376,7 +378,7 @@ function bindThreadActions(tbody) {
     const tr  = ev.currentTarget.closest('tr');
     const tid = tr?.dataset.id;
     if (!tid) return;
-    const note= prompt('Note (optional):');
+    const note = prompt('Note (optional):');
     try {
       await api(`/api/admin/threads/${encodeURIComponent(tid)}/lock`, { method: 'POST', body: { note } });
       loadThreads();
@@ -398,6 +400,7 @@ function bindThreadActions(tbody) {
     }
   }));
 }
+
 
 
 
