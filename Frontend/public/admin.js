@@ -717,14 +717,16 @@ function bindSearchForm() {
 
   const resetBtn = document.querySelector('#sReset');
   if (resetBtn) {
-    resetBtn.addEventListener('click', () => {
-      document.querySelector('#sQ').value       = '';
-      document.querySelector('#sType').value    = 'all';
-      document.querySelector('#sStatus').value  = '';
-      document.querySelector('#sFrom').value    = '';
-      document.querySelector('#sTo').value      = '';
-      document.querySelector('#sMinUp').value   = '';
-      document.querySelector('#sCategory').value= '';
+    resetBtn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      document.querySelector('#sQ').value        = '';
+      document.querySelector('#sType').value     = 'all';
+      document.querySelector('#sStatus').value   = '';
+      document.querySelector('#sFrom').value     = '';
+      document.querySelector('#sTo').value       = '';
+      document.querySelector('#sMinUp').value    = '';
+      document.querySelector('#sCategory').value = '';
+      console.log('[AdminSearch] Reset search filters');
       doSearch();
     });
   }
@@ -734,6 +736,7 @@ function bindSearchForm() {
     qInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
+        console.log('[AdminSearch] Enter pressed in search field');
         doSearch();
       }
     });
@@ -782,3 +785,4 @@ async function init() {
 
 // Run init when DOM is ready
 document.addEventListener('DOMContentLoaded', init);
+
