@@ -701,18 +701,16 @@ function exportCSV(path) {
 // ===== SEARCH (Admin UI) =====
 
 function bindSearchForm() {
-  const btn = document.querySelector('#searchBtn');
-  if (!btn) {
-    console.warn('[AdminSearch] #searchBtn not found in DOM');
-    return;
+  const btn = document.querySelector('#sGo');
+  if (btn) {
+    btn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      console.log('[admin] Search button clicked');  // ✅ Confirm this runs
+      doSearch();
+    });
   }
-
-  btn.addEventListener('click', (e) => {
-    e.preventDefault();
-    console.log('[AdminSearch] Search button clicked');
-    doSearch();
-  });
 }
+
 
 async function doSearch() {
   const qstr     = (q('#sQ')?.value || '').trim();
