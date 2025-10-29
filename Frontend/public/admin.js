@@ -766,6 +766,20 @@ async function doSearch() {
   }
 }
 
+// Bind Search button in Admin Dashboard
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.querySelector('#sGo');
+  if (!btn) {
+    console.warn('[AdminSearch] #sGo button not found');
+    return;
+  }
+  btn.addEventListener('click', ev => {
+    ev.preventDefault();
+    console.log('[AdminSearch] Search button clicked');
+    doSearch();
+  });
+});
+
 // Initialize the search form bindings when the page is ready
 document.addEventListener('DOMContentLoaded', bindSearchForm);
 
