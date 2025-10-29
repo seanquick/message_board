@@ -700,166 +700,82 @@ function exportCSV(path) {
 }
 
 // ===== SEARCH (Admin UI) =====
-
 function bindSearchForm() {
   const btn = document.querySelector('#sGo');
   if (btn) {
     btn.addEventListener('click', (ev) => {
       ev.preventDefault();
-      console.log('[admin] Search button clicked');  // ✅ Confirm this runs
+      console.log('[AdminSearch] Search button clicked');
       doSearch();
-    });
-  }
-}
-
-
-async function doSearch() {
-  const qstr     = (q('#sQ')?.value || '').trim();
-  const type     = (q('#sType')?.value  || 'all').toLowerCase();
-  const status   = (q('#sStatus')?.value || '').toLowerCase();
-  const from     = q('#sFrom')?.value;
-  const to       = q('#sTo')?.value;
-  const minUp    = q('#sMinUp')?.value;
-  const category = q('#sCategory')?.value;
-
-  console.log('[AdminSearch] doSearch() called with:', { qstr, type, status, from, to, minUp, category });
-
-  const params = new URLSearchParams();
-  params.set('t', String(Date.now()));
-  if (qstr)     params.set('q', qstr);
-  if (type)     params.set('type', type);
-  if (status)   params.set('status', status);
-  if (from)     params.set('from', from);
-  if (to)       params.set('to', to);
-  if (minUp)    params.set('minUp', minUp);
-  if (category) params.set('category', category);
-
-  try {
-    const resp = await api(`/api/admin/search?${params.toString()}`, { nocache: true, skipHtmlRedirect: true });
-    const results = resp.results || [];
-
-    console.log('[AdminSearch] Results:', results);
-
-    const tbody = ensureTbody('#searchTable');
-    if (!tbody) return;
-
-    tbody.innerHTML = '';
-    if (!results.length) {
-      tbody.innerHTML = `<tr><td colspan="6" class="empty">No results</td></tr>`;
-      return;
-    }
-
-    results.forEach(r => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${escapeHTML(new Date(r.createdAt || Date.now()).toLocaleString())}</td>
-        <td>${escapeHTML(r.type || '')}</td>
-        <td>${escapeHTML(r.title || '')}</td>
-        <td>${escapeHTML(r.snippet || '')}</td>
-        <td>${escapeHTML(String(r.upvotes || ''))}</td>
-        <td>${escapeHTML(r.link || '')}</td>
-      `;
-      tbody.appendChild(tr);
-    });
-  } catch (err) {
-    console.error('[AdminSearch] Search failed:', err);
-    alert('Search failed: ' + (err?.error || err?.message || 'Unknown error'));
-  }
-}
-
-// Bind Search button in Admin Dashboard
-document.addEventListener('DOMContentLoaded', () => {
-  const btn = document.querySelector('#sGo');
-  if (!btn) {
-    console.warn('[AdminSearch] #sGo button not found');
-    return;
-  }
-  btn.addEventListener('click', ev => {
-    ev.preventDefault();
-    console.log('[AdminSearch] Search button clicked');
-    doSearch();
-  });
-});
-
-// Initialize the search form bindings when the page is ready
-document.addEventListener('DOMContentLoaded', bindSearchForm);
-
-
-// --- INIT ---
-async function init() {
-  console.log('Admin UI init');
-  try {
-    await refreshMe();
-    meUser = meVar;
-
-    await api(`/api/admin/ping?t=${Date.now()}`, { nocache: true });
-
-    q('#uRefresh')?.addEventListener('click',   () => { state.users.page = 1; loadUsers(); });
-    q('#uSearch')?.addEventListener('input', debounce(() => { state.users.page = 1; loadUsers(); }));
-
-    q('#tRefresh')?.addEventListener('click', loadThreads);
-    q('#tIncludeDeleted')?.addEventListener('change', loadThreads);
-
-    q('#cRefresh')?.addEventListener('click', loadAdminComments);
-    q('#cIncludeDeleted')?.addEventListener('change', loadAdminComments);
-
-    q('#rRefresh')?.addEventListener('click', loadReports);
-    q('#rGroup')?.addEventListener('change', loadReports);
-    q('#rFilter')?.addEventListener('change', loadReports);
-    q('#rBulkResolve')?.addEventListener('click', bulkResolveSelected);
-
-    q('#rExport')?.addEventListener('click',   () => exportCSV('reports'));
-    q('#cExport')?.addEventListener('click',   () => exportCSV('comments'));
-    q('#uExport')?.addEventListener('click',   () => exportCSV('users'));
-
-    q('#rSelectAll')?.addEventListener('change', () => {
-      const checked = q('#rSelectAll')?.checked;
-      qa('#reportsTable tbody .rSelect').forEach(cb => { cb.checked = !!checked; });
-    });
-
-    q('#sGo')?.addEventListener('click', doSearch);
-    q('#sReset')?.addEventListener('click', () => {
-      q('#sQ').value = '';
-      q('#sType').value = 'all';
-      q('#sStatus').value = '';
-      q('#sFrom').value = '';
-      q('#sTo').value = '';
-      q('#sMinUp').value = '';
-      q('#sCategory').value = '';
-      doSearch();
-    });
-    q('#sQ')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
-
-    await loadMetrics();
-    await loadUsers();
-    await loadThreads();
-    await loadAdminComments();
-    await loadReports();
-
-  } catch (err) {
-    showErr(`Init failed: ${err?.message || err}`);
-    console.error('Init error', err);
-  }
-}
-
-if (document.readyState !== 'loading') {
-  init();
-}
-function init() {
-  const btn = document.querySelector('#sGo');
-  if (btn) {
-    btn.addEventListener('click', async () => {
-      console.log('[admin.js] Search button clicked');
-      await doSearch();
     });
   } else {
-    console.error('[admin.js] Search button #sGo not found on page.');
+    console.warn('[AdminSearch] #sGo button not found');
   }
 
-  // You can attach other event listeners or setup code here as well
+  const resetBtn = document.querySelector('#sReset');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      document.querySelector('#sQ').value       = '';
+      document.querySelector('#sType').value    = 'all';
+      document.querySelector('#sStatus').value  = '';
+      document.querySelector('#sFrom').value    = '';
+      document.querySelector('#sTo').value      = '';
+      document.querySelector('#sMinUp').value   = '';
+      document.querySelector('#sCategory').value= '';
+      doSearch();
+    });
+  }
+
+  const qInput = document.querySelector('#sQ');
+  if (qInput) {
+    qInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        doSearch();
+      }
+    });
+  }
 }
 
-// ✅ Run init() after DOM is ready
+async function init() {
+  console.log('[admin.js] init start');
+
+  await refreshMe();
+  meUser = meVar;
+
+  q('#uRefresh')?.addEventListener('click',   () => { state.users.page = 1; loadUsers(); });
+  q('#uSearch')?.addEventListener('input', debounce(() => { state.users.page = 1; loadUsers(); }));
+
+  q('#tRefresh')?.addEventListener('click',      loadThreads);
+  q('#tIncludeDeleted')?.addEventListener('change', loadThreads);
+
+  q('#cRefresh')?.addEventListener('click',      loadAdminComments);
+  q('#cIncludeDeleted')?.addEventListener('change', loadAdminComments);
+
+  q('#rRefresh')?.addEventListener('click',      loadReports);
+  q('#rGroup')?.addEventListener('change',      loadReports);
+  q('#rFilter')?.addEventListener('change',     loadReports);
+  q('#rBulkResolve')?.addEventListener('click', bulkResolveSelected);
+
+  q('#rExport')?.addEventListener('click',   () => exportCSV('reports'));
+  q('#cExport')?.addEventListener('click',   () => exportCSV('comments'));
+  q('#uExport')?.addEventListener('click',   () => exportCSV('users'));
+
+  q('#rSelectAll')?.addEventListener('change', () => {
+    const checked = q('#rSelectAll')?.checked;
+    qa('#reportsTable tbody .rSelect').forEach(cb => { cb.checked = !!checked; });
+  });
+
+  bindSearchForm();  // Attach search button logic
+
+  await loadMetrics();
+  await loadUsers();
+  await loadThreads();
+  await loadAdminComments();
+  await loadReports();
+
+  console.log('[admin.js] init complete');
+}
+
+// Run init when DOM is ready
 document.addEventListener('DOMContentLoaded', init);
-
-
