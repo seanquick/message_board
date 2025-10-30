@@ -841,15 +841,21 @@ async function doSearch() {
         ? 'Anonymous'
         : (r.author?.name || r.author?.email || r.author_name || '—');
 
+      const realAuthor = r.realAuthor?.name || r.realAuthor?.email || '—';
+      const anonInfo = r.isAnonymous ? `Yes → ${realAuthor}` : 'No';
+
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${escapeHTML(new Date(r.createdAt || Date.now()).toLocaleString())}</td>
         <td>${escapeHTML(r.type || '')}</td>
         <td>${escapeHTML(r.title || r.snippet || '(no title)')}</td>
         <td>${escapeHTML(author)}</td>
+        <td>${escapeHTML(anonInfo)}</td>
         <td>${escapeHTML(String(r.upvoteCount ?? r.upvotes ?? ''))}</td>
         <td><a href="${escapeHTML(linkHref)}" target="_blank">View</a></td>
       `;
+
+
 
       tbody.appendChild(tr);
     });
