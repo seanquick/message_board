@@ -830,36 +830,44 @@ async function doSearch() {
     return;
   }
 
-  // Add debug column for realAuthor just for test
+  // Row building 
   results.forEach(r => {
-    console.log('Row data:', r);  // debug each row
+  console.log('Row data:', r);
 
-    const author = r.isAnonymous
-      ? 'Anonymous'
-      : (r.author?.name || r.author?.email || r.author_name || '—');
+  // Determine display for “public author”
+  const publicAuthor = r.isAnonymous
+    ? 'Anonymous'
+    : (r.author?.name || r.author?.email || r.author_name || '—');
 
-    const realAuthorName = r.realAuthor?.name || r.realAuthor?.email || '—';
-    const anonInfo = r.isAnonymous ? `Yes → ${realAuthorName}` : 'No';
+  // Determine “real” author (internal/admin only)
+  const realAuthorName = r.realAuthor?.name || r.realAuthor?.email || '—';
 
-    let linkHref = '#';
-    if (r.type === 'thread' && r._id) {
-      linkHref = `thread.html?id=${encodeURIComponent(r._id)}`;
-    } else if (r.type === 'comment' && r._id) {
-      linkHref = `thread.html?id=${encodeURIComponent(r.thread)}&comment=${encodeURIComponent(r._id)}`;
-    }
+  // Build “Anon / Real Author” display
+  const anonInfo = r.isAnonymous
+    ? `Yes → ${realAuthorName}`
+    : `No → ${realAuthorName}`;
 
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${escapeHTML(new Date(r.createdAt || Date.now()).toLocaleString())}</td>
-      <td>${escapeHTML(r.type || '')}</td>
-      <td>${escapeHTML(r.title || r.snippet || '(no title)')}</td>
-      <td>${escapeHTML(author)}</td>
-      <td>${escapeHTML(anonInfo)}</td>
-      <td>${escapeHTML(String(r.upvoteCount ?? r.upvotes ?? ''))}</td>
-      <td><a href="${escapeHTML(linkHref)}" target="_blank">View</a></td>
-    `;
-    tbody.appendChild(tr);
-  });
+  // Build link
+  let linkHref = '#';
+  if (r.type === 'thread' && r._id) {
+    linkHref = `thread.html?id=${encodeURIComponent(r._id)}`;
+  } else if (r.type === 'comment' && r._id) {
+    linkHref = `thread.html?id=${encodeURIComponent(r.thread)}&comment=${encodeURIComponent(r._id)}`;
+  }
+
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td>${escapeHTML(new Date(r.createdAt || Date.now()).toLocaleString())}</td>
+    <td>${escapeHTML(r.type || '')}</td>
+    <td>${escapeHTML(r.title || r.snippet || '(no title)')}</td>
+    <td>${escapeHTML(publicAuthor)}</td>
+    <td>${escapeHTML(anonInfo)}</td>
+    <td>${escapeHTML(String(r.upvoteCount ?? r.upvotes ?? ''))}</td>
+    <td><a href="${escapeHTML(linkHref)}" target="_blank">View</a></td>
+  `;
+  tbody.appendChild(tr);
+});
+
 
 
   } catch (err) {
