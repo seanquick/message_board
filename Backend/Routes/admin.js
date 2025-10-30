@@ -132,53 +132,58 @@ router.get('/search', requireAdmin, async (req, res) => {
       $text: { $search: q },
       ...(includeDeleted ? {} : notDeleted('isDeleted')),
     };
+// --- Search Threads ---
+async function searchThreads() {
+  const docs = await Thread.find(threadFilter, { score: { $meta: 'textScore' } })
+    .sort({ score: { $meta: 'textScore' } })
+    .limit(100)
+    .select(
+      '_id title body author author_name isAnonymous realAuthor createdAt ' +
+      'isDeleted isPinned pinned isLocked locked upvoteCount commentCount status score'
+    )
+    .populate('author', 'name email')
+    .populate('realAuthor', 'name email')
+    .lean();
 
-    // --- Search Threads ---
-    async function searchThreads() {
-      const docs = await Thread.find(threadFilter, { score: { $meta: 'textScore' } })
-        .sort({ score: { $meta: 'textScore' } })
-        .limit(100)
-        .select(
-          '_id title author author_name isAnonymous realAuthor createdAt ' +
-          'isDeleted isPinned pinned isLocked locked upvoteCount commentCount status'
-        )
-        .populate('author', 'name email')
-        .lean();
+  return docs.map(t => ({
+    type: 'thread',
+    _id: t._id,
+    title: t.title,
+    author: t.author || null,
+    realAuthor: t.realAuthor || null,
+    isAnonymous: !!t.isAnonymous,
+    createdAt: t.createdAt,
+    score: t.score,
+    snippet: (t.body || t.title || '').slice(0, 120),
+    upvoteCount: t.upvoteCount ?? 0,
+    isDeleted: t.isDeleted,
+  }));
+}
 
-      return docs.map(t => ({
-        type: 'thread',
-        _id: t._id,
-        title: t.title,
-        author: t.author,
-        createdAt: t.createdAt,
-        score: t.score,
-        snippet: (t.title || '').slice(0, 120),
-        upvoteCount: t.upvoteCount ?? 0,
-        isDeleted: t.isDeleted,
-      }));
-    }
+// --- Search Comments ---
+async function searchComments() {
+  const docs = await Comment.find(commentFilter, { score: { $meta: 'textScore' } })
+    .sort({ score: { $meta: 'textScore' } })
+    .limit(100)
+    .select('_id thread body author author_name isAnonymous realAuthor createdAt isDeleted upvoteCount score')
+    .populate('author', 'name email')
+    .populate('realAuthor', 'name email')
+    .lean();
 
-    // --- Search Comments ---
-    async function searchComments() {
-      const docs = await Comment.find(commentFilter, { score: { $meta: 'textScore' } })
-        .sort({ score: { $meta: 'textScore' } })
-        .limit(100)
-        .select('_id thread body author author_name isAnonymous realAuthor createdAt isDeleted upvoteCount')
-        .populate('realAuthor', 'name email')
-        .populate('author', 'name email')
-        .lean();
-
-      return docs.map(c => ({
-        type: 'comment',
-        _id: c._id,
-        thread: c.thread,
-        author: c.author,
-        createdAt: c.createdAt,
-        score: c.score,
-        snippet: (c.body || '').slice(0, 120),
-        isDeleted: c.isDeleted,
-      }));
-    }
+  return docs.map(c => ({
+    type: 'comment',
+    _id: c._id,
+    thread: c.thread,
+    author: c.author || null,
+    realAuthor: c.realAuthor || null,
+    isAnonymous: !!c.isAnonymous,
+    createdAt: c.createdAt,
+    score: c.score,
+    snippet: (c.body || '').slice(0, 120),
+    upvoteCount: c.upvoteCount ?? 0,
+    isDeleted: c.isDeleted,
+  }));
+}
 
     // --- Execute Search ---
     if (type === 'threads') {
