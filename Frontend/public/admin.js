@@ -816,49 +816,51 @@ async function doSearch() {
     const results = resp.results || [];
     console.log('[AdminSearch] Results:', results);
 
-    const tbody = ensureTbody('#searchTable');
-    if (!tbody) {
-      showErr('Results table body not found');
-      return;
+    // after console.log('[AdminSearch] Results:', results);
+
+  const tbody = ensureTbody('#searchTable');
+  if (!tbody) {
+    showErr('Results table body not found');
+    return;
+  }
+
+  tbody.innerHTML = '';
+  if (!results.length) {
+    tbody.innerHTML = `<tr><td colspan="7" class="empty">No results found for "${escapeHTML(qStr)}"</td></tr>`;
+    return;
+  }
+
+  // Add debug column for realAuthor just for test
+  results.forEach(r => {
+    console.log('Row data:', r);  // debug each row
+
+    const author = r.isAnonymous
+      ? 'Anonymous'
+      : (r.author?.name || r.author?.email || r.author_name || '—');
+
+    const realAuthorName = r.realAuthor?.name || r.realAuthor?.email || '—';
+    const anonInfo = r.isAnonymous ? `Yes → ${realAuthorName}` : 'No';
+
+    let linkHref = '#';
+    if (r.type === 'thread' && r._id) {
+      linkHref = `thread.html?id=${encodeURIComponent(r._id)}`;
+    } else if (r.type === 'comment' && r._id) {
+      linkHref = `thread.html?id=${encodeURIComponent(r.thread)}&comment=${encodeURIComponent(r._id)}`;
     }
 
-    tbody.innerHTML = '';
-    if (!results.length) {
-      tbody.innerHTML = `<tr><td colspan="6" class="empty">No results</td></tr>`;
-      return;
-    }
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${escapeHTML(new Date(r.createdAt || Date.now()).toLocaleString())}</td>
+      <td>${escapeHTML(r.type || '')}</td>
+      <td>${escapeHTML(r.title || r.snippet || '(no title)')}</td>
+      <td>${escapeHTML(author)}</td>
+      <td>${escapeHTML(anonInfo)}</td>
+      <td>${escapeHTML(String(r.upvoteCount ?? r.upvotes ?? ''))}</td>
+      <td><a href="${escapeHTML(linkHref)}" target="_blank">View</a></td>
+    `;
+    tbody.appendChild(tr);
+  });
 
-    results.forEach(r => {
-      // build link depending on type
-      let linkHref = '#';
-      if (r.type === 'thread' && r._id) {
-        linkHref = `thread.html?id=${encodeURIComponent(r._id)}`;
-      } else if (r.type === 'comment' && r._id) {
-        linkHref = `thread.html?id=${encodeURIComponent(r.thread)}&comment=${encodeURIComponent(r._id)}`;
-      }
-
-      const author = r.isAnonymous
-        ? 'Anonymous'
-        : (r.author?.name || r.author?.email || r.author_name || '—');
-
-      const realAuthor = r.realAuthor?.name || r.realAuthor?.email || '—';
-      const anonInfo = r.isAnonymous ? `Yes → ${realAuthor}` : 'No';
-
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${escapeHTML(new Date(r.createdAt || Date.now()).toLocaleString())}</td>
-        <td>${escapeHTML(r.type || '')}</td>
-        <td>${escapeHTML(r.title || r.snippet || '(no title)')}</td>
-        <td>${escapeHTML(author)}</td>
-        <td>${escapeHTML(anonInfo)}</td>
-        <td>${escapeHTML(String(r.upvoteCount ?? r.upvotes ?? ''))}</td>
-        <td><a href="${escapeHTML(linkHref)}" target="_blank">View</a></td>
-      `;
-
-
-
-      tbody.appendChild(tr);
-    });
 
   } catch (err) {
     console.error('[AdminSearch] Failed:', err);
