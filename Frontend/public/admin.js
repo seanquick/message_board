@@ -784,37 +784,82 @@ async function init() {
 }
 
 async function doSearch() {
-  const qVal = document.querySelector('#sQ')?.value?.trim();
-  const type = document.querySelector('#sType')?.value || 'all';
+  clearErrs();
 
-  if (!qVal) {
+  const qStr    = (q('#sQ')?.value || '').trim();
+  const type    = (q('#sType')?.value || 'all').toLowerCase();
+  const status  = (q('#sStatus')?.value || '').toLowerCase();
+  const from    = q('#sFrom')?.value;
+  const to      = q('#sTo')?.value;
+  const minUp   = q('#sMinUp')?.value;
+  const category= q('#sCategory')?.value;
+
+  if (!qStr) {
     showErr('Please enter a search term.');
     return;
   }
 
+  const params = new URLSearchParams();
+  params.set('q', qStr);
+  params.set('type', type);
+  params.set('t', String(Date.now()));
+
+  if (status)   params.set('status', status);
+  if (from)     params.set('from', from);
+  if (to)       params.set('to',   to);
+  if (minUp)    params.set('minUp', minUp);
+  if (category) params.set('category', category);
+
   try {
-    const params = new URLSearchParams();
-    params.set('q', qVal);
-    params.set('type', type);
-    params.set('t', Date.now());  // prevent caching
+    console.log('[AdminSearch] Fetching:', `/api/admin/search?${params.toString()}`);
+    const resp    = await api(`/api/admin/search?${params.toString()}`, { nocache: true, skipHtmlRedirect: true });
+    const results = resp.results || [];
+    console.log('[AdminSearch] Results:', results);
 
-    const includeDeleted = document.querySelector('#tIncludeDeleted')?.checked;
-    if (includeDeleted) params.set('includeDeleted', '1');
+    const tbody = ensureTbody('#searchTable');
+    if (!tbody) {
+      showErr('Results table body not found');
+      return;
+    }
 
-    const url = `/api/admin/search?${params.toString()}`;
-    console.log(`[AdminSearch] Fetching: ${url}`);
+    tbody.innerHTML = '';
+    if (!results.length) {
+      tbody.innerHTML = `<tr><td colspan="6" class="empty">No results</td></tr>`;
+      return;
+    }
 
-    const resp = await api(url);
-    console.log('[AdminSearch] Results:', resp);
+    results.forEach(r => {
+      // build link depending on type
+      let linkHref = '#';
+      if (r.type === 'thread' && r._id) {
+        linkHref = `thread.html?id=${encodeURIComponent(r._id)}`;
+      } else if (r.type === 'comment' && r._id) {
+        linkHref = `thread.html?id=${encodeURIComponent(r.thread)}&comment=${encodeURIComponent(r._id)}`;
+      }
 
-    // Update your UI here — for now, just log them
-    alert(`Found ${resp?.results?.length || 0} result(s). Check console.`);
+      const author = r.isAnonymous
+        ? 'Anonymous'
+        : (r.author?.name || r.author?.email || r.author_name || '—');
 
-  } catch (e) {
-    console.error('[AdminSearch] Failed:', e);
-    showErr(e?.error || e?.message || 'Search failed');
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${escapeHTML(new Date(r.createdAt || Date.now()).toLocaleString())}</td>
+        <td>${escapeHTML(r.type || '')}</td>
+        <td>${escapeHTML(r.title || r.snippet || '(no title)')}</td>
+        <td>${escapeHTML(author)}</td>
+        <td>${escapeHTML(String(r.upvoteCount ?? r.upvotes ?? ''))}</td>
+        <td><a href="${escapeHTML(linkHref)}" target="_blank">View</a></td>
+      `;
+
+      tbody.appendChild(tr);
+    });
+
+  } catch (err) {
+    console.error('[AdminSearch] Failed:', err);
+    showErr(`Search failed: ${err?.error || err?.message || 'Unknown error'}`);
   }
 }
+
 
 // Run init when DOM is ready
 document.addEventListener('DOMContentLoaded', init);
