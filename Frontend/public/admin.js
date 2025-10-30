@@ -786,13 +786,13 @@ async function init() {
 async function doSearch() {
   clearErrs();
 
-  const qStr    = (q('#sQ')?.value || '').trim();
-  const type    = (q('#sType')?.value || 'all').toLowerCase();
-  const status  = (q('#sStatus')?.value || '').toLowerCase();
-  const from    = q('#sFrom')?.value;
-  const to      = q('#sTo')?.value;
-  const minUp   = q('#sMinUp')?.value;
-  const category= q('#sCategory')?.value;
+  const qStr     = (q('#sQ')?.value || '').trim();
+  const type     = (q('#sType')?.value || 'all').toLowerCase();
+  const status   = (q('#sStatus')?.value || '').toLowerCase();
+  const from     = q('#sFrom')?.value;
+  const to       = q('#sTo')?.value;
+  const minUp    = q('#sMinUp')?.value;
+  const category = q('#sCategory')?.value;
 
   if (!qStr) {
     showErr('Please enter a search term.');
@@ -816,59 +816,55 @@ async function doSearch() {
     const results = resp.results || [];
     console.log('[AdminSearch] Results:', results);
 
-    // after console.log('[AdminSearch] Results:', results);
+    const tbody = ensureTbody('#searchTable');
+    if (!tbody) {
+      showErr('Results table body not found');
+      return;
+    }
 
-  const tbody = ensureTbody('#searchTable');
-  if (!tbody) {
-    showErr('Results table body not found');
-    return;
-  }
+    tbody.innerHTML = '';
+    if (!results.length) {
+      tbody.innerHTML = `<tr><td colspan="7" class="empty">No results found for "${escapeHTML(qStr)}"</td></tr>`;
+      return;
+    }
 
-  tbody.innerHTML = '';
-  if (!results.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="empty">No results found for "${escapeHTML(qStr)}"</td></tr>`;
-    return;
-  }
+    // Row building
+    results.forEach(r => {
+      console.log('Row data:', r);
 
-  // Row building 
-  results.forEach(r => {
-  console.log('Row data:', r);
+      // Determine display for “public author”
+      const publicAuthor = r.isAnonymous
+        ? 'Anonymous'
+        : (r.author?.name || r.author?.email || r.author_name || '—');
 
-  // Determine display for “public author”
-  const publicAuthor = r.isAnonymous
-    ? 'Anonymous'
-    : (r.author?.name || r.author?.email || r.author_name || '—');
+      // Determine “real” author (internal/admin only)
+      const realAuthorName = r.realAuthor?.name || r.realAuthor?.email || '—';
 
-  // Determine “real” author (internal/admin only)
-  const realAuthorName = r.realAuthor?.name || r.realAuthor?.email || '—';
+      // Build “Anon / Real Author” display
+      const anonInfo = r.isAnonymous
+        ? `Yes → ${realAuthorName}`
+        : `No → ${realAuthorName}`;
 
-  // Build “Anon / Real Author” display
-  const anonInfo = r.isAnonymous
-    ? `Yes → ${realAuthorName}`
-    : `No → ${realAuthorName}`;
+      // Build link
+      let linkHref = '#';
+      if (r.type === 'thread' && r._id) {
+        linkHref = `thread.html?id=${encodeURIComponent(r._id)}`;
+      } else if (r.type === 'comment' && r._id) {
+        linkHref = `thread.html?id=${encodeURIComponent(r.thread)}&comment=${encodeURIComponent(r._id)}`;
+      }
 
-  // Build link
-  let linkHref = '#';
-  if (r.type === 'thread' && r._id) {
-    linkHref = `thread.html?id=${encodeURIComponent(r._id)}`;
-  } else if (r.type === 'comment' && r._id) {
-    linkHref = `thread.html?id=${encodeURIComponent(r.thread)}&comment=${encodeURIComponent(r._id)}`;
-  }
-
-  const tr = document.createElement('tr');
-  tr.innerHTML = `
-    <td>${escapeHTML(new Date(r.createdAt || Date.now()).toLocaleString())}</td>
-    <td>${escapeHTML(r.type || '')}</td>
-    <td>${escapeHTML(r.title || r.snippet || '(no title)')}</td>
-    <td>${escapeHTML(publicAuthor)}</td>
-    <td>${escapeHTML(anonInfo)}</td>
-    <td>${escapeHTML(String(r.upvoteCount ?? r.upvotes ?? ''))}</td>
-    <td><a href="${escapeHTML(linkHref)}" target="_blank">View</a></td>
-  `;
-  tbody.appendChild(tr);
-});
-
-
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${escapeHTML(new Date(r.createdAt || Date.now()).toLocaleString())}</td>
+        <td>${escapeHTML(r.type || '')}</td>
+        <td>${escapeHTML(r.title || r.snippet || '(no title)')}</td>
+        <td>${escapeHTML(publicAuthor)}</td>
+        <td>${escapeHTML(anonInfo)}</td>
+        <td>${escapeHTML(String(r.upvoteCount ?? r.upvotes ?? ''))}</td>
+        <td><a href="${escapeHTML(linkHref)}" target="_blank">View</a></td>
+      `;
+      tbody.appendChild(tr);
+    });
 
   } catch (err) {
     console.error('[AdminSearch] Failed:', err);
