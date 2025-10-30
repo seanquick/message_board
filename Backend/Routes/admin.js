@@ -142,7 +142,6 @@ router.get('/search', requireAdmin, async (req, res) => {
           '_id title author author_name isAnonymous realAuthor createdAt ' +
           'isDeleted isPinned pinned isLocked locked upvoteCount commentCount status'
         )
-        .populate('realAuthor', 'name email')
         .populate('author', 'name email')
         .lean();
 

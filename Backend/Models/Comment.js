@@ -40,6 +40,7 @@ const CommentSchema = new Schema(
     userId:       { type: Schema.Types.ObjectId, ref: 'User' },  // legacy
     author_name:  { type: String, trim: true, default: '' },
     isAnonymous:  { type: Boolean, default: false },
+    realAuthor: { type: Schema.Types.ObjectId, ref: 'User', index: true }, // ✅ added for admin search
 
     // ----- Upvotes (thumbs up) -----
     upvoters:    [{ type: Schema.Types.ObjectId, ref: 'User' }],
@@ -82,6 +83,15 @@ CommentSchema.pre('validate', function (next) {
   if (!this.author_name) this.author_name = 'Unknown';
   next();
 });
+
+// ✅ Mirror realAuthor if not already set
+CommentSchema.pre('save', function (next) {
+  if (!this.realAuthor && this.author) {
+    this.realAuthor = this.author;
+  }
+  next();
+});
+
 
 // Maintain upvoteCount/score + mirrors before save
 CommentSchema.pre('save', function (next) {
