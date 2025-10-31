@@ -4,7 +4,8 @@ const mongoose = require('mongoose');
 const Thread = require('../Models/Thread');
 const Comment = require('../Models/Comment');
 const User = require('../Models/User');
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/message-board';
+const MONGO_URI = 'mongodb+srv://USERNAME:PASSWORD@cluster0.mongodb.net/message-board';
+
 
 (async function run() {
   console.log('Connecting to MongoDB...');
