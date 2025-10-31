@@ -7,7 +7,7 @@ const Comment = require('../Models/Comment');
 const User = require('../Models/User');
 
 // Use .env or fallback
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/message-board';
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/messageboard';
 
 (async function run() {
   try {
