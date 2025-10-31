@@ -1,151 +1,91 @@
 /**
- * backfillRealAuthor.js
+ * fixAuthorNameFromReal.js
  *
- * Populates missing `realAuthor` fields in Threads and Comments
- * and fixes `isAnonymous` flags where missing or incorrect.
+ * For Thread and Comment:
+ * - Find docs where author_name is blank/'Unknown'
+ * - realAuthor exists
+ * - Load realAuthor, then set author_name = realAuthor.name
  *
  * Usage:
- *   node backend/scripts/backfillRealAuthor.js
+ *   node backend/scripts/fixAuthorNameFromReal.js
  */
 
 require('dotenv').config();
 const mongoose = require('mongoose');
-const Thread = require('../Models/Thread');
+const Thread  = require('../Models/Thread');
 const Comment = require('../Models/Comment');
 
 async function connectDB() {
   const uri = process.env.MONGO_URI || process.env.MONGODB_URI || 'mongodb://localhost:27017/board';
   mongoose.set('strictQuery', false);
-
-  console.log('🟡 Connecting to MongoDB...');
+  console.log('Connecting to MongoDB...');
   await mongoose.connect(uri);
-  console.log('✅ Connected to MongoDB');
+  console.log('Connected');
 }
 
-/* ---------------------------------------------------------
- * THREADS BACKFILL
- * --------------------------------------------------------*/
-async function backfillThreads() {
-  console.log('\n🔍 Checking threads missing realAuthor or bad isAnonymous...');
-
-  // 1️⃣ Populate missing realAuthor
-  const missingRealAuthor = await Thread.countDocuments({
-    $or: [{ realAuthor: { $exists: false } }, { realAuthor: null }],
-    author: { $ne: null }
-  });
-
-  if (missingRealAuthor > 0) {
-    console.log(`⚙️  Found ${missingRealAuthor} threads missing realAuthor. Updating...`);
-    const updated = await Thread.updateMany(
-      {
-        $or: [{ realAuthor: { $exists: false } }, { realAuthor: null }],
-        author: { $ne: null }
-      },
-      [
-        { $set: { realAuthor: '$author' } }
-      ]
-    );
-    console.log(`✅ Updated ${updated.modifiedCount || 0} threads with realAuthor.`);
-  } else {
-    console.log('✅ All threads already have realAuthor set.');
-  }
-
-  // 2️⃣ Fix missing or incorrect isAnonymous
-  const anonCandidates = await Thread.countDocuments({
+async function fixThreads() {
+  console.log('\nFixing threads author_name...');
+  const toFix = await Thread.find({
+    author:   { $ne: null },
+    realAuthor:{ $ne: null },
     $or: [
-      { isAnonymous: { $exists: false } },
-      { isAnonymous: null },
-      { $and: [{ isAnonymous: false }, { author_name: /anonymous/i }] }
+      { author_name: { $exists: false } },
+      { author_name: '' },
+      { author_name: 'Unknown' }
     ]
-  });
+  }).populate('realAuthor', 'name email').lean();
 
-  if (anonCandidates > 0) {
-    console.log(`⚙️  Found ${anonCandidates} threads needing isAnonymous fix. Updating...`);
-    const updatedAnon = await Thread.updateMany(
-      {
-        $or: [
-          { isAnonymous: { $exists: false } },
-          { isAnonymous: null },
-          { $and: [{ isAnonymous: false }, { author_name: /anonymous/i }] }
-        ]
-      },
-      { $set: { isAnonymous: true } }
+  console.log(`Found ${toFix.length} threads needing update`);
+
+  for (const t of toFix) {
+    const name = t.realAuthor.name || t.realAuthor.email || '';
+    if (!name) continue;
+    await Thread.updateOne(
+      { _id: t._id },
+      { $set: { author_name: name } }
     );
-    console.log(`✅ Updated ${updatedAnon.modifiedCount || 0} threads marked as anonymous.`);
-  } else {
-    console.log('✅ All threads have correct isAnonymous flag.');
+    console.log(`Updated Thread ${t._id} => ${name}`);
   }
+  console.log('Threads author_name fix done');
 }
 
-/* ---------------------------------------------------------
- * COMMENTS BACKFILL
- * --------------------------------------------------------*/
-async function backfillComments() {
-  console.log('\n🔍 Checking comments missing realAuthor or bad isAnonymous...');
-
-  // 1️⃣ Populate missing realAuthor
-  const missingRealAuthor = await Comment.countDocuments({
-    $or: [{ realAuthor: { $exists: false } }, { realAuthor: null }],
-    author: { $ne: null }
-  });
-
-  if (missingRealAuthor > 0) {
-    console.log(`⚙️  Found ${missingRealAuthor} comments missing realAuthor. Updating...`);
-    const updated = await Comment.updateMany(
-      {
-        $or: [{ realAuthor: { $exists: false } }, { realAuthor: null }],
-        author: { $ne: null }
-      },
-      [
-        { $set: { realAuthor: '$author' } }
-      ]
-    );
-    console.log(`✅ Updated ${updated.modifiedCount || 0} comments with realAuthor.`);
-  } else {
-    console.log('✅ All comments already have realAuthor set.');
-  }
-
-  // 2️⃣ Fix missing or incorrect isAnonymous
-  const anonCandidates = await Comment.countDocuments({
+async function fixComments() {
+  console.log('\nFixing comments author_name...');
+  const toFix = await Comment.find({
+    author: { $ne: null },
+    realAuthor: { $ne: null },
     $or: [
-      { isAnonymous: { $exists: false } },
-      { isAnonymous: null },
-      { $and: [{ isAnonymous: false }, { author_name: /anonymous/i }] }
+      { author_name: { $exists: false } },
+      { author_name: '' },
+      { author_name: 'Unknown' }
     ]
-  });
+  }).populate('realAuthor', 'name email').lean();
 
-  if (anonCandidates > 0) {
-    console.log(`⚙️  Found ${anonCandidates} comments needing isAnonymous fix. Updating...`);
-    const updatedAnon = await Comment.updateMany(
-      {
-        $or: [
-          { isAnonymous: { $exists: false } },
-          { isAnonymous: null },
-          { $and: [{ isAnonymous: false }, { author_name: /anonymous/i }] }
-        ]
-      },
-      { $set: { isAnonymous: true } }
+  console.log(`Found ${toFix.length} comments needing update`);
+
+  for (const c of toFix) {
+    const name = c.realAuthor.name || c.realAuthor.email || '';
+    if (!name) continue;
+    await Comment.updateOne(
+      { _id: c._id },
+      { $set: { author_name: name } }
     );
-    console.log(`✅ Updated ${updatedAnon.modifiedCount || 0} comments marked as anonymous.`);
-  } else {
-    console.log('✅ All comments have correct isAnonymous flag.');
+    console.log(`Updated Comment ${c._id} => ${name}`);
   }
+  console.log('Comments author_name fix done');
 }
 
-/* ---------------------------------------------------------
- * MAIN
- * --------------------------------------------------------*/
 async function run() {
   try {
     await connectDB();
-    await backfillThreads();
-    await backfillComments();
-    console.log('\n🎉 Backfill complete!');
+    await fixThreads();
+    await fixComments();
+    console.log('\nAll done');
   } catch (err) {
-    console.error('❌ Backfill failed:', err);
+    console.error('Error:', err);
   } finally {
     await mongoose.disconnect();
-    console.log('🔌 Disconnected from MongoDB');
+    console.log('Disconnected');
   }
 }
 
