@@ -4,7 +4,8 @@ const mongoose = require('mongoose');
 const Thread = require('../Models/Thread');
 const Comment = require('../Models/Comment');
 const User = require('../Models/User');
-const MONGO_URI = 'mongodb+srv://USERNAME:PASSWORD@cluster0.mongodb.net/message-board';
+const MONGO_URI = 'mongodb+srv://seandief:<db_password>@cluster0.ceeuibu.mongodb.net/?appName=Cluster0'
+;
 
 
 (async function run() {
