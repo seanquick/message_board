@@ -1,92 +1,113 @@
-/**
- * fixAuthorNameFromReal.js
- *
- * For Thread and Comment:
- * - Find docs where author_name is blank/'Unknown'
- * - realAuthor exists
- * - Load realAuthor, then set author_name = realAuthor.name
- *
- * Usage:
- *   node backend/scripts/fixAuthorNameFromReal.js
- */
+// backend/scripts/backfillRealAuthor.js
 
-require('dotenv').config();
 const mongoose = require('mongoose');
-const Thread  = require('../Models/Thread');
+const Thread = require('../Models/Thread');
 const Comment = require('../Models/Comment');
+const User = require('../Models/User');
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/message-board';
 
-async function connectDB() {
-  const uri = process.env.MONGO_URI || process.env.MONGODB_URI || 'mongodb://localhost:27017/board';
-  mongoose.set('strictQuery', false);
+(async function run() {
   console.log('Connecting to MongoDB...');
-  await mongoose.connect(uri);
-  console.log('Connected');
-}
+  await mongoose.connect(MONGO_URI);
+  console.log('Connected\n');
 
-async function fixThreads() {
-  console.log('\nFixing threads author_name...');
-  const toFix = await Thread.find({
-    author:   { $ne: null },
-    realAuthor:{ $ne: null },
+  // ----------------------------------------
+  // 🧵 THREADS
+  // ----------------------------------------
+  console.log('Fixing threads author_name & realAuthor...');
+  const threads = await Thread.find({
     $or: [
-      { author_name: { $exists: false } },
-      { author_name: '' },
-      { author_name: 'Unknown' }
+      { author_name: { $in: [null, '', 'Unknown'] } },
+      { realAuthor: { $exists: false } },
+      { realAuthor: null },
+      { author: { $exists: false } },
+      { author: null }
     ]
-  }).populate('realAuthor', 'name email').lean();
+  });
 
-  console.log(`Found ${toFix.length} threads needing update`);
+  let updatedThreads = 0;
 
-  for (const t of toFix) {
-    const name = t.realAuthor.name || t.realAuthor.email || '';
-    if (!name) continue;
-    await Thread.updateOne(
-      { _id: t._id },
-      { $set: { author_name: name } }
-    );
-    console.log(`Updated Thread ${t._id} => ${name}`);
+  for (const thread of threads) {
+    const userId = thread.author || thread.userId;
+    if (!userId) continue;
+
+    const user = await User.findById(userId);
+    if (!user) continue;
+
+    let changed = false;
+
+    if (!thread.author) {
+      thread.author = user._id;
+      changed = true;
+    }
+
+    if (!thread.realAuthor) {
+      thread.realAuthor = user._id;
+      changed = true;
+    }
+
+    if (!thread.author_name || thread.author_name === 'Unknown' || thread.author_name === '') {
+      thread.author_name = user.name || user.email || 'Anonymous';
+      changed = true;
+    }
+
+    if (changed) {
+      await thread.save();
+      updatedThreads++;
+    }
   }
-  console.log('Threads author_name fix done');
-}
 
-async function fixComments() {
-  console.log('\nFixing comments author_name...');
-  const toFix = await Comment.find({
-    author: { $ne: null },
-    realAuthor: { $ne: null },
+  console.log(`Updated ${updatedThreads} thread(s)\n`);
+
+  // ----------------------------------------
+  // 💬 COMMENTS
+  // ----------------------------------------
+  console.log('Fixing comments author_name & realAuthor...');
+  const comments = await Comment.find({
     $or: [
-      { author_name: { $exists: false } },
-      { author_name: '' },
-      { author_name: 'Unknown' }
+      { author_name: { $in: [null, '', 'Unknown'] } },
+      { realAuthor: { $exists: false } },
+      { realAuthor: null },
+      { author: { $exists: false } },
+      { author: null }
     ]
-  }).populate('realAuthor', 'name email').lean();
+  });
 
-  console.log(`Found ${toFix.length} comments needing update`);
+  let updatedComments = 0;
 
-  for (const c of toFix) {
-    const name = c.realAuthor.name || c.realAuthor.email || '';
-    if (!name) continue;
-    await Comment.updateOne(
-      { _id: c._id },
-      { $set: { author_name: name } }
-    );
-    console.log(`Updated Comment ${c._id} => ${name}`);
+  for (const comment of comments) {
+    const userId = comment.author || comment.userId;
+    if (!userId) continue;
+
+    const user = await User.findById(userId);
+    if (!user) continue;
+
+    let changed = false;
+
+    if (!comment.author) {
+      comment.author = user._id;
+      changed = true;
+    }
+
+    if (!comment.realAuthor) {
+      comment.realAuthor = user._id;
+      changed = true;
+    }
+
+    if (!comment.author_name || comment.author_name === 'Unknown' || comment.author_name === '') {
+      comment.author_name = user.name || user.email || 'Anonymous';
+      changed = true;
+    }
+
+    if (changed) {
+      await comment.save();
+      updatedComments++;
+    }
   }
-  console.log('Comments author_name fix done');
-}
 
-async function run() {
-  try {
-    await connectDB();
-    await fixThreads();
-    await fixComments();
-    console.log('\nAll done');
-  } catch (err) {
-    console.error('Error:', err);
-  } finally {
-    await mongoose.disconnect();
-    console.log('Disconnected');
-  }
-}
+  console.log(`Updated ${updatedComments} comment(s)\n`);
 
-run();
+  // ----------------------------------------
+  console.log('✅ Backfill complete');
+  mongoose.disconnect();
+})();
