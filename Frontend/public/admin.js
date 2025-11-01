@@ -441,56 +441,72 @@ function bindThreadActions(tbody) {
 }
 
 
-
-
-// --- COMMENTS Section ---
-async function loadAdminComments() {
+// ===== COMMENTS Section (Admin) =====
+async function loadAdminComments({ page = 1 } = {}) {
   clearErrs();
   const tbody = ensureTbody('#commentsTable');
   if (!tbody) return;
 
   try {
     const includeDeleted = q('#cIncludeDeleted')?.checked;
-    const params         = new URLSearchParams();
+    const params = new URLSearchParams();
     params.set('t', String(Date.now()));
+    params.set('page', page);
+    params.set('limit', 20);  // or whatever default
     if (includeDeleted) params.set('includeDeleted', '1');
-    const url  = `/api/admin/search?type=comments&${params.toString()}`;
+
+    const url = `/api/admin/comments?${params.toString()}`;
+    console.log('[AdminComments] Fetching:', url);
     const resp = await api(url, { nocache: true, skipHtmlRedirect: true });
-    const results = resp.results || [];
+    const comments = Array.isArray(resp.comments) ? resp.comments : [];
+    const { totalPages = 1, totalCount = 0 } = resp.pagination || {};
 
     tbody.innerHTML = '';
-    if (!results.length) {
+    if (!comments.length) {
       tbody.innerHTML = '<tr><td colspan="7">No comments found.</td></tr>';
+      renderCommentPagination(page, totalPages, totalCount);
       return;
     }
 
-    results.forEach(c => {
-      const tr          = document.createElement('tr');
-      tr.dataset.id     = c._id;
-      const author      = c.author?.name || c.author?.email || c.authorId || '';
-      tr.innerHTML      = `
+    comments.forEach(c => {
+      const tr = document.createElement('tr');
+      tr.dataset.id = c._id;
+
+      const publicAuthor = c.isAnonymous
+        ? 'Anonymous'
+        : (c.author_name || (c.author?.name || ''));
+
+      const internalAuthor = c.realAuthor
+        ? (c.realAuthor.name || c.realAuthor.email || '')
+        : '';
+
+      const displayAuthor = c.isAnonymous
+        ? `${publicAuthor} (internal: ${escapeHTML(internalAuthor)})`
+        : escapeHTML(publicAuthor);
+
+      tr.innerHTML = `
         <td>${escapeHTML(new Date(c.createdAt || Date.now()).toLocaleString())}</td>
-        <td>${escapeHTML(c.snippet || '')}</td>
-        <td>${escapeHTML(author)}</td>
-        <td>${escapeHTML(c.thread || '')}</td>
-        <td>${Number(c.upvoteCount ?? 0)}</td>
-        <td>${c.isDeleted ? 'Deleted' : ''}</td>
+        <td>${escapeHTML(c.snippet || (c.body || '').slice(0, 120) || '(no snippet)')}</td>
+        <td>${displayAuthor}</td>
+        <td>${encodeURIComponent(c.thread)}</td>
+        <td>${Number(c.upvoteCount ?? c.upvotes ?? 0)}</td>
+        <td>${escapeHTML(c.status || '')}</td>
         <td class="row gap-05">
           <button class="btn tiny viewComment">View</button>
-          <button class="btn tiny replyComment">Reply</button>
-          <button class="btn tiny editComment">Edit</button>
-          <button class="btn tiny delRestoreComment">${c.isDeleted ? 'Restore' : 'Delete'}</button>
+          <button class="btn tiny deleteComment">Delete/Restore</button>
         </td>
       `;
       tbody.appendChild(tr);
     });
 
-    bindCommentAdminActions(tbody);
+    renderCommentPagination(page, totalPages, totalCount);
+    bindCommentActions(tbody);
 
   } catch (e) {
     renderErrorRow('#commentsTable', `Error loading comments: ${e?.error || e?.message}`, 7);
   }
 }
+
 
 function bindCommentAdminActions(tbody) {
   tbody.querySelectorAll('.viewComment').forEach(btn => btn.addEventListener('click', ev => {
