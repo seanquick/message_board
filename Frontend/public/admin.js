@@ -442,6 +442,7 @@ function bindThreadActions(tbody) {
 
 
 // ===== COMMENTS Section (Admin UI) =====
+// ===== COMMENTS Section (Admin UI) =====
 async function loadAdminComments({ page = 1 } = {}) {
   clearErrs();
   const tbody = ensureTbody('#commentsTable');
@@ -457,11 +458,13 @@ async function loadAdminComments({ page = 1 } = {}) {
       params.set('includeDeleted', '1');
     }
 
-    const url  = `/api/admin/comments?${params.toString()}`;
+    const url = `/api/admin/comments?${params.toString()}`;
     console.log('[AdminComments] Fetching:', url);
 
     const resp = await api(url, { nocache: true, skipHtmlRedirect: true });
-    const comments       = Array.isArray(resp.comments) ? resp.comments : [];
+    console.log('[AdminComments] Response:', resp);
+
+    const comments = Array.isArray(resp.comments) ? resp.comments : [];
     const { totalPages = 1, totalCount = 0 } = resp.pagination || {};
 
     tbody.innerHTML = '';
@@ -471,12 +474,11 @@ async function loadAdminComments({ page = 1 } = {}) {
       return;
     }
 
-    // Render each comment row
     comments.forEach(c => {
       const tr = document.createElement('tr');
       tr.dataset.id = c._id;
 
-      const publicAuthor   = c.isAnonymous
+      const publicAuthor = c.isAnonymous
         ? 'Anonymous'
         : (c.author_name || (c.author?.name || ''));
 
@@ -484,7 +486,7 @@ async function loadAdminComments({ page = 1 } = {}) {
         ? (c.realAuthor.name || c.realAuthor.email || '')
         : '';
 
-      const displayAuthor  = c.isAnonymous
+      const displayAuthor = c.isAnonymous
         ? `${publicAuthor} (internal: ${escapeHTML(internalAuthor)})`
         : escapeHTML(publicAuthor);
 
@@ -503,7 +505,6 @@ async function loadAdminComments({ page = 1 } = {}) {
       tbody.appendChild(tr);
     });
 
-    // Render pagination controls
     renderCommentPagination(page, totalPages, totalCount);
     bindCommentActions(tbody);
 
@@ -512,6 +513,7 @@ async function loadAdminComments({ page = 1 } = {}) {
     renderErrorRow('#commentsTable', `Error loading comments: ${e?.error || e?.message}`, 7);
   }
 }
+
 
 
 
