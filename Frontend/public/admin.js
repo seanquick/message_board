@@ -6,17 +6,21 @@ import { api, escapeHTML, timeAgo, q, qa, refreshMe, me as meVar } from './main.
 let meUser = null;
 
 function showErr(msg) {
-  const host = q('#adminErr') || document.body;
-  const div  = document.createElement('div');
-  div.className   = 'err';
-  div.textContent = msg;
-  host.prepend(div);
+  const el = document.getElementById('adminErr');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('active');
 }
 
+
 function clearErrs() {
-  const host = q('#adminErr') || document.body;
-  host.querySelectorAll('.err').forEach(el => el.remove());
+  const el = document.getElementById('adminErr');
+  if (!el) return;
+  el.textContent = '';
+  el.classList.remove('active');
 }
+
+
 
 function debounce(fn, ms = 300) {
   let timer;

@@ -696,3 +696,17 @@ tr .row.gap-05 button {
     padding: 1rem;
   }
 }
+
+#adminErr {
+  display: none;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  border-radius: 4px;
+  background-color: #ffe0e0;
+  color: #a00;
+  font-weight: 500;
+}
+
+#adminErr.active {
+  display: block;
+}
