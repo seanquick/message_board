@@ -762,32 +762,52 @@ router.get('/threads', requireAdmin, async (req, res) => {
 router.get('/comments', requireAdmin, async (req, res) => {
   try {
     const includeDeleted = toBool(req.query.includeDeleted);
+    const page  = Math.max(parseInt(req.query.page) || 1, 1);
+    const limit = Math.max(parseInt(req.query.limit) || 20, 1);
+    const skip  = (page - 1) * limit;
+
     const filter = includeDeleted ? {} : notDeleted('isDeleted');
 
-    const comments = await Comment.find(filter)
-      .sort({ createdAt: -1 })
-      .limit(200)                           // adjust limit as needed
-      .select('_id thread body author author_name isAnonymous realAuthor createdAt isDeleted upvoteCount')
-      .populate('author', 'name email') // Good ✅
-      .lean();
+    const [comments, totalCount] = await Promise.all([
+      Comment.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .select('_id thread body author author_name isAnonymous realAuthor createdAt isDeleted upvoteCount')
+        .populate('author', 'name email')
+        .populate('realAuthor', 'name email')
+        .lean(),
 
-    // Optionally map snippet field for frontend
+      Comment.countDocuments(filter)
+    ]);
+
     const results = comments.map(c => ({
-      _id:        c._id,
-      thread:     c.thread,
-      snippet:    (c.body || '').slice(0, 120),
-      author:     c.author,
-      createdAt:  c.createdAt,
-      upvoteCount:c.upvoteCount,
-      isDeleted:  c.isDeleted
+      _id:         c._id,
+      thread:      c.thread,
+      snippet:     (c.body || '').slice(0, 120),
+      author:      c.author,
+      author_name: c.author_name,
+      realAuthor:  c.realAuthor,
+      createdAt:   c.createdAt,
+      upvoteCount: c.upvoteCount,
+      isDeleted:   c.isDeleted,
+      isAnonymous: c.isAnonymous
     }));
 
-    res.json({ results });
+    res.json({
+      comments: results,
+      pagination: {
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+        currentPage: page
+      }
+    });
   } catch (e) {
     console.error('[admin] comments list error:', e);
     res.status(500).json({ error: 'Failed to load comments', detail: String(e) });
   }
 });
+
 
 // ===== EXPORT THREADS JSON =====
 router.get('/export/threads', requireAdmin, async (_req, res) => {
