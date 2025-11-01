@@ -781,7 +781,6 @@ async function init() {
   await loadMetrics();
   await loadUsers();
   await loadThreads();
-  await loadAdminComments();
   await loadReports();
 
   console.log('[admin.js] init complete');
