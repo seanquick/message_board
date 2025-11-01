@@ -441,7 +441,7 @@ function bindThreadActions(tbody) {
 }
 
 
-// ===== COMMENTS Section (Admin) =====
+// ===== COMMENTS Section (Admin UI) =====
 async function loadAdminComments({ page = 1 } = {}) {
   clearErrs();
   const tbody = ensureTbody('#commentsTable');
@@ -449,16 +449,19 @@ async function loadAdminComments({ page = 1 } = {}) {
 
   try {
     const includeDeleted = q('#cIncludeDeleted')?.checked;
-    const params = new URLSearchParams();
+    const params         = new URLSearchParams();
     params.set('t', String(Date.now()));
     params.set('page', page);
-    params.set('limit', 20);  // or whatever default
-    if (includeDeleted) params.set('includeDeleted', '1');
+    params.set('limit', 20);
+    if (includeDeleted) {
+      params.set('includeDeleted', '1');
+    }
 
-    const url = `/api/admin/comments?${params.toString()}`;
+    const url  = `/api/admin/comments?${params.toString()}`;
     console.log('[AdminComments] Fetching:', url);
+
     const resp = await api(url, { nocache: true, skipHtmlRedirect: true });
-    const comments = Array.isArray(resp.comments) ? resp.comments : [];
+    const comments       = Array.isArray(resp.comments) ? resp.comments : [];
     const { totalPages = 1, totalCount = 0 } = resp.pagination || {};
 
     tbody.innerHTML = '';
@@ -468,11 +471,12 @@ async function loadAdminComments({ page = 1 } = {}) {
       return;
     }
 
+    // Render each comment row
     comments.forEach(c => {
       const tr = document.createElement('tr');
       tr.dataset.id = c._id;
 
-      const publicAuthor = c.isAnonymous
+      const publicAuthor   = c.isAnonymous
         ? 'Anonymous'
         : (c.author_name || (c.author?.name || ''));
 
@@ -480,7 +484,7 @@ async function loadAdminComments({ page = 1 } = {}) {
         ? (c.realAuthor.name || c.realAuthor.email || '')
         : '';
 
-      const displayAuthor = c.isAnonymous
+      const displayAuthor  = c.isAnonymous
         ? `${publicAuthor} (internal: ${escapeHTML(internalAuthor)})`
         : escapeHTML(publicAuthor);
 
@@ -488,7 +492,7 @@ async function loadAdminComments({ page = 1 } = {}) {
         <td>${escapeHTML(new Date(c.createdAt || Date.now()).toLocaleString())}</td>
         <td>${escapeHTML(c.snippet || (c.body || '').slice(0, 120) || '(no snippet)')}</td>
         <td>${displayAuthor}</td>
-        <td>${encodeURIComponent(c.thread)}</td>
+        <td>${escapeHTML(String(c.thread || ''))}</td>
         <td>${Number(c.upvoteCount ?? c.upvotes ?? 0)}</td>
         <td>${escapeHTML(c.status || '')}</td>
         <td class="row gap-05">
@@ -499,13 +503,16 @@ async function loadAdminComments({ page = 1 } = {}) {
       tbody.appendChild(tr);
     });
 
+    // Render pagination controls
     renderCommentPagination(page, totalPages, totalCount);
     bindCommentActions(tbody);
 
   } catch (e) {
+    console.error('[AdminComments] Error loading comments', e);
     renderErrorRow('#commentsTable', `Error loading comments: ${e?.error || e?.message}`, 7);
   }
 }
+
 
 
 function bindCommentAdminActions(tbody) {
