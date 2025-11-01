@@ -120,15 +120,19 @@
         <div id="export-container"></div>
       </section>
 
-      <!-- Threads -->
+      <!-- ===== THREADS Section ===== -->
       <section class="dashboard-box">
         <div class="toolbar between">
           <h2 class="minw-0">Threads</h2>
           <div class="row items-center gap-05">
-            <label class="row items-center gap-05"><input id="tIncludeDeleted" type="checkbox" /><span>Show deleted</span></label>
+            <label class="row items-center gap-05">
+              <input id="tIncludeDeleted" type="checkbox" />
+              <span>Show deleted</span>
+            </label>
             <button id="tRefresh" class="btn tiny">Refresh</button>
           </div>
         </div>
+
         <div class="overflow-auto mt-1">
           <table id="threadsTable">
             <thead>
@@ -145,9 +149,10 @@
             <tbody></tbody>
           </table>
         </div>
-      </section>
 
-    <div id="threadsPagination" class="pagination row gap-05 mt-1"></div>
+        <!-- 🧭 Pagination Controls for Threads -->
+        <div id="threadsPagination" class="pagination row gap-05 mt-1" style="justify-content: center;"></div>
+      </section>
 
       <!-- Comments -->
       <section class="dashboard-box">
