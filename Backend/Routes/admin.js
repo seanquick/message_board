@@ -722,24 +722,41 @@ router.get('/users/:userId/content', requireAdmin, async (req, res) => {
 });
 
 // ===== THREADS LIST (admin) =====
+// In backend/routes/admin.js — in the “SEARCH” or “THREADS LIST” section
 router.get('/threads', requireAdmin, async (req, res) => {
   try {
-    const includeDeleted = toBool(req.query.includeDeleted);
-    const filter = includeDeleted ? {} : notDeleted('isDeleted');
+    const page  = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit, 10) || 20));  // default 20, max 100
+    const skip  = (page - 1) * limit;
 
-    const threads = await Thread.find(filter)
-      .sort({ createdAt: -1 })
-      .limit(200)                           // adjust limit as needed
-      .select('_id title author author_name isAnonymous realAuthor createdAt isDeleted isPinned pinned isLocked locked upvoteCount commentCount status')
-      .populate('author', 'name email') // Good ✅
-      .lean();
+    const filter = { /* your filter logic e.g., notDeleted etc */ };
 
-    res.json({ threads });
+    const [ totalCount, docs ] = await Promise.all([
+      Thread.countDocuments(filter),
+      Thread.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean()
+    ]);
+
+    const totalPages = Math.ceil(totalCount / limit);
+
+    res.json({
+      threads: docs,
+      pagination: {
+        page,
+        limit,
+        totalPages,
+        totalCount
+      }
+    });
   } catch (e) {
-    console.error('[admin] threads list error:', e);
+    console.error('[admin] threads pagination error:', e);
     res.status(500).json({ error: 'Failed to load threads', detail: String(e) });
   }
 });
+
 
 // ===== COMMENTS LIST (admin) =====
 router.get('/comments', requireAdmin, async (req, res) => {

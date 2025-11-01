@@ -294,35 +294,37 @@ function showUserContentModal(user, threads, comments) {
   modal.querySelector('.close-modal')?.addEventListener('click', () => modal.remove());
 }
 
-// --- THREADS Section ---
-async function loadThreads() {
+// --- THREADS Section (with pagination) ---
+async function loadThreads({ page = 1 } = {}) {
   clearErrs();
   const tbody = ensureTbody('#threadsTable');
   if (!tbody) return;
 
   try {
     const includeDeleted = q('#tIncludeDeleted')?.checked;
-    const params         = new URLSearchParams();
+    const params = new URLSearchParams();
     params.set('t', String(Date.now()));
+    params.set('page', page);
+    params.set('limit', 20);
     if (includeDeleted) params.set('includeDeleted', '1');
 
-    // ✅ Corrected endpoint
-    const url  = `/api/admin/threads?${params.toString()}`;
+    const url = `/api/admin/threads?${params.toString()}`;
     const resp = await api(url, { nocache: true, skipHtmlRedirect: true });
-    const results = Array.isArray(resp.threads) ? resp.threads : [];
+
+    const threads = Array.isArray(resp.threads) ? resp.threads : [];
+    const { totalPages = 1, totalCount = 0 } = resp.pagination || {};
 
     tbody.innerHTML = '';
-    if (!results.length) {
+    if (!threads.length) {
       tbody.innerHTML = '<tr><td colspan="7">No threads found.</td></tr>';
       return;
     }
 
-    results.forEach(t => {
-      const tr      = document.createElement('tr');
+    threads.forEach(t => {
+      const tr = document.createElement('tr');
       tr.dataset.id = t._id;
 
-      // Determine public vs internal author display
-      const publicAuthor  = t.isAnonymous
+      const publicAuthor = t.isAnonymous
         ? 'Anonymous'
         : (t.author_name || (t.author?.name || ''));
 
@@ -351,12 +353,45 @@ async function loadThreads() {
       tbody.appendChild(tr);
     });
 
+    renderThreadPagination(page, totalPages, totalCount);
     bindThreadActions(tbody);
 
   } catch (e) {
     renderErrorRow('#threadsTable', `Error loading threads: ${e?.error || e?.message}`, 7);
   }
 }
+
+function renderThreadPagination(currentPage, totalPages, totalCount) {
+  const container = q('#threadsPagination');
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  if (totalPages <= 1) return; // no pagination needed
+
+  const createBtn = (label, page, disabled = false) => {
+    const btn = document.createElement('button');
+    btn.textContent = label;
+    btn.className = 'btn tiny';
+    if (disabled) {
+      btn.disabled = true;
+    } else {
+      btn.addEventListener('click', () => loadThreads({ page }));
+    }
+    return btn;
+  };
+
+  container.appendChild(createBtn('⟨ Prev', currentPage - 1, currentPage <= 1));
+
+  for (let p = 1; p <= totalPages; p++) {
+    const btn = createBtn(p, p, false);
+    if (p === currentPage) btn.classList.add('active');
+    container.appendChild(btn);
+  }
+
+  container.appendChild(createBtn('Next ⟩', currentPage + 1, currentPage >= totalPages));
+}
+
 
 function bindThreadActions(tbody) {
   tbody.querySelectorAll('.viewThread').forEach(btn => btn.addEventListener('click', ev => {
