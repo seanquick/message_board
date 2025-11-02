@@ -807,6 +807,7 @@ function bindSearchForm() {
   }
 }
 
+// ===== INIT (Admin UI) =====
 async function init() {
   console.log('[admin.js] init start');
 
@@ -820,7 +821,7 @@ async function init() {
   q('#tIncludeDeleted')?.addEventListener('change', loadThreads);
 
   q('#cRefresh')?.addEventListener('click',      loadAdminComments);
-  q('#cIncludeDeleted')?.addEventListener('change', loadAdminComments);
+  q('#cIncludeDeleted')?.addEventListener('change',     loadAdminComments);
 
   q('#rRefresh')?.addEventListener('click',      loadReports);
   q('#rGroup')?.addEventListener('change',      loadReports);
@@ -841,10 +842,15 @@ async function init() {
   await loadMetrics();
   await loadUsers();
   await loadThreads();
+
+  // ✅ This is where you add the await
+  await loadAdminComments();
+
   await loadReports();
 
   console.log('[admin.js] init complete');
 }
+
 
 async function doSearch() {
   clearErrs();
