@@ -336,6 +336,7 @@ async function loadThreads({ page = 1 } = {}) {
         ? `${publicAuthor} (internal: ${escapeHTML(internalAuthor)})`
         : escapeHTML(publicAuthor);
 
+      // inside loadThreads() row rendering
       tr.innerHTML = `
         <td><input type="checkbox" class="bulkSelectThread" /></td>
         <td>${escapeHTML(new Date(t.createdAt || Date.now()).toLocaleString())}</td>
@@ -344,13 +345,14 @@ async function loadThreads({ page = 1 } = {}) {
         <td>${Number(t.upvoteCount ?? t.upvotes ?? 0)}</td>
         <td>${Number(t.commentCount ?? 0)}</td>
         <td>${escapeHTML(t.status || '')}</td>
-        <td class="row gap‑05">
+        <td class="row gap-05">
           <button class="btn tiny viewThread">View</button>
           <button class="btn tiny pinBtn">Pin/Unpin</button>
           <button class="btn tiny lockBtn">Lock/Unlock</button>
           <button class="btn tiny deleteThread">Delete/Restore</button>
         </td>
       `;
+
 
       tbody.appendChild(tr);
     });
@@ -365,7 +367,7 @@ async function loadThreads({ page = 1 } = {}) {
 
 // ===== BULK ACTIONS: Threads =====
 function bindThreadBulkActions() {
-  // Select all toggle
+  // 🟢 Select All Toggle
   q('#tSelectAll')?.addEventListener('change', ev => {
     const checked = ev.currentTarget.checked;
     qa('#threadsTable tbody tr input.bulkSelectThread').forEach(cb => {
@@ -373,47 +375,62 @@ function bindThreadBulkActions() {
     });
   });
 
-  // Delete Selected
+  // 🟥 Delete Selected Threads
   q('#tBulkDelete')?.addEventListener('click', async () => {
     const ids = Array.from(qa('#threadsTable tbody tr input.bulkSelectThread:checked'))
-      .map(cb => cb.closest('tr').dataset.id)
-      .filter(id => id);
+      .map(cb => cb.closest('tr')?.dataset.id)
+      .filter(Boolean);
+
+    console.log('[Thread Bulk Delete] Selected IDs:', ids);
+
     if (!ids.length) {
       alert('No threads selected');
       return;
     }
+
     const reason = prompt('Reason for delete (optional):');
     try {
-      await api('/api/admin/threads/bulk-delete', {
+      const result = await api('/api/admin/threads/bulk-delete', {
         method: 'POST',
         body: { ids, restore: false, reason }
       });
+
+      console.log('[Thread Bulk Delete] Response:', result);
       await loadThreads();
     } catch (e) {
+      console.error('[Thread Bulk Delete] Error:', e);
       showErr(`Bulk threads delete failed: ${e?.error || e?.message}`);
     }
   });
 
-  // Restore Selected
+  // ✅ Restore Selected Threads
   q('#tBulkRestore')?.addEventListener('click', async () => {
     const ids = Array.from(qa('#threadsTable tbody tr input.bulkSelectThread:checked'))
-      .map(cb => cb.closest('tr').dataset.id)
-      .filter(id => id);
+      .map(cb => cb.closest('tr')?.dataset.id)
+      .filter(Boolean);
+
+    console.log('[Thread Bulk Restore] Selected IDs:', ids);
+
     if (!ids.length) {
       alert('No threads selected');
       return;
     }
+
     try {
-      await api('/api/admin/threads/bulk-delete', {
+      const result = await api('/api/admin/threads/bulk-delete', {
         method: 'POST',
         body: { ids, restore: true }
       });
+
+      console.log('[Thread Bulk Restore] Response:', result);
       await loadThreads();
     } catch (e) {
+      console.error('[Thread Bulk Restore] Error:', e);
       showErr(`Bulk threads restore failed: ${e?.error || e?.message}`);
     }
   });
 }
+
 
 function renderThreadPagination(currentPage, totalPages, totalCount) {
   const container = q('#threadsPagination');
@@ -541,6 +558,7 @@ async function loadAdminComments() {
         ? `${publicAuthor} (internal: ${escapeHTML(internalAuthor)})`
         : escapeHTML(publicAuthor);
 
+      // inside loadAdminComments() row rendering
       tr.innerHTML = `
         <td><input type="checkbox" class="bulkSelectComment" /></td>
         <td>${escapeHTML(new Date(c.createdAt || Date.now()).toLocaleString())}</td>
@@ -554,6 +572,7 @@ async function loadAdminComments() {
           <button class="btn tiny delRestoreComment">Delete/Restore</button>
         </td>
       `;
+
 
 
       tbody.appendChild(tr);
