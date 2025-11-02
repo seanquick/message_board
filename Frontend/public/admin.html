@@ -130,6 +130,9 @@
               <span>Show deleted</span>
             </label>
             <button id="tRefresh" class="btn tiny">Refresh</button>
+            <!-- Bulk action buttons -->
+            <button id="tBulkDelete" class="btn tiny">Delete Selected</button>
+            <button id="tBulkRestore" class="btn tiny">Restore Selected</button>
           </div>
         </div>
 
@@ -137,6 +140,7 @@
           <table id="threadsTable">
             <thead>
               <tr>
+                <th><input id="tSelectAll" type="checkbox" /></th>
                 <th>Created</th>
                 <th>Title</th>
                 <th>Author</th>
@@ -154,12 +158,20 @@
         <div id="threadsPagination" class="pagination row gap-05 mt-1" style="justify-content: center;"></div>
       </section>
 
-      <!-- Comments -->
+
+        <!-- 🧭 Pagination Controls for Threads -->
+        <div id="threadsPagination" class="pagination row gap-05 mt-1" style="justify-content: center;"></div>
+      </section>
+
+      <!-- ===== COMMENTS Section ===== -->
       <section class="dashboard-box">
         <div class="toolbar between">
           <h2 class="minw-0">Recent Comments</h2>
           <div class="row items-center gap-05">
-            <label class="row items-center gap-05"><input id="cIncludeDeleted" type="checkbox" /><span>Show deleted</span></label>
+            <label class="row items-center gap-05">
+              <input id="cIncludeDeleted" type="checkbox" />
+              <span>Show deleted</span>
+            </label>
             <select id="cPageSize">
               <option value="25">25</option>
               <option value="50" selected>50</option>
@@ -168,14 +180,19 @@
             <span id="cPageInfo" class="meta">—</span>
             <button id="cPrev" class="btn tiny">Prev</button>
             <button id="cNext" class="btn tiny">Next</button>
+            <!-- Bulk action buttons -->
+            <button id="cBulkDelete" class="btn tiny">Delete Selected</button>
+            <button id="cBulkRestore" class="btn tiny">Restore Selected</button>
             <button id="cExport" class="btn tiny">Export CSV</button>
             <button id="cRefresh" class="btn tiny">Refresh</button>
           </div>
         </div>
+
         <div class="overflow-auto mt-1">
           <table id="commentsTable">
             <thead>
               <tr>
+                <th><input id="cSelectAll" type="checkbox" /></th>
                 <th>When</th>
                 <th>Snippet</th>
                 <th>Author</th>
@@ -189,6 +206,7 @@
           </table>
         </div>
       </section>
+
 
       <!-- Users -->
       <section class="dashboard-box">

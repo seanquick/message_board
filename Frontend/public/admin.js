@@ -361,6 +361,58 @@ async function loadThreads({ page = 1 } = {}) {
   }
 }
 
+// ===== BULK ACTIONS: Threads =====
+function bindThreadBulkActions() {
+  // Select all toggle
+  q('#tSelectAll')?.addEventListener('change', ev => {
+    const checked = ev.currentTarget.checked;
+    qa('#threadsTable tbody tr input.bulkSelectThread').forEach(cb => {
+      cb.checked = checked;
+    });
+  });
+
+  // Delete Selected
+  q('#tBulkDelete')?.addEventListener('click', async () => {
+    const ids = Array.from(qa('#threadsTable tbody tr input.bulkSelectThread:checked'))
+      .map(cb => cb.closest('tr').dataset.id)
+      .filter(id => id);
+    if (!ids.length) {
+      alert('No threads selected');
+      return;
+    }
+    const reason = prompt('Reason for delete (optional):');
+    try {
+      await api('/api/admin/threads/bulk-delete', {
+        method: 'POST',
+        body: { ids, restore: false, reason }
+      });
+      await loadThreads();
+    } catch (e) {
+      showErr(`Bulk threads delete failed: ${e?.error || e?.message}`);
+    }
+  });
+
+  // Restore Selected
+  q('#tBulkRestore')?.addEventListener('click', async () => {
+    const ids = Array.from(qa('#threadsTable tbody tr input.bulkSelectThread:checked'))
+      .map(cb => cb.closest('tr').dataset.id)
+      .filter(id => id);
+    if (!ids.length) {
+      alert('No threads selected');
+      return;
+    }
+    try {
+      await api('/api/admin/threads/bulk-delete', {
+        method: 'POST',
+        body: { ids, restore: true }
+      });
+      await loadThreads();
+    } catch (e) {
+      showErr(`Bulk threads restore failed: ${e?.error || e?.message}`);
+    }
+  });
+}
+
 function renderThreadPagination(currentPage, totalPages, totalCount) {
   const container = q('#threadsPagination');
   if (!container) return;
@@ -513,6 +565,58 @@ async function loadAdminComments() {
     console.error('[AdminComments] Error loading comments', e);
     renderErrorRow('#commentsTable', `Error loading comments: ${e?.error || e?.message}`, 7);
   }
+}
+
+// ===== BULK ACTIONS: Comments =====
+function bindCommentBulkActions() {
+  // Select all toggle
+  q('#cSelectAll')?.addEventListener('change', ev => {
+    const checked = ev.currentTarget.checked;
+    qa('#commentsTable tbody tr input.bulkSelectComment').forEach(cb => {
+      cb.checked = checked;
+    });
+  });
+
+  // Delete Selected
+  q('#cBulkDelete')?.addEventListener('click', async () => {
+    const ids = Array.from(qa('#commentsTable tbody tr input.bulkSelectComment:checked'))
+      .map(cb => cb.closest('tr').dataset.id)
+      .filter(id => id);
+    if (!ids.length) {
+      alert('No comments selected');
+      return;
+    }
+    const reason = prompt('Reason for delete (optional):');
+    try {
+      await api('/api/admin/comments/bulk-delete', {
+        method: 'POST',
+        body: { ids, restore: false, reason }
+      });
+      await loadAdminComments();
+    } catch (e) {
+      showErr(`Bulk comments delete failed: ${e?.error || e?.message}`);
+    }
+  });
+
+  // Restore Selected
+  q('#cBulkRestore')?.addEventListener('click', async () => {
+    const ids = Array.from(qa('#commentsTable tbody tr input.bulkSelectComment:checked'))
+      .map(cb => cb.closest('tr').dataset.id)
+      .filter(id => id);
+    if (!ids.length) {
+      alert('No comments selected');
+      return;
+    }
+    try {
+      await api('/api/admin/comments/bulk-delete', {
+        method: 'POST',
+        body: { ids, restore: true }
+      });
+      await loadAdminComments();
+    } catch (e) {
+      showErr(`Bulk comments restore failed: ${e?.error || e?.message}`);
+    }
+  });
 }
 
 function bindCommentAdminActions(tbody) {

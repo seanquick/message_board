@@ -721,6 +721,66 @@ router.get('/users/:userId/content', requireAdmin, async (req, res) => {
   }
 });
 
+// ===== BULK THREADS DELETE/RESTORE (admin) =====
+router.post('/threads/bulk‑delete', requireAdmin, async (req, res) => {
+  try {
+    const { ids, restore = false } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'No thread IDs provided' });
+    }
+    const update = { isDeleted: !restore };
+    if (restore) {
+      update.deletedAt  = null;
+      update.deletedBy  = null;
+      update.deleteReason = '';
+    } else {
+      update.deletedAt     = new Date();
+      update.deletedBy     = req.user._id;    // assuming req.user is the admin
+      update.deleteReason  = req.body.reason || '';
+    }
+
+    const result = await Thread.updateMany(
+      { _id: { $in: ids.map(id => mongoose.Types.ObjectId(id)) } },
+      { $set: update }
+    );
+
+    res.json({ ok: true, matched: result.matchedCount, modified: result.modifiedCount });
+  } catch (err) {
+    console.error('[admin] bulk threads delete error:', err);
+    res.status(500).json({ error: 'Bulk threads delete failed', detail: String(err) });
+  }
+});
+
+// ===== BULK COMMENTS DELETE/RESTORE (admin) =====
+router.post('/comments/bulk‑delete', requireAdmin, async (req, res) => {
+  try {
+    const { ids, restore = false } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'No comment IDs provided' });
+    }
+    const update = { isDeleted: !restore };
+    if (restore) {
+      update.deletedAt     = null;
+      update.deletedBy     = null;
+      update.deleteReason  = '';
+    } else {
+      update.deletedAt     = new Date();
+      update.deletedBy     = req.user._id;
+      update.deleteReason  = req.body.reason || '';
+    }
+
+    const result = await Comment.updateMany(
+      { _id: { $in: ids.map(id => mongoose.Types.ObjectId(id)) } },
+      { $set: update }
+    );
+
+    res.json({ ok: true, matched: result.matchedCount, modified: result.modifiedCount });
+  } catch (err) {
+    console.error('[admin] bulk comments delete error:', err);
+    res.status(500).json({ error: 'Bulk comments delete failed', detail: String(err) });
+  }
+});
+
 // ===== THREADS LIST (admin) =====
 // In backend/routes/admin.js — in the “SEARCH” or “THREADS LIST” section
 router.get('/threads', requireAdmin, async (req, res) => {
