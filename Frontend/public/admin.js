@@ -337,19 +337,21 @@ async function loadThreads({ page = 1 } = {}) {
         : escapeHTML(publicAuthor);
 
       tr.innerHTML = `
+        <td><input type="checkbox" class="bulkSelectThread" /></td>
         <td>${escapeHTML(new Date(t.createdAt || Date.now()).toLocaleString())}</td>
         <td>${escapeHTML(t.title || '(no title)')}</td>
         <td>${displayAuthor}</td>
         <td>${Number(t.upvoteCount ?? t.upvotes ?? 0)}</td>
         <td>${Number(t.commentCount ?? 0)}</td>
         <td>${escapeHTML(t.status || '')}</td>
-        <td class="row gap-05">
+        <td class="row gap‑05">
           <button class="btn tiny viewThread">View</button>
           <button class="btn tiny pinBtn">Pin/Unpin</button>
           <button class="btn tiny lockBtn">Lock/Unlock</button>
           <button class="btn tiny deleteThread">Delete/Restore</button>
         </td>
       `;
+
       tbody.appendChild(tr);
     });
 
@@ -540,17 +542,19 @@ async function loadAdminComments() {
         : escapeHTML(publicAuthor);
 
       tr.innerHTML = `
+        <td><input type="checkbox" class="bulkSelectComment" /></td>
         <td>${escapeHTML(new Date(c.createdAt || Date.now()).toLocaleString())}</td>
         <td>${escapeHTML(c.snippet || '(no snippet)')}</td>
         <td>${displayAuthor}</td>
         <td>${escapeHTML(String(c.thread || ''))}</td>
         <td>${Number(c.upvoteCount ?? 0)}</td>
         <td>${c.isDeleted ? 'Deleted' : 'Active'}</td>
-        <td class="row gap-05">
+        <td class="row gap‑05">
           <button class="btn tiny viewComment">View</button>
           <button class="btn tiny delRestoreComment">Delete/Restore</button>
         </td>
       `;
+
 
       tbody.appendChild(tr);
     });
