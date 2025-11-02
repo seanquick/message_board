@@ -71,8 +71,8 @@ function renderErrorRow(tableSelector, msg, colspan = 5) {
 }
 
 const state = {
-  users:    { page: 1, limit: 50, total: 0 },
-  comments: { page: 1, limit: 50, total: 0 },
+  users:    { page: 1, limit: 25, total: 0 },
+  comments: { page: 1, limit: 25, total: 0 },
 };
 
 // --- METRICS ---
@@ -441,81 +441,79 @@ function bindThreadActions(tbody) {
 }
 
 
-// ===== COMMENTS Section (Admin UI) =====
-// ===== COMMENTS Section (Admin UI) =====
-async function loadAdminComments({ page = 1 } = {}) {
+// ===== LOAD ADMIN COMMENTS (with Pagination) =====
+async function loadAdminComments() {
   clearErrs();
+
   const tbody = ensureTbody('#commentsTable');
   if (!tbody) return;
 
   try {
     const includeDeleted = q('#cIncludeDeleted')?.checked;
-    const params         = new URLSearchParams();
-    params.set('t', String(Date.now()));
-    params.set('page', page);
-    params.set('limit', 20);
+    const pageSize = parseInt(q('#cPageSize')?.value || '50', 10);
+    const page = state.comments.page;
+
+    const params = new URLSearchParams({
+      t: String(Date.now()),
+      page,
+      limit: pageSize
+    });
+
     if (includeDeleted) {
       params.set('includeDeleted', '1');
     }
 
     const url = `/api/admin/comments?${params.toString()}`;
-    console.log('[AdminComments] Fetching:', url);
-
     const resp = await api(url, { nocache: true, skipHtmlRedirect: true });
-    console.log('[AdminComments] Response:', resp);
-
-    const comments = Array.isArray(resp.comments) ? resp.comments : [];
+    const comments = resp.comments || [];
     const { totalPages = 1, totalCount = 0 } = resp.pagination || {};
 
     tbody.innerHTML = '';
+
     if (!comments.length) {
-      tbody.innerHTML = '<tr><td colspan="7">No comments found.</td></tr>';
-      renderCommentPagination(page, totalPages, totalCount);
+      tbody.innerHTML = `<tr><td colspan="7">No comments found.</td></tr>`;
+      q('#cPageInfo').textContent = '0 results';
       return;
     }
 
     comments.forEach(c => {
       const tr = document.createElement('tr');
       tr.dataset.id = c._id;
+      tr.dataset.deleted = !!c.isDeleted;
 
-      const publicAuthor = c.isAnonymous
-        ? 'Anonymous'
-        : (c.author_name || (c.author?.name || ''));
-
-      const internalAuthor = c.realAuthor
-        ? (c.realAuthor.name || c.realAuthor.email || '')
-        : '';
-
+      const publicAuthor = c.isAnonymous ? 'Anonymous' : (c.author_name || (c.author?.name || ''));
+      const internalAuthor = c.realAuthor ? (c.realAuthor.name || c.realAuthor.email || '') : '';
       const displayAuthor = c.isAnonymous
         ? `${publicAuthor} (internal: ${escapeHTML(internalAuthor)})`
         : escapeHTML(publicAuthor);
 
       tr.innerHTML = `
         <td>${escapeHTML(new Date(c.createdAt || Date.now()).toLocaleString())}</td>
-        <td>${escapeHTML(c.snippet || (c.body || '').slice(0, 120) || '(no snippet)')}</td>
+        <td>${escapeHTML(c.snippet || '(no snippet)')}</td>
         <td>${displayAuthor}</td>
         <td>${escapeHTML(String(c.thread || ''))}</td>
-        <td>${Number(c.upvoteCount ?? c.upvotes ?? 0)}</td>
-        <td>${escapeHTML(c.status || '')}</td>
+        <td>${Number(c.upvoteCount ?? 0)}</td>
+        <td>${c.isDeleted ? 'Deleted' : 'Active'}</td>
         <td class="row gap-05">
           <button class="btn tiny viewComment">View</button>
-          <button class="btn tiny deleteComment">Delete/Restore</button>
+          <button class="btn tiny delRestoreComment">Delete/Restore</button>
         </td>
       `;
+
       tbody.appendChild(tr);
     });
 
-    renderCommentPagination(page, totalPages, totalCount);
-    bindCommentActions(tbody);
+    q('#cPageInfo').textContent = `Page ${page} of ${totalPages} (${totalCount} comments)`;
+    q('#cPrev').disabled = (page <= 1);
+    q('#cNext').disabled = (page >= totalPages);
+
+    bindCommentAdminActions(tbody);
 
   } catch (e) {
     console.error('[AdminComments] Error loading comments', e);
     renderErrorRow('#commentsTable', `Error loading comments: ${e?.error || e?.message}`, 7);
   }
 }
-
-
-
 
 function bindCommentAdminActions(tbody) {
   tbody.querySelectorAll('.viewComment').forEach(btn => btn.addEventListener('click', ev => {
@@ -849,6 +847,36 @@ async function init() {
   await loadReports();
 
   console.log('[admin.js] init complete');
+}
+
+// ===== COMMENT PAGINATION (admin) =====
+function renderCommentPagination(currentPage, totalPages, totalCount) {
+  const container = document.getElementById('commentsPagination');
+  if (!container) return;
+
+  container.innerHTML = ''; // Clear previous buttons
+
+  const makeBtn = (text, page, disabled = false, bold = false) => {
+    const btn = document.createElement('button');
+    btn.className = 'btn tiny';
+    if (bold) btn.style.fontWeight = 'bold';
+    btn.disabled = disabled;
+    btn.textContent = text;
+    if (!disabled) {
+      btn.addEventListener('click', () => {
+        loadAdminComments({ page });
+      });
+    }
+    return btn;
+  };
+
+  if (totalPages <= 1) return;
+
+  container.appendChild(makeBtn('❮ Prev', currentPage - 1, currentPage <= 1));
+  for (let i = 1; i <= totalPages; i++) {
+    container.appendChild(makeBtn(String(i), i, false, i === currentPage));
+  }
+  container.appendChild(makeBtn('Next ❯', currentPage + 1, currentPage >= totalPages));
 }
 
 
