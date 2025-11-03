@@ -740,7 +740,7 @@ router.post('/threads/bulk-delete', requireAdmin, async (req, res) => {
     }
 
     const result = await Thread.updateMany(
-      { _id: { $in: ids.map(id => mongoose.Types.ObjectId(id)) } },
+      { _id: { $in: ids.map(id => new mongoose.Types.ObjectId(id))} },
       { $set: update }
     );
 
@@ -770,7 +770,7 @@ router.post('/comments/bulk-delete', requireAdmin, async (req, res) => {
     }
 
     const result = await Comment.updateMany(
-      { _id: { $in: ids.map(id => mongoose.Types.ObjectId(id)) } },
+      { _id: { $in: ids.map(id => new mongoose.Types.ObjectId(id)) } },
       { $set: update }
     );
 
