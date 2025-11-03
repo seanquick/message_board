@@ -390,7 +390,7 @@ function bindThreadBulkActions() {
 
     const reason = prompt('Reason for delete (optional):');
     try {
-      const result = await api('/api/admin/threads/bulk-delete', {
+      const result = await api('/threads/bulk-delete',  {
         method: 'POST',
         body: { ids, restore: false, reason }
       });
@@ -417,7 +417,7 @@ function bindThreadBulkActions() {
     }
 
     try {
-      const result = await api('/api/admin/threads/bulk-delete', {
+      const result = await api('/threads/bulk-delete',  {
         method: 'POST',
         body: { ids, restore: true }
       });
@@ -430,6 +430,17 @@ function bindThreadBulkActions() {
     }
   });
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+  // call the binding functions once the DOM is ready
+  try {
+    bindThreadBulkActions();
+    bindCommentBulkActions();
+    console.log('[Admin Init] Bulk actions bound');
+  } catch (e) {
+    console.error('[Admin Init] Binding bulk actions error:', e);
+  }
+});
 
 
 function renderThreadPagination(currentPage, totalPages, totalCount) {
@@ -592,7 +603,7 @@ async function loadAdminComments() {
 
 // ===== BULK ACTIONS: Comments =====
 function bindCommentBulkActions() {
-  // 🟢 Select All Toggle for comments (header checkbox with id="cSelectAll")
+  // 🟢 Select All Toggle for comments
   q('#cSelectAll')?.addEventListener('change', ev => {
     const checked = ev.currentTarget.checked;
     qa('#commentsTable tbody tr input.bulkSelectComment').forEach(cb => {
@@ -615,14 +626,12 @@ function bindCommentBulkActions() {
 
     const reason = prompt('Reason for delete (optional):');
     try {
-      // backend expects { commentIds, action }
-      const result = await api('/api/admin/comments/bulk', {
+      const result = await api('/comments/bulk-delete', {
         method: 'POST',
-        body: { commentIds: ids, action: 'delete', reason }
+        body: { ids, restore: false, reason }
       });
 
       console.log('[Comment Bulk Delete] Response:', result);
-      // refresh comment list (keep same page / filters)
       await loadAdminComments();
     } catch (e) {
       console.error('[Comment Bulk Delete] Error:', e);
@@ -644,9 +653,9 @@ function bindCommentBulkActions() {
     }
 
     try {
-      const result = await api('/api/admin/comments/bulk', {
+      const result = await api('/comments/bulk-delete', {
         method: 'POST',
-        body: { commentIds: ids, action: 'restore' }
+        body: { ids, restore: true }
       });
 
       console.log('[Comment Bulk Restore] Response:', result);
@@ -657,6 +666,7 @@ function bindCommentBulkActions() {
     }
   });
 }
+
 
 
 function bindCommentAdminActions(tbody) {
