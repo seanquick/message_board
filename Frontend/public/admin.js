@@ -592,7 +592,7 @@ async function loadAdminComments() {
 
 // ===== BULK ACTIONS: Comments =====
 function bindCommentBulkActions() {
-  // Select all toggle
+  // 🟢 Select All Toggle for comments (header checkbox with id="cSelectAll")
   q('#cSelectAll')?.addEventListener('change', ev => {
     const checked = ev.currentTarget.checked;
     qa('#commentsTable tbody tr input.bulkSelectComment').forEach(cb => {
@@ -600,47 +600,64 @@ function bindCommentBulkActions() {
     });
   });
 
-  // Delete Selected
+  // 🟥 Delete Selected Comments
   q('#cBulkDelete')?.addEventListener('click', async () => {
     const ids = Array.from(qa('#commentsTable tbody tr input.bulkSelectComment:checked'))
-      .map(cb => cb.closest('tr').dataset.id)
-      .filter(id => id);
+      .map(cb => cb.closest('tr')?.dataset.id)
+      .filter(Boolean);
+
+    console.log('[Comment Bulk Delete] Selected IDs:', ids);
+
     if (!ids.length) {
       alert('No comments selected');
       return;
     }
+
     const reason = prompt('Reason for delete (optional):');
     try {
-      await api('/api/admin/comments/bulk-delete', {
+      // backend expects { commentIds, action }
+      const result = await api('/api/admin/comments/bulk', {
         method: 'POST',
-        body: { ids, restore: false, reason }
+        body: { commentIds: ids, action: 'delete', reason }
       });
+
+      console.log('[Comment Bulk Delete] Response:', result);
+      // refresh comment list (keep same page / filters)
       await loadAdminComments();
     } catch (e) {
+      console.error('[Comment Bulk Delete] Error:', e);
       showErr(`Bulk comments delete failed: ${e?.error || e?.message}`);
     }
   });
 
-  // Restore Selected
+  // ✅ Restore Selected Comments
   q('#cBulkRestore')?.addEventListener('click', async () => {
     const ids = Array.from(qa('#commentsTable tbody tr input.bulkSelectComment:checked'))
-      .map(cb => cb.closest('tr').dataset.id)
-      .filter(id => id);
+      .map(cb => cb.closest('tr')?.dataset.id)
+      .filter(Boolean);
+
+    console.log('[Comment Bulk Restore] Selected IDs:', ids);
+
     if (!ids.length) {
       alert('No comments selected');
       return;
     }
+
     try {
-      await api('/api/admin/comments/bulk-delete', {
+      const result = await api('/api/admin/comments/bulk', {
         method: 'POST',
-        body: { ids, restore: true }
+        body: { commentIds: ids, action: 'restore' }
       });
+
+      console.log('[Comment Bulk Restore] Response:', result);
       await loadAdminComments();
     } catch (e) {
+      console.error('[Comment Bulk Restore] Error:', e);
       showErr(`Bulk comments restore failed: ${e?.error || e?.message}`);
     }
   });
 }
+
 
 function bindCommentAdminActions(tbody) {
   tbody.querySelectorAll('.viewComment').forEach(btn => btn.addEventListener('click', ev => {
