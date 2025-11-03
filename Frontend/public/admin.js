@@ -303,15 +303,18 @@ async function loadThreads({ page = 1 } = {}) {
   try {
     const includeDeleted = q('#tIncludeDeleted')?.checked;
     const limit = parseInt(q('#tPageSize')?.value || 50);
-    const params = new URLSearchParams();
+    const url = `/api/admin/threads`;
+      const resp = await api(url, {
+        method: 'POST',
+        body: {
+          page,
+          limit,
+          includeDeleted
+        },
+        nocache: true,
+        skipHtmlRedirect: true
+      });
 
-    params.set('t', String(Date.now()));
-    params.set('page', page);
-    params.set('limit', limit);
-    if (includeDeleted) params.set('includeDeleted', '1');
-
-    const url = `/api/admin/threads?${params.toString()}`;
-    const resp = await api(url, { nocache: true, skipHtmlRedirect: true });
 
     const threads = Array.isArray(resp.threads) ? resp.threads : [];
     const { totalPages = 1, totalCount = 0 } = resp.pagination || {};
