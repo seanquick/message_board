@@ -722,7 +722,7 @@ router.get('/users/:userId/content', requireAdmin, async (req, res) => {
 });
 
 // ===== BULK THREADS DELETE/RESTORE (admin) =====
-router.post('/threads/bulk‑delete', requireAdmin, async (req, res) => {
+router.post('/threads/bulk-delete', requireAdmin, async (req, res) => {
   try {
     const { ids, restore = false } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) {
@@ -752,7 +752,7 @@ router.post('/threads/bulk‑delete', requireAdmin, async (req, res) => {
 });
 
 // ===== BULK COMMENTS DELETE/RESTORE (admin) =====
-router.post('/comments/bulk‑delete', requireAdmin, async (req, res) => {
+router.post('/comments/bulk-delete', requireAdmin, async (req, res) => {
   try {
     const { ids, restore = false } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) {
