@@ -390,7 +390,7 @@ function bindThreadBulkActions() {
 
     const reason = prompt('Reason for delete (optional):');
     try {
-      const result = await api('/threads/bulk-delete',  {
+      const result = await api('/api/admin/threads/bulk-delete',   {
         method: 'POST',
         body: { ids, restore: false, reason }
       });
@@ -417,7 +417,7 @@ function bindThreadBulkActions() {
     }
 
     try {
-      const result = await api('/threads/bulk-delete',  {
+      const result = await api('/api/admin/threads/bulk-delete',   {
         method: 'POST',
         body: { ids, restore: true }
       });
@@ -626,7 +626,7 @@ function bindCommentBulkActions() {
 
     const reason = prompt('Reason for delete (optional):');
     try {
-      const result = await api('/comments/bulk-delete', {
+      const result = await api('/api/admin/comments/bulk-delete', {
         method: 'POST',
         body: { ids, restore: false, reason }
       });
@@ -653,7 +653,7 @@ function bindCommentBulkActions() {
     }
 
     try {
-      const result = await api('/comments/bulk-delete', {
+      const result = await api('/api/admin/comments/bulk-delete', {
         method: 'POST',
         body: { ids, restore: true }
       });
