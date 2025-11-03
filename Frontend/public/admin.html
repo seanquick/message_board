@@ -120,43 +120,60 @@
         <div id="export-container"></div>
       </section>
 
-<!-- ===== THREADS Section ===== -->
-<section class="dashboard-box">
-  <div class="toolbar between">
-    <h2 class="minw-0">Threads</h2>
-    <div class="row items-center gap-05">
-      <label class="row items-center gap-05">
-        <input id="tIncludeDeleted" type="checkbox" />
-        <span>Show deleted</span>
-      </label>
-      <button id="tRefresh" class="btn tiny">Refresh</button>
-      <!-- Bulk action buttons -->
-      <button id="tBulkDelete" class="btn tiny">Delete Selected</button>
-      <button id="tBulkRestore" class="btn tiny">Restore Selected</button>
+  <!-- ===== THREADS Section ===== -->
+  <section class="dashboard-box">
+    <div class="toolbar between">
+      <h2 class="minw-0">Threads</h2>
+      <div class="row items-center gap-05">
+        <label class="row items-center gap-05">
+          <input id="tIncludeDeleted" type="checkbox" />
+          <span>Show deleted</span>
+        </label>
+
+        <!-- 🔽 Thread Per Page Selector -->
+        <select id="tPageSize">
+          <option value="25">25</option>
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+        </select>
+
+        <!-- 🧾 Optional page info label -->
+        <span id="tPageInfo" class="meta">—</span>
+
+        <!-- 🧭 Pagination Buttons -->
+        <button id="tPrev" class="btn tiny">Prev</button>
+        <button id="tNext" class="btn tiny">Next</button>
+
+        <!-- 🗑️ Bulk Action Buttons -->
+        <button id="tBulkDelete" class="btn tiny">Delete Selected</button>
+        <button id="tBulkRestore" class="btn tiny">Restore Selected</button>
+        <button id="tExport" class="btn tiny">Export CSV</button>
+        <button id="tRefresh" class="btn tiny">Refresh</button>
+      </div>
     </div>
-  </div>
 
-  <div class="overflow-auto mt-1">
-    <table id="threadsTable">
-      <thead>
-        <tr>
-          <th><input id="tSelectAll" type="checkbox" /></th>
-          <th>Created</th>
-          <th>Title</th>
-          <th>Author</th>
-          <th>Upvotes</th>
-          <th>Comments</th>
-          <th>Status</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </div>
+    <div class="overflow-auto mt-1">
+      <table id="threadsTable">
+        <thead>
+          <tr>
+            <th><input id="tSelectAll" type="checkbox" /></th>
+            <th>Created</th>
+            <th>Title</th>
+            <th>Author</th>
+            <th>Upvotes</th>
+            <th>Comments</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
 
-  <!-- 🧭 Pagination Controls for Threads -->
-  <div id="threadsPagination" class="pagination row gap-05 mt-1" style="justify-content: center;"></div>
-</section>
+    <!-- 🧭 Pagination Container (if needed) -->
+    <div id="threadsPagination" class="pagination row gap-05 mt-1" style="justify-content: center;"></div>
+  </section>
+
 
 <!-- ===== COMMENTS Section ===== -->
 <section class="dashboard-box">

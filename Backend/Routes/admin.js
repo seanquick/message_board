@@ -782,40 +782,42 @@ router.post('/comments/bulk-delete', requireAdmin, async (req, res) => {
 });
 
 // ===== THREADS LIST (admin) =====
-// In backend/routes/admin.js — in the “SEARCH” or “THREADS LIST” section
-router.get('/threads', requireAdmin, async (req, res) => {
+router.post('/threads', requireAdmin, async (req, res) => {
   try {
-    const page  = Math.max(1, parseInt(req.query.page, 10) || 1);
-    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit, 10) || 20));  // default 20, max 100
-    const skip  = (page - 1) * limit;
+    const page = Math.max(1, parseInt(req.body.page) || 1);
+    const limit = Math.max(1, Math.min(parseInt(req.body.limit) || 50, 200));
+    const skip = (page - 1) * limit;
 
-    const filter = { /* your filter logic e.g., notDeleted etc */ };
+    const includeDeleted = req.body.includeDeleted === true || req.body.includeDeleted === '1';
 
-    const [ totalCount, docs ] = await Promise.all([
-      Thread.countDocuments(filter),
+    // Build query
+    const filter = includeDeleted ? {} : { isDeleted: { $ne: true } };
+
+    const [threads, totalCount] = await Promise.all([
       Thread.find(filter)
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limit)
-        .lean()
+        .limit(limit),
+      Thread.countDocuments(filter)
     ]);
 
     const totalPages = Math.ceil(totalCount / limit);
 
     res.json({
-      threads: docs,
+      threads,
       pagination: {
-        page,
-        limit,
+        totalCount,
         totalPages,
-        totalCount
+        currentPage: page
       }
     });
-  } catch (e) {
-    console.error('[admin] threads pagination error:', e);
-    res.status(500).json({ error: 'Failed to load threads', detail: String(e) });
+
+  } catch (err) {
+    console.error('[admin] thread list error:', err);
+    res.status(500).json({ error: 'Failed to load threads', detail: err.message });
   }
 });
+
 
 
 // ===== COMMENTS LIST (admin) =====

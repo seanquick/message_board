@@ -294,7 +294,7 @@ function showUserContentModal(user, threads, comments) {
   modal.querySelector('.close-modal')?.addEventListener('click', () => modal.remove());
 }
 
-// --- THREADS Section (with pagination) ---
+// --- THREADS Section (with pagination + show deleted + page size) ---
 async function loadThreads({ page = 1 } = {}) {
   clearErrs();
   const tbody = ensureTbody('#threadsTable');
@@ -302,10 +302,12 @@ async function loadThreads({ page = 1 } = {}) {
 
   try {
     const includeDeleted = q('#tIncludeDeleted')?.checked;
+    const limit = parseInt(q('#tPageSize')?.value || 50);
     const params = new URLSearchParams();
+
     params.set('t', String(Date.now()));
     params.set('page', page);
-    params.set('limit', 20);
+    params.set('limit', limit);
     if (includeDeleted) params.set('includeDeleted', '1');
 
     const url = `/api/admin/threads?${params.toString()}`;
@@ -316,7 +318,7 @@ async function loadThreads({ page = 1 } = {}) {
 
     tbody.innerHTML = '';
     if (!threads.length) {
-      tbody.innerHTML = '<tr><td colspan="7">No threads found.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8">No threads found.</td></tr>';
       return;
     }
 
@@ -336,7 +338,6 @@ async function loadThreads({ page = 1 } = {}) {
         ? `${publicAuthor} (internal: ${escapeHTML(internalAuthor)})`
         : escapeHTML(publicAuthor);
 
-      // inside loadThreads() row rendering
       tr.innerHTML = `
         <td><input type="checkbox" class="bulkSelectThread" /></td>
         <td>${escapeHTML(new Date(t.createdAt || Date.now()).toLocaleString())}</td>
@@ -353,17 +354,24 @@ async function loadThreads({ page = 1 } = {}) {
         </td>
       `;
 
-
       tbody.appendChild(tr);
     });
 
     renderThreadPagination(page, totalPages, totalCount);
+
+    // ✅ Update page info label
+    const info = q('#tPageInfo');
+    if (info) {
+      info.textContent = `Page ${page} of ${totalPages} (${totalCount} threads)`;
+    }
+
     bindThreadActions(tbody);
 
   } catch (e) {
-    renderErrorRow('#threadsTable', `Error loading threads: ${e?.error || e?.message}`, 7);
+    renderErrorRow('#threadsTable', `Error loading threads: ${e?.error || e?.message}`, 8);
   }
 }
+
 
 // ===== BULK ACTIONS: Threads =====
 function bindThreadBulkActions() {
@@ -970,7 +978,9 @@ async function init() {
   q('#uSearch')?.addEventListener('input', debounce(() => { state.users.page = 1; loadUsers(); }));
 
   q('#tRefresh')?.addEventListener('click',      loadThreads);
-  q('#tIncludeDeleted')?.addEventListener('change', loadThreads);
+  q('#tPageSize')?.addEventListener('change', () => loadThreads({ page: 1 }));
+  q('#tIncludeDeleted')?.addEventListener('change', () => loadThreads({ page: 1 }));
+
 
   q('#cRefresh')?.addEventListener('click',      loadAdminComments);
   q('#cIncludeDeleted')?.addEventListener('change',     loadAdminComments);
