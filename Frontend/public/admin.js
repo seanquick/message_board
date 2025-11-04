@@ -364,6 +364,14 @@ async function loadThreads({ page = 1 } = {}) {
 
     renderThreadPagination(page, totalPages, totalCount);
 
+    state.threads.page = page;
+    state.threads.total = totalCount;
+    state.threads.totalPages = totalPages;
+
+    // Disable Prev/Next if at edge
+    q('#tPrev')?.disabled = page <= 1;
+    q('#tNext')?.disabled = page >= totalPages;
+
     // ✅ Update page info label
     const info = q('#tPageInfo');
     if (info) {
@@ -979,40 +987,66 @@ async function init() {
   await refreshMe();
   meUser = meVar;
 
-  q('#uRefresh')?.addEventListener('click',   () => { state.users.page = 1; loadUsers(); });
-  q('#uSearch')?.addEventListener('input', debounce(() => { state.users.page = 1; loadUsers(); }));
+  q('#uRefresh')?.addEventListener('click', () => {
+    state.users.page = 1;
+    loadUsers();
+  });
+  q('#uSearch')?.addEventListener('input', debounce(() => {
+    state.users.page = 1;
+    loadUsers();
+  }));
 
-  q('#tRefresh')?.addEventListener('click',      loadThreads);
+  // THREAD CONTROLS
+  q('#tRefresh')?.addEventListener('click', () => loadThreads({ page: 1 }));
   q('#tPageSize')?.addEventListener('change', () => loadThreads({ page: 1 }));
   q('#tIncludeDeleted')?.addEventListener('change', () => loadThreads({ page: 1 }));
 
-
-  q('#cRefresh')?.addEventListener('click',      loadAdminComments);
-  q('#cIncludeDeleted')?.addEventListener('change',     loadAdminComments);
-
-  q('#rRefresh')?.addEventListener('click',      loadReports);
-  q('#rGroup')?.addEventListener('change',      loadReports);
-  q('#rFilter')?.addEventListener('change',     loadReports);
-  q('#rBulkResolve')?.addEventListener('click', bulkResolveSelected);
-
-  q('#rExport')?.addEventListener('click',   () => exportCSV('reports'));
-  q('#cExport')?.addEventListener('click',   () => exportCSV('comments'));
-  q('#uExport')?.addEventListener('click',   () => exportCSV('users'));
-
-  q('#rSelectAll')?.addEventListener('change', () => {
-    const checked = q('#rSelectAll')?.checked;
-    qa('#reportsTable tbody .rSelect').forEach(cb => { cb.checked = !!checked; });
+  // ✅ Pagination controls (TOP ONLY)
+  q('#tPrev')?.addEventListener('click', () => {
+    if (state.threads.page > 1) {
+      state.threads.page--;
+      loadThreads({ page: state.threads.page });
+    }
   });
 
-  bindSearchForm();  // Attach search button logic
+  q('#tNext')?.addEventListener('click', () => {
+    if (state.threads.page < state.threads.totalPages) {
+      state.threads.page++;
+      loadThreads({ page: state.threads.page });
+    }
+  });
 
+  // COMMENT CONTROLS
+  q('#cRefresh')?.addEventListener('click', loadAdminComments);
+  q('#cIncludeDeleted')?.addEventListener('change', loadAdminComments);
+
+  // REPORT CONTROLS
+  q('#rRefresh')?.addEventListener('click', loadReports);
+  q('#rGroup')?.addEventListener('change', loadReports);
+  q('#rFilter')?.addEventListener('change', loadReports);
+  q('#rBulkResolve')?.addEventListener('click', bulkResolveSelected);
+
+  // EXPORTS
+  q('#rExport')?.addEventListener('click', () => exportCSV('reports'));
+  q('#cExport')?.addEventListener('click', () => exportCSV('comments'));
+  q('#uExport')?.addEventListener('click', () => exportCSV('users'));
+
+  // SELECT ALL FOR REPORTS
+  q('#rSelectAll')?.addEventListener('change', () => {
+    const checked = q('#rSelectAll')?.checked;
+    qa('#reportsTable tbody .rSelect').forEach(cb => {
+      cb.checked = !!checked;
+    });
+  });
+
+  // GLOBAL SEARCH FORM
+  bindSearchForm();
+
+  // INITIAL LOADS
   await loadMetrics();
   await loadUsers();
   await loadThreads({ page: state.threads.page });
-
-  // ✅ This is where you add the await
   await loadAdminComments();
-
   await loadReports();
 
   console.log('[admin.js] init complete');
