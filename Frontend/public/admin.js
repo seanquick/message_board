@@ -73,7 +73,9 @@ function renderErrorRow(tableSelector, msg, colspan = 5) {
 const state = {
   users:    { page: 1, limit: 25, total: 0 },
   comments: { page: 1, limit: 25, total: 0 },
+  threads:  { page: 1, limit: 25, total: 0 }
 };
+
 
 // --- METRICS ---
 async function loadMetrics() {
@@ -407,7 +409,7 @@ function bindThreadBulkActions() {
       });
 
       console.log('[Thread Bulk Delete] Response:', result);
-      await loadThreads();
+      await loadThreads({ page: state.threads.page });
     } catch (e) {
       console.error('[Thread Bulk Delete] Error:', e);
       showErr(`Bulk threads delete failed: ${e?.error || e?.message}`);
@@ -434,7 +436,7 @@ function bindThreadBulkActions() {
       });
 
       console.log('[Thread Bulk Restore] Response:', result);
-      await loadThreads();
+      await loadThreads({ page: state.threads.page });
     } catch (e) {
       console.error('[Thread Bulk Restore] Error:', e);
       showErr(`Bulk threads restore failed: ${e?.error || e?.message}`);
@@ -500,7 +502,7 @@ function bindThreadActions(tbody) {
     const note = prompt('Note (optional):');
     try {
       await api(`/api/admin/threads/${encodeURIComponent(tid)}/pin`, { method: 'POST', body: { note } });
-      loadThreads();
+      loadThreads({ page: state.threads.page });
     } catch (e) {
       showErr(`Failed to pin/unpin: ${e?.error || e?.message}`);
     }
@@ -513,7 +515,7 @@ function bindThreadActions(tbody) {
     const note = prompt('Note (optional):');
     try {
       await api(`/api/admin/threads/${encodeURIComponent(tid)}/lock`, { method: 'POST', body: { note } });
-      loadThreads();
+      loadThreads({ page: state.threads.page });
     } catch (e) {
       showErr(`Failed to lock/unlock: ${e?.error || e?.message}`);
     }
@@ -526,7 +528,7 @@ function bindThreadActions(tbody) {
     const reason = prompt('Reason (optional):');
     try {
       await api(`/api/admin/threads/${encodeURIComponent(tid)}/delete`, { method: 'POST', body: { reason } });
-      loadThreads();
+      loadThreads({ page: state.threads.page });
     } catch (e) {
       showErr(`Failed to delete/restore: ${e?.error || e?.message}`);
     }
@@ -1006,7 +1008,7 @@ async function init() {
 
   await loadMetrics();
   await loadUsers();
-  await loadThreads();
+  await loadThreads({ page: state.threads.page });
 
   // ✅ This is where you add the await
   await loadAdminComments();
