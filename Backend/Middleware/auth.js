@@ -128,10 +128,14 @@ function sendAuthFailure(req, res, isAdmin = false) {
   }
 }
 
+const requireUser = requireAuth; // alias for clarity
+
 module.exports = {
   tryAuth,
   requireAuth,
+  requireUser,     // ✅ Now it's exported
   requireAdmin,
   setAuthCookie,
   clearAuthCookie,
 };
+
