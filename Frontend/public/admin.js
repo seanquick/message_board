@@ -543,9 +543,8 @@ function bindThreadActions(tbody) {
   }));
 }
 
-
-// ===== LOAD ADMIN COMMENTS (with Pagination) =====
-async function loadAdminComments({ page = state.comments.page } = {}) {
+// ===== LOAD ADMIN COMMENTS (with Pagination + Show Deleted + Page Size) =====
+async function loadAdminComments({ page = state.comments.page || 1 } = {}) {
   clearErrs();
 
   const tbody = ensureTbody('#commentsTable');
@@ -553,10 +552,9 @@ async function loadAdminComments({ page = state.comments.page } = {}) {
 
   try {
     const includeDeleted = q('#cIncludeDeleted')?.checked;
-    const limit = parseInt(q('#cPageSize')?.value || state.comments.limit || '50', 10);
-    const skip = (page - 1) * limit;
+    const limit = parseInt(q('#cPageSize')?.value || state.comments.limit || 50, 10);
 
-    // Use POST so the backend can read body (or adjust if your backend uses GET)
+    // ✅ Build request to backend
     const resp = await api('/api/admin/comments', {
       method: 'POST',
       body: {
@@ -568,19 +566,23 @@ async function loadAdminComments({ page = state.comments.page } = {}) {
       skipHtmlRedirect: true
     });
 
+    console.log('[AdminComments] API Response:', resp);
+
     const comments = Array.isArray(resp.comments) ? resp.comments : [];
     const { totalPages = 1, totalCount = 0 } = resp.pagination || {};
 
+    // Clear table
     tbody.innerHTML = '';
 
     if (!comments.length) {
-      tbody.innerHTML = `<tr><td colspan="8">No comments found.</td></tr>`;
-      q('#cPageInfo').textContent = '0 results';
-      q('#cPrev')?.disabled = true;
-      q('#cNext')?.disabled = true;
+      tbody.innerHTML = `<tr><td colspan="8" class="empty">No comments found.</td></tr>`;
+      q('#cPageInfo').textContent = `0 results`;
+      q('#cPrev')?.setAttribute('disabled', true);
+      q('#cNext')?.setAttribute('disabled', true);
       return;
     }
 
+    // ✅ Render rows
     comments.forEach(c => {
       const tr = document.createElement('tr');
       tr.dataset.id = c._id;
@@ -613,23 +615,29 @@ async function loadAdminComments({ page = state.comments.page } = {}) {
       tbody.appendChild(tr);
     });
 
-    // Update state
+    // ✅ Update pagination state
     state.comments.page = page;
     state.comments.limit = limit;
     state.comments.total = totalCount;
     state.comments.totalPages = totalPages;
 
+    // ✅ Update info label
     q('#cPageInfo').textContent = `Page ${page} of ${totalPages} (${totalCount} comments)`;
-    q('#cPrev')?.disabled = (page <= 1);
-    q('#cNext')?.disabled = (page >= totalPages);
 
+    // ✅ Enable/disable pagination buttons
+    q('#cPrev')?.toggleAttribute('disabled', page <= 1);
+    q('#cNext')?.toggleAttribute('disabled', page >= totalPages);
+
+    // ✅ Bind per-row admin actions
     bindCommentAdminActions(tbody);
 
   } catch (e) {
-    console.error('[AdminComments] Error loading comments', e);
+    console.error('[AdminComments] Error loading comments:', e);
     renderErrorRow('#commentsTable', `Error loading comments: ${e?.error || e?.message}`, 8);
   }
 }
+
+
 
 // ===== BULK ACTIONS: Comments =====
 function bindCommentBulkActions() {
