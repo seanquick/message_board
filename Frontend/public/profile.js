@@ -1,5 +1,5 @@
 // profile.js
-import { api } from './_utils.js';
+import { api } from './utils.js';
 
 const q = sel => document.querySelector(sel);
 const params = new URLSearchParams(location.search);

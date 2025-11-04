@@ -1,7 +1,7 @@
 // Frontend/public/nav.js
 // Inject site header, then signal 'nav:ready'
 
-import { api } from './_utils.js';
+import { api } from './utils.js';
 
 (async function initHeader() {
   // Global guard
