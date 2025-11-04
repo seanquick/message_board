@@ -545,7 +545,7 @@ function bindThreadActions(tbody) {
 
 
 // ===== LOAD ADMIN COMMENTS (with Pagination) =====
-async function loadAdminComments() {
+async function loadAdminComments({ page = state.comments.page } = {}) {
   clearErrs();
 
   const tbody = ensureTbody('#commentsTable');
@@ -553,29 +553,31 @@ async function loadAdminComments() {
 
   try {
     const includeDeleted = q('#cIncludeDeleted')?.checked;
-    const pageSize = parseInt(q('#cPageSize')?.value || '50', 10);
-    const page = state.comments.page;
+    const limit = parseInt(q('#cPageSize')?.value || state.comments.limit || '50', 10);
+    const skip = (page - 1) * limit;
 
-    const params = new URLSearchParams({
-      t: String(Date.now()),
-      page,
-      limit: pageSize
+    // Use POST so the backend can read body (or adjust if your backend uses GET)
+    const resp = await api('/api/admin/comments', {
+      method: 'POST',
+      body: {
+        page,
+        limit,
+        includeDeleted
+      },
+      nocache: true,
+      skipHtmlRedirect: true
     });
 
-    if (includeDeleted) {
-      params.set('includeDeleted', '1');
-    }
-
-    const url = `/api/admin/comments?${params.toString()}`;
-    const resp = await api(url, { nocache: true, skipHtmlRedirect: true });
-    const comments = resp.comments || [];
+    const comments = Array.isArray(resp.comments) ? resp.comments : [];
     const { totalPages = 1, totalCount = 0 } = resp.pagination || {};
 
     tbody.innerHTML = '';
 
     if (!comments.length) {
-      tbody.innerHTML = `<tr><td colspan="7">No comments found.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8">No comments found.</td></tr>`;
       q('#cPageInfo').textContent = '0 results';
+      q('#cPrev')?.disabled = true;
+      q('#cNext')?.disabled = true;
       return;
     }
 
@@ -584,13 +586,16 @@ async function loadAdminComments() {
       tr.dataset.id = c._id;
       tr.dataset.deleted = !!c.isDeleted;
 
-      const publicAuthor = c.isAnonymous ? 'Anonymous' : (c.author_name || (c.author?.name || ''));
-      const internalAuthor = c.realAuthor ? (c.realAuthor.name || c.realAuthor.email || '') : '';
+      const publicAuthor = c.isAnonymous
+        ? 'Anonymous'
+        : (c.author_name || (c.author?.name || ''));
+      const internalAuthor = c.realAuthor
+        ? (c.realAuthor.name || c.realAuthor.email || '')
+        : '';
       const displayAuthor = c.isAnonymous
         ? `${publicAuthor} (internal: ${escapeHTML(internalAuthor)})`
         : escapeHTML(publicAuthor);
 
-      // inside loadAdminComments() row rendering
       tr.innerHTML = `
         <td><input type="checkbox" class="bulkSelectComment" /></td>
         <td>${escapeHTML(new Date(c.createdAt || Date.now()).toLocaleString())}</td>
@@ -599,26 +604,30 @@ async function loadAdminComments() {
         <td>${escapeHTML(String(c.thread || ''))}</td>
         <td>${Number(c.upvoteCount ?? 0)}</td>
         <td>${c.isDeleted ? 'Deleted' : 'Active'}</td>
-        <td class="row gap‑05">
+        <td class="row gap-05">
           <button class="btn tiny viewComment">View</button>
           <button class="btn tiny delRestoreComment">Delete/Restore</button>
         </td>
       `;
 
-
-
       tbody.appendChild(tr);
     });
 
+    // Update state
+    state.comments.page = page;
+    state.comments.limit = limit;
+    state.comments.total = totalCount;
+    state.comments.totalPages = totalPages;
+
     q('#cPageInfo').textContent = `Page ${page} of ${totalPages} (${totalCount} comments)`;
-    q('#cPrev').disabled = (page <= 1);
-    q('#cNext').disabled = (page >= totalPages);
+    q('#cPrev')?.disabled = (page <= 1);
+    q('#cNext')?.disabled = (page >= totalPages);
 
     bindCommentAdminActions(tbody);
 
   } catch (e) {
     console.error('[AdminComments] Error loading comments', e);
-    renderErrorRow('#commentsTable', `Error loading comments: ${e?.error || e?.message}`, 7);
+    renderErrorRow('#commentsTable', `Error loading comments: ${e?.error || e?.message}`, 8);
   }
 }
 
@@ -1017,8 +1026,11 @@ async function init() {
   });
 
   // COMMENT CONTROLS
-  q('#cRefresh')?.addEventListener('click', loadAdminComments);
-  q('#cIncludeDeleted')?.addEventListener('change', loadAdminComments);
+  q('#cPageSize')?.addEventListener('change', () => loadAdminComments({ page: 1 }));
+  q('#cIncludeDeleted')?.addEventListener('change', () => loadAdminComments({ page: 1 }));
+  q('#cPrev')?.addEventListener('click', () => { if (state.comments.page > 1) {state.comments.page--; loadAdminComments({ page: state.comments.page }); } });
+  q('#cNext')?.addEventListener('click', () => { if (state.comments.page < state.comments.totalPages) {state.comments.page++; loadAdminComments({ page: state.comments.page }); } });
+
 
   // REPORT CONTROLS
   q('#rRefresh')?.addEventListener('click', loadReports);
