@@ -558,26 +558,24 @@ async function loadAdminComments({ page = state.comments.page || 1 } = {}) {
     const includeDeleted = q('#cIncludeDeleted')?.checked;
     const limit = parseInt(q('#cPageSize')?.value || state.comments.limit || 50, 10);
 
-    // ✅ Build request to backend
-    const resp = await api('/api/admin/comments', {
-      method: 'POST',
-      body: {
-        page,
-        limit,
-        includeDeleted
-      },
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+      t: String(Date.now()) // bust cache
+    });
+    if (includeDeleted) params.set('includeDeleted', '1');
+
+    const url = `/api/admin/comments?${params.toString()}`;
+    const resp = await api(url, {
+      method: 'GET',
       nocache: true,
       skipHtmlRedirect: true
     });
 
-    console.log('[AdminComments] API Response:', resp);
-
     const comments = Array.isArray(resp.comments) ? resp.comments : [];
     const { totalPages = 1, totalCount = 0 } = resp.pagination || {};
 
-    // Clear table
     tbody.innerHTML = '';
-
     if (!comments.length) {
       tbody.innerHTML = `<tr><td colspan="8" class="empty">No comments found.</td></tr>`;
       q('#cPageInfo').textContent = `0 results`;
@@ -586,7 +584,6 @@ async function loadAdminComments({ page = state.comments.page || 1 } = {}) {
       return;
     }
 
-    // ✅ Render rows
     comments.forEach(c => {
       const tr = document.createElement('tr');
       tr.dataset.id = c._id;
@@ -619,20 +616,16 @@ async function loadAdminComments({ page = state.comments.page || 1 } = {}) {
       tbody.appendChild(tr);
     });
 
-    // ✅ Update pagination state
     state.comments.page = page;
     state.comments.limit = limit;
     state.comments.total = totalCount;
     state.comments.totalPages = totalPages;
 
-    // ✅ Update info label
     q('#cPageInfo').textContent = `Page ${page} of ${totalPages} (${totalCount} comments)`;
 
-    // ✅ Enable/disable pagination buttons
     q('#cPrev')?.toggleAttribute('disabled', page <= 1);
     q('#cNext')?.toggleAttribute('disabled', page >= totalPages);
 
-    // ✅ Bind per-row admin actions
     bindCommentAdminActions(tbody);
 
   } catch (e) {
@@ -640,6 +633,7 @@ async function loadAdminComments({ page = state.comments.page || 1 } = {}) {
     renderErrorRow('#commentsTable', `Error loading comments: ${e?.error || e?.message}`, 8);
   }
 }
+
 
 
 
