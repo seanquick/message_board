@@ -1,37 +1,111 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Account Settings</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device‑width, initial‑scale=1.0" />
+  <title>My Profile</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <!-- Header is injected by nav.js (loads header.html) -->
+  <main class="container narrow pad">
+    <h1>My Profile</h1>
+    <div id="profileErr" class="err" aria-live="polite" hidden></div>
 
-  <main class="container card" role="main" aria-labelledby="pageTitle">
-    <h2 id="pageTitle">Account Settings</h2>
+    <form id="profileForm" class="profile-edit-form">
+      <label for="profilePhotoInput">Profile Photo</label><br/>
+      <img id="profilePhotoPreview" class="profile-photo" src="" alt="Profile Photo" hidden /><br/>
+      <input type="file" id="profilePhotoInput" accept="image/*" /><br/><br/>
 
-    <section class="mt-1">
-      <h3>Change password</h3>
-      <form id="pwForm" class="stack" novalidate>
-        <label for="old">Current password</label>
-        <input id="old" type="password" placeholder="Current password" autocomplete="current-password" required />
+      <label for="displayNameInput">Display Name</label><br/>
+      <input type="text" id="displayNameInput" maxlength="100" placeholder="How you’d like to be shown" /><br/><br/>
 
-        <label for="nw">New password</label>
-        <input id="nw" type="password" placeholder="New password (min 8 chars)" autocomplete="new-password" required />
+      <label for="bioInput">Short Bio</label><br/>
+      <textarea id="bioInput" maxlength="1000" rows="4" placeholder="Tell others about yourself…"></textarea><br/><br/>
 
-        <button class="btn" type="submit">Update Password</button>
-      </form>
-      <div id="msg" class="meta mt-05" aria-live="polite"></div>
-    </section>
+      <label for="favoriteQuoteInput">Favorite Quote</label><br/>
+      <textarea id="favoriteQuoteInput" maxlength="500" rows="2" placeholder="A quote you like"></textarea><br/><br/>
+
+      <button type="submit" class="btn">Save Profile</button>
+    </form>
+
+    <p id="saveMsg" class="meta" hidden>Profile saved successfully.</p>
   </main>
 
-  <!-- ✅ Shared scripts first (header injection + auth/nav wiring) -->
-  <script type="module" src="nav.js"></script>
-  <script type="module" src="main.js"></script>
-  <!-- ✅ Page script last -->
-  <script type="module" src="threads.js"></script>
-  <script type="module" src="account.js"></script>
+  <script type="module">
+    import { api } from './_utils.js';  // adjust if your utility path differs
+
+    const q = sel => document.querySelector(sel);
+
+    async function loadMyProfile() {
+      try {
+        const resp = await api('/api/users/profile', { method: 'GET' });
+        if (resp.displayName)   q('#displayNameInput').value   = resp.displayName;
+        if (resp.bio)           q('#bioInput').value           = resp.bio;
+        if (resp.favoriteQuote) q('#favoriteQuoteInput').value = resp.favoriteQuote;
+
+        if (resp.profilePhoto) {
+          const img = q('#profilePhotoPreview');
+          img.src = resp.profilePhoto;
+          img.hidden = false;
+        }
+      } catch (e) {
+        console.error('Error loading profile:', e);
+        q('#profileErr').textContent = e?.error || 'Failed to load profile';
+        q('#profileErr').hidden = false;
+      }
+    }
+
+    q('#profilePhotoInput')?.addEventListener('change', ev => {
+      const file = ev.currentTarget.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        const img = q('#profilePhotoPreview');
+        img.src = e.target.result;
+        img.hidden = false;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    q('#profileForm')?.addEventListener('submit', async ev => {
+      ev.preventDefault();
+      q('#profileErr').hidden = true;
+      q('#saveMsg').hidden   = true;
+
+      try {
+        let photoData = '';
+        const fileInput = q('#profilePhotoInput');
+        if (fileInput.files && fileInput.files[0]) {
+          photoData = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = e => resolve(e.target.result);
+            reader.onerror = err => reject(err);
+            reader.readAsDataURL(fileInput.files[0]);
+          });
+        }
+
+        const body = {
+          displayName:   q('#displayNameInput').value.trim(),
+          bio:           q('#bioInput').value.trim(),
+          favoriteQuote: q('#favoriteQuoteInput').value.trim(),
+          profilePhoto:  photoData
+        };
+
+        await api('/api/users/profile', {
+          method: 'POST',
+          body
+        });
+
+        q('#saveMsg').hidden = false;
+      } catch (e) {
+        console.error('Error saving profile:', e);
+        q('#profileErr').textContent = e?.error || 'Failed to save profile';
+        q('#profileErr').hidden = false;
+      }
+    });
+
+    // On load
+    loadMyProfile();
+  </script>
 </body>
 </html>

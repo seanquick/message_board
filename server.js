@@ -9,7 +9,7 @@ const mongoose = require('mongoose');
 const path = require('path');
 const jwt = require('jsonwebtoken');
 
-const { requireAdmin } = require('./Backend/Middleware/auth'); // import admin guard
+const { requireAdmin } = require('./Backend/Middleware/auth');
 
 // Route modules
 const authRoutes    = require('./Backend/Routes/auth');
@@ -19,6 +19,9 @@ const reportRoutes  = require('./Backend/Routes/report');
 const adminRoutes   = require('./Backend/Routes/admin');
 const searchRoutes  = require('./Backend/Routes/search');
 const notifRouter   = require('./Backend/Routes/notifications');
+const userRoutes    = require('./Backend/Routes/user'); // ✅ NEW
+const profileRoutes = require('./Backend/Routes/profile');
+
 
 const app = express();
 app.set('trust proxy', 1);
@@ -73,7 +76,7 @@ function noStore(res) {
   });
 }
 
-// sessionGate from your prior code
+// sessionGate
 function sessionGate(req, res, next) {
   const token = req.cookies?.token;
   if (!token) return res.redirect('/login.html');
@@ -132,7 +135,10 @@ app.use('/api/report',        pickRouter(reportRoutes));
 app.use('/api/search',        pickRouter(searchRoutes));
 app.use('/api/admin',         pickRouter(adminRoutes));
 app.use('/api/notifications', notifRouter);
+app.use('/api/users',         pickRouter(userRoutes)); // ✅ NEW
 app.set('notifyUser', notifRouter.notifyUser);
+app.use('/api/profile', pickRouter(profileRoutes));
+
 
 // Health
 app.get('/api/health',  (_req, res) => res.json({ ok: true }));

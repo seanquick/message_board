@@ -710,3 +710,32 @@ tr .row.gap-05 button {
 #adminErr.active {
   display: block;
 }
+
+.profile-box {
+  display: flex;
+  flex-direction: row;
+  gap: 1.5rem;
+  align-items: flex-start;
+  margin-top: 1rem;
+}
+
+.profile-photo {
+  width: 150px;
+  height: 150px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+}
+
+.profile-info {
+  flex: 1;
+}
+
+.profile-bio {
+  font-style: italic;
+  margin-bottom: 1rem;
+}
+
+.profile-quotes ul {
+  padding-left: 1.2rem;
+}

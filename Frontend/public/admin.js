@@ -130,7 +130,12 @@ async function loadUsers() {
       const tr         = document.createElement('tr');
       tr.dataset.id    = u._id;
       const display    = u.name ? escapeHTML(u.name) : escapeHTML(u.email);
-      const nameLink   = `<a href="#" class="user-link" data-uid="${escapeHTML(u._id)}">${display}</a>`;
+      const nameLink = `
+          <div>
+            <a href="#" class="user-link" data-uid="${escapeHTML(u._id)}">${display}</a><br>
+            <a class="btn tiny" href="profile.html?id=${u._id}" target="_blank">View Profile</a>
+          </div>
+        `;
       tr.innerHTML     = `
         <td>${nameLink}<br><span class="meta">${escapeHTML(u.email)}</span></td>
         <td>${escapeHTML(u.role || 'user')}</td>
@@ -340,8 +345,9 @@ async function loadThreads({ page = 1 } = {}) {
         : '';
 
       const displayAuthor = t.isAnonymous
-        ? `${publicAuthor} (internal: ${escapeHTML(internalAuthor)})`
-        : escapeHTML(publicAuthor);
+        ? `${publicAuthor} (internal: ${escapeHTML(internalAuthor)}${t.realAuthor?._id ? `, <a class="btn tiny" href="profile.html?id=${t.realAuthor._id}" target="_blank">View Profile</a>` : ''})`
+        : `${escapeHTML(publicAuthor)}${t.realAuthor?._id ? ` <a class="btn tiny" href="profile.html?id=${t.realAuthor._id}" target="_blank">View Profile</a>` : ''}`;
+
 
       tr.innerHTML = `
         <td><input type="checkbox" class="bulkSelectThread" /></td>
@@ -596,8 +602,9 @@ async function loadAdminComments({ page = state.comments.page || 1 } = {}) {
         ? (c.realAuthor.name || c.realAuthor.email || '')
         : '';
       const displayAuthor = c.isAnonymous
-        ? `${publicAuthor} (internal: ${escapeHTML(internalAuthor)})`
-        : escapeHTML(publicAuthor);
+        ? `${publicAuthor} (internal: ${escapeHTML(internalAuthor)}${c.realAuthor?._id ? `, <a class="btn tiny" href="profile.html?id=${c.realAuthor._id}" target="_blank">View Profile</a>` : ''})`
+        : `${escapeHTML(publicAuthor)}${c.realAuthor?._id ? ` <a class="btn tiny" href="profile.html?id=${c.realAuthor._id}" target="_blank">View Profile</a>` : ''}`;
+
 
       tr.innerHTML = `
         <td><input type="checkbox" class="bulkSelectComment" /></td>
