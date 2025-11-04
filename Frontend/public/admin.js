@@ -369,8 +369,12 @@ async function loadThreads({ page = 1 } = {}) {
     state.threads.totalPages = totalPages;
 
     // Disable Prev/Next if at edge
-    q('#tPrev')?.disabled = page <= 1;
-    q('#tNext')?.disabled = page >= totalPages;
+    const tPrev = q('#tPrev');
+      if (tPrev) tPrev.disabled = page <= 1;
+
+    const tNext = q('#tNext');
+      if (tNext) tNext.disabled = page >= totalPages;
+
 
     // ✅ Update page info label
     const info = q('#tPageInfo');
