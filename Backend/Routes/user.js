@@ -21,7 +21,7 @@ router.get('/profile', requireAuth, async (req, res) => {
       displayName: user.displayName || '',
       bio: user.bio || '',
       favoriteQuote: user.favoriteQuote || '',
-      profilePhoto: user.profilePhoto || ''
+      profilePhoto: user.profilePhotoUrl || '/default-avatar.png'
     });
   } catch (err) {
     console.error('[GET /users/profile] Error:', err);
@@ -53,7 +53,7 @@ router.post('/profile', requireAuth, async (req, res) => {
         displayName: user.displayName,
         bio: user.bio,
         favoriteQuote: user.favoriteQuote,
-        profilePhoto: user.profilePhoto
+        profilePhoto: user.profilePhotoUrl || '/default-avatar.png'
       }
     });
   } catch (err) {
@@ -68,11 +68,14 @@ router.post('/profile/photo', requireAuth, uploadSingle, async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
+
     const url = await processAndUpload(req.file.buffer, req.file.originalname, req.file.mimetype);
 
-    const user = await User.findByIdAndUpdate(req.user.uid,
+    const user = await User.findByIdAndUpdate(
+      req.user.uid,
       { profilePhotoUrl: url },
-      { new: true, lean: true });
+      { new: true, lean: true }
+    );
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     res.json({ success: true, profilePhotoUrl: user.profilePhotoUrl });
@@ -96,7 +99,7 @@ router.get('/:id', async (req, res) => {
       displayName: user.displayName || '',
       bio: user.bio || '',
       favoriteQuote: user.favoriteQuote || '',
-      profilePhoto: user.profilePhoto || ''
+      profilePhoto: user.profilePhotoUrl || '/default-avatar.png'
     });
   } catch (err) {
     console.error('[GET /users/:id] Error:', err);
