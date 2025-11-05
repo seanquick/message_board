@@ -11,6 +11,11 @@
 /* 0) Webfonts */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600;700&display=swap');
 
+/* Utility class to hide elements */
+.hidden {
+  display: none !important;
+}
+
 /* 1) CSS Variables (Theme Tokens) */
 :root {
   /* Base */

@@ -4,7 +4,6 @@
 import { api } from './utils.js';
 
 (async function initHeader() {
-  // Global guard
   if (window.__NAV_INJECTED__) {
     document.dispatchEvent(new CustomEvent('nav:ready'));
     return;
@@ -30,12 +29,22 @@ import { api } from './utils.js';
       header.setAttribute('data-header-existing', '1');
     }
 
-    // Inject profile links after header loads
+    // Fetch current user
     const user = await api('/api/users/profile', { method: 'GET' }).catch(() => null);
 
     if (user?._id) {
       const navRight = document.querySelector('.nav-right') || header.querySelector('.row');
 
+      // Hide login/register
+      document.getElementById('loginLink')?.classList.add('hidden');
+      document.getElementById('registerLink')?.classList.add('hidden');
+
+      // Show admin link if role is admin
+      if (user.role === 'admin') {
+        document.querySelector('a[href="admin.html"]')?.classList.remove('hidden');
+      }
+
+      // Add "My Profile" and "Edit Profile"
       if (navRight) {
         const viewLink = document.createElement('a');
         viewLink.href = `profile.html?id=${user._id}`;
@@ -50,15 +59,19 @@ import { api } from './utils.js';
         navRight.insertBefore(viewLink, navRight.querySelector('#logoutBtn'));
         navRight.insertBefore(editLink, navRight.querySelector('#logoutBtn'));
       }
-    }
 
-    // Logout button
-    document.querySelector('#logoutBtn')?.addEventListener('click', async () => {
-      try {
-        await api('/api/auth/logout', { method: 'POST' });
-      } catch (_) {}
-      location.href = '/login.html';
-    });
+      // Show logout button
+      const logoutBtn = document.getElementById('logoutBtn');
+      if (logoutBtn) {
+        logoutBtn.style.display = '';
+        logoutBtn.addEventListener('click', async () => {
+          try {
+            await api('/api/auth/logout', { method: 'POST' });
+          } catch (_) {}
+          location.href = '/login.html';
+        });
+      }
+    }
 
   } catch (e) {
     console.error('[nav] header inject failed:', e);
