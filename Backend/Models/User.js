@@ -36,7 +36,11 @@ const UserSchema = new mongoose.Schema({
   displayName:   { type: String, default: '', trim: true, maxlength: 100 },
   bio:           { type: String, default: '', maxlength: 1000 },
   favoriteQuote: { type: String, default: '', maxlength: 500 },
-  profilePhoto:  { type: String, default: '' } // store image URL or base64
+  profilePhoto:  { type: String, default: '' }, // legacy base64 or local
+
+  // ✅ Profile Photo URL (Uploaded or Cloud-Hosted)
+  profilePhotoUrl: { type: String, default: '' }
+
 }, { timestamps: true });
 
 // Indexes

@@ -40,22 +40,30 @@ q('#profileForm')?.addEventListener('submit', async ev => {
   q('#saveMsg').hidden = true;
 
   try {
-    let photoData = '';
+    let photoUrl = '';
+
+    // Step 1: Upload the photo if a file is selected
     const fileInput = q('#profilePhotoInput');
     if (fileInput.files && fileInput.files[0]) {
-      photoData = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = e => resolve(e.target.result);
-        reader.onerror = err => reject(err);
-        reader.readAsDataURL(fileInput.files[0]);
+      const formData = new FormData();
+      formData.append('profilePhoto', fileInput.files[0]);
+
+      const uploadResp = await fetch('/api/users/profile/photo', {
+        method: 'POST',
+        body: formData
       });
+
+      const uploadData = await uploadResp.json();
+      if (!uploadResp.ok) throw new Error(uploadData.error || 'Photo upload failed');
+      photoUrl = uploadData.profilePhotoUrl || '';
     }
 
+    // Step 2: Submit the rest of the profile
     const body = {
-      displayName: q('#displayNameInput').value.trim(),
-      bio: q('#bioInput').value.trim(),
+      displayName:   q('#displayNameInput').value.trim(),
+      bio:           q('#bioInput').value.trim(),
       favoriteQuote: q('#favoriteQuoteInput').value.trim(),
-      profilePhoto: photoData
+      profilePhoto:  photoUrl // may be empty if no file uploaded
     };
 
     await api('/api/users/profile', {
@@ -66,10 +74,11 @@ q('#profileForm')?.addEventListener('submit', async ev => {
     q('#saveMsg').hidden = false;
   } catch (e) {
     console.error('Error saving profile:', e);
-    q('#profileErr').textContent = e?.error || 'Failed to save profile';
+    q('#profileErr').textContent = e?.message || 'Failed to save profile';
     q('#profileErr').hidden = false;
   }
 });
+
 
 document.addEventListener('DOMContentLoaded', async () => {
   const form = $('#pwForm');

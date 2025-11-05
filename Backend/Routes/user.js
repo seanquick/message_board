@@ -61,6 +61,26 @@ router.post('/profile', requireAuth, async (req, res) => {
   }
 });
 
+// === BACKEND ROUTE: Upload Profile Photo ===
+router.post('/profile/photo', requireAuth, uploadSingle, async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    const url = await processAndUpload(req.file.buffer, req.file.originalname, req.file.mimetype);
+
+    const user = await User.findByIdAndUpdate(req.user.uid,
+      { profilePhotoUrl: url },
+      { new: true, lean: true });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    res.json({ success: true, profilePhotoUrl: user.profilePhotoUrl });
+  } catch (err) {
+    console.error('[POST /users/profile/photo] Error:', err);
+    res.status(500).json({ error: 'Photo upload failed' });
+  }
+});
+
 // ===== PUBLIC PROFILE VIEW =====
 // GET /api/users/:id — View public profile by ID
 router.get('/:id', async (req, res) => {
