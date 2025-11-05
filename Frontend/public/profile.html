@@ -1,51 +1,41 @@
-// Frontend/public/profile.js
-import { api, $, escapeHTML } from './main.js';
+<!-- Frontend/public/profile.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>User Profile</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Inject header nav -->
+  <script type="module" src="nav.js?v=1"></script>
 
-document.addEventListener('DOMContentLoaded', async () => {
-  const params = new URLSearchParams(window.location.search);
-  const userId = params.get('id');
+  <main class="container narrow pad">
+    <h1 id="userName">Profile</h1>
 
-  if (!userId) {
-    $('#errorMsg').textContent = 'No user ID provided';
-    $('#errorMsg').hidden = false;
-    return;
-  }
+    <div id="profileBox" class="profile-box">
+      <img id="profilePhoto" class="profile-photo" src="" alt="User Photo" hidden />
 
-  try {
-    const profile = await api(`/api/users/${userId}`);
+      <div class="profile-info">
+        <p id="userBio" class="profile-bio" hidden></p>
 
-    $('#userName').textContent = escapeHTML(profile.displayName || profile.name || 'User');
+        <div id="userQuoteBox" class="profile-quote" hidden>
+          <h3>Favorite Quote</h3>
+          <blockquote id="userQuoteText"></blockquote>
+        </div>
 
-    // ✅ Show fallback image if missing
-    const img = $('#profilePhoto');
-    img.src = profile.profilePhoto || '/default-avatar.png';
-    img.alt = `${profile.displayName || profile.name || 'User'}'s photo`;
-    img.hidden = false;
+        <div id="userQuotesBox" class="profile-quotes" hidden>
+          <h3>Other Favorite Quotes</h3>
+          <ul id="userQuotesList"></ul>
+        </div>
+      </div>
+    </div>
 
-    // ✅ Optional: fallback to default-avatar if image fails to load
-    img.onerror = () => {
-      img.onerror = null;
-      img.src = '/default-avatar.png';
-    };
+    <p id="errorMsg" class="error" hidden></p>
+  </main>
 
-    // Bio
-    if (profile.bio) {
-      $('#userBio').textContent = profile.bio;
-      $('#userBio').hidden = false;
-    }
-
-    // Favorite quote
-    if (profile.favoriteQuote) {
-      $('#userQuoteText').textContent = profile.favoriteQuote;
-      $('#userQuoteBox').hidden = false;
-    }
-
-    // If you ever support multiple quotes
-    // $('#userQuotesBox').hidden = false;
-
-  } catch (err) {
-    console.error('[profile.js] Failed to load profile:', err);
-    $('#errorMsg').textContent = err?.error || 'Failed to load user profile';
-    $('#errorMsg').hidden = false;
-  }
-});
+  <!-- ✅ Load logic from external JS file -->
+  <script type="module" src="profile.js?v=1"></script>
+</body>
+</html>

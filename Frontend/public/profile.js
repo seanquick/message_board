@@ -1,54 +1,44 @@
-// profile.js
-import { api } from './utils.js';
+// Frontend/public/profile.js
+import { api, $, escapeHTML } from './main.js';
 
-const q = sel => document.querySelector(sel);
-const params = new URLSearchParams(location.search);
-const userId = params.get('id');
+document.addEventListener('DOMContentLoaded', async () => {
+  const params = new URLSearchParams(window.location.search);
+  const userId = params.get('id');
 
-async function loadProfile() {
   if (!userId) {
-    q('#errorMsg').textContent = 'Missing user ID.';
-    q('#errorMsg').hidden = false;
+    $('#errorMsg').textContent = 'No user ID provided';
+    $('#errorMsg').hidden = false;
     return;
   }
 
   try {
-    const profile = await api(`/api/users/${encodeURIComponent(userId)}`);
+    const profile = await api(`/api/users/${userId}`);
 
-    q('#userName').textContent = profile.displayName || profile.name || 'Unnamed User';
+    $('#userName').textContent = escapeHTML(profile.displayName || profile.name || 'User');
 
-    if (profile.profilePhoto) {
-      const img = q('#profilePhoto');
-      img.src = profile.profilePhoto;
-      img.alt = `${profile.displayName || profile.name || 'User'}'s photo`;
-      img.hidden = false;
-    }
+    const img = $('#profilePhoto');
+    img.src = profile.profilePhoto || '/default-avatar.png';
+    img.alt = `${profile.displayName || profile.name || 'User'}'s photo`;
+    img.hidden = false;
+
+    img.onerror = () => {
+      img.onerror = null;
+      img.src = '/default-avatar.png';
+    };
 
     if (profile.bio) {
-      q('#userBio').textContent = profile.bio;
-      q('#userBio').hidden = false;
+      $('#userBio').textContent = profile.bio;
+      $('#userBio').hidden = false;
     }
 
     if (profile.favoriteQuote) {
-      q('#userQuoteText').textContent = profile.favoriteQuote;
-      q('#userQuoteBox').hidden = false;
+      $('#userQuoteText').textContent = profile.favoriteQuote;
+      $('#userQuoteBox').hidden = false;
     }
 
-    if (Array.isArray(profile.otherQuotes) && profile.otherQuotes.length) {
-      const list = q('#userQuotesList');
-      list.innerHTML = '';
-      profile.otherQuotes.forEach(qt => {
-        const li = document.createElement('li');
-        li.textContent = qt;
-        list.appendChild(li);
-      });
-      q('#userQuotesBox').hidden = false;
-    }
   } catch (err) {
-    console.error('Error loading profile:', err);
-    q('#errorMsg').textContent = err?.error || 'Failed to load profile';
-    q('#errorMsg').hidden = false;
+    console.error('[profile.js] Failed to load profile:', err);
+    $('#errorMsg').textContent = err?.error || 'Failed to load user profile';
+    $('#errorMsg').hidden = false;
   }
-}
-
-loadProfile();
+});
