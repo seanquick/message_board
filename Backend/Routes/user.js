@@ -4,8 +4,10 @@ const router = express.Router();
 const User = require('../Models/User');
 const { requireAuth } = require('../Middleware/auth');
 
+// ✅ Import upload handlers
+const { uploadSingle, processAndUpload } = require('../Services/uploadPhoto');
+
 // ===== GET OWN PROFILE =====
-// GET /api/users/profile — Return the authenticated user's profile
 router.get('/profile', requireAuth, async (req, res) => {
   try {
     const user = await User.findById(req.user.uid).lean();
@@ -28,7 +30,6 @@ router.get('/profile', requireAuth, async (req, res) => {
 });
 
 // ===== UPDATE OWN PROFILE =====
-// POST /api/users/profile — Authenticated user updates their own profile
 router.post('/profile', requireAuth, async (req, res) => {
   try {
     const { displayName = '', bio = '', favoriteQuote = '', profilePhoto = '' } = req.body;
@@ -61,7 +62,7 @@ router.post('/profile', requireAuth, async (req, res) => {
   }
 });
 
-// === BACKEND ROUTE: Upload Profile Photo ===
+// ===== UPLOAD PROFILE PHOTO =====
 router.post('/profile/photo', requireAuth, uploadSingle, async (req, res) => {
   try {
     if (!req.file) {
@@ -82,7 +83,6 @@ router.post('/profile/photo', requireAuth, uploadSingle, async (req, res) => {
 });
 
 // ===== PUBLIC PROFILE VIEW =====
-// GET /api/users/:id — View public profile by ID
 router.get('/:id', async (req, res) => {
   try {
     const user = await User.findById(req.params.id).lean();
