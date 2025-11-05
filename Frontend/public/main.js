@@ -3,7 +3,6 @@
 /* ---------------- HTTP helper + silent refresh for admin routes ---------------- */
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
-
 function makeUrl(url, params = {}) {
   const keys = Object.keys(params);
   if (keys.length === 0) return url;
@@ -13,14 +12,12 @@ function makeUrl(url, params = {}) {
   return u.toString();
 }
 
-
-
 export async function api(url, opts = {}) {
   const {
     method = 'GET',
     body = null,
     headers = {},
-    params = {},        // new: support query params
+    params = {},
     nocache = false,
     skipHtmlRedirect = false
   } = opts;
@@ -29,11 +26,7 @@ export async function api(url, opts = {}) {
   const upper = String(method).toUpperCase();
 
   const csrf = getCsrfToken();
-    if (csrf) {
-      finalHeaders['X-CSRF-Token'] = csrf;
-    }
-
-  
+  if (csrf) finalHeaders['X-CSRF-Token'] = csrf;
 
   const fullUrl = makeUrl(url, params);
 
@@ -42,8 +35,8 @@ export async function api(url, opts = {}) {
       method: upper,
       headers: finalHeaders,
       credentials: 'include',
-      cache:   nocache ? 'no-store' : 'default',
-      body:    body ? JSON.stringify(body) : undefined
+      cache: nocache ? 'no-store' : 'default',
+      body: body ? JSON.stringify(body) : undefined
     });
   }
 
@@ -51,19 +44,17 @@ export async function api(url, opts = {}) {
 
   if (res.status === 401 && fullUrl.startsWith('/api/admin/')) {
     const refreshed = await tryRefreshSession();
-    if (refreshed) {
-      res = await doFetch();
-    }
+    if (refreshed) res = await doFetch();
   }
 
-  const ct     = res.headers.get('content-type') || '';
+  const ct = res.headers.get('content-type') || '';
   const isJson = ct.includes('application/json');
   const isHtml = ct.includes('text/html');
-  const text   = await res.text();
+  const text = await res.text();
 
   if (!skipHtmlRedirect && isHtml &&
-      (text.includes('<title>Sign in') ||
-       (text.includes('input') && text.includes('password') && text.includes('email'))) ) {
+    (text.includes('<title>Sign in') ||
+     (text.includes('input') && text.includes('password') && text.includes('email')))) {
     console.warn('🔒 Detected login HTML in api response — redirecting to login.');
     window.location.href = '/login.html';
     return {};
@@ -80,9 +71,9 @@ export async function api(url, opts = {}) {
 async function tryRefreshSession() {
   try {
     const r = await fetch('/api/auth/refresh', {
-      method:      'POST',
+      method: 'POST',
       credentials: 'include',
-      headers:      { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' }
     });
     return r.ok;
   } catch (e) {
@@ -109,24 +100,28 @@ export const $  = id  => document.getElementById(id);
 export const q  = sel => document.querySelector(sel);
 export const qa = sel => Array.from(document.querySelectorAll(sel));
 
+/** ✅ New helper for profile.js compatibility */
+export const $$ = sel => document.querySelector(sel);  // alias for querySelector
+
+/** ✅ Updated escapeHTML (unchanged logic) */
 export function escapeHTML(s = '') {
   return String(s)
-    .replaceAll('&',  '&amp;')
-    .replaceAll('<',  '&lt;')
-    .replaceAll('>',  '&gt;')
-    .replaceAll('"',  '&quot;')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
 }
 
 export function timeAgo(v) {
   const d = (typeof v === 'string' || typeof v === 'number')
-            ? new Date(v)
-            : (v instanceof Date ? v : new Date());
+    ? new Date(v)
+    : (v instanceof Date ? v : new Date());
   const s = Math.floor((Date.now() - d.getTime()) / 1000);
   if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s/60); if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m/60); if (h < 24) return `${h}h ago`;
-  const d2 = Math.floor(h/24); if (d2 < 7) return `${d2}d ago`;
+  const m = Math.floor(s / 60); if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`;
+  const d2 = Math.floor(h / 24); if (d2 < 7) return `${d2}d ago`;
   return d.toLocaleDateString();
 }
 
@@ -239,9 +234,9 @@ function ensureAdminLink() {
 function ensureControls() {
   if (!navRoot()) return;
   ensureAdminLink();
-  const login    = ensureLogin();
+  const login = ensureLogin();
   const register = ensureRegister();
-  const logout   = ensureLogout();
+  const logout = ensureLogout();
   return { login, register, logout };
 }
 
@@ -252,9 +247,9 @@ function updateNav() {
   const adminLink = document.querySelector('a[href$="admin.html"]');
   const loggedIn = !!me;
 
-  if (logout)   logout.style.display   = loggedIn ? 'inline-block' : 'none';
-  if (login)    login.style.display    = loggedIn ? 'none'       : 'inline-block';
-  if (register) register.style.display = loggedIn ? 'none'       : 'inline-block';
+  if (logout) logout.style.display = loggedIn ? 'inline-block' : 'none';
+  if (login) login.style.display = loggedIn ? 'none' : 'inline-block';
+  if (register) register.style.display = loggedIn ? 'none' : 'inline-block';
 
   if (adminLink) {
     if (me?.role === 'admin') {
@@ -302,9 +297,9 @@ document.addEventListener('nav:ready', () => {
 /* ---------------- Debug helper ---------------- */
 window.__authDebug = () => ({
   me,
-  hasLogin:     !!$('#loginLink'),
-  hasRegister:  !!$('#registerLink'),
-  hasLogout:    !!$('#logoutBtn'),
+  hasLogin: !!$('#loginLink'),
+  hasRegister: !!$('#registerLink'),
+  hasLogout: !!$('#logoutBtn'),
   adminVisible: !document.querySelector('a[href$="admin.html"]')?.classList.contains('hidden')
 });
 
