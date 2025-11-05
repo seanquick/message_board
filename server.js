@@ -101,6 +101,11 @@ function sessionGate(req, res, next) {
 const pubDir = path.join(__dirname, 'Frontend', 'public');
 app.use(express.static(pubDir));
 
+// ✅ Serve user-uploaded profile images (publicly accessible)
+const uploadsDir = path.join(__dirname, 'Backend', 'public', 'uploads');
+app.use('/uploads', express.static(uploadsDir));
+
+
 // Guard admin.html so non‑admins cannot view it
 app.get('/admin.html', sessionGate, requireAdmin, (_req, res) => {
   res.sendFile(path.join(pubDir, 'admin.html'));
