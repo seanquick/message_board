@@ -725,12 +725,14 @@ tr .row.gap-05 button {
 }
 
 .profile-photo {
-  width: 150px;
-  height: 150px;
-  object-fit: cover;
-  border-radius: 8px;
-  border: 1px solid #ccc;
+  width: 120px;            /* adjust size as desired */
+  height: 120px;
+  object-fit: cover;       /* ensures full coverage */
+  border-radius: 50%;      /* make it circular */
+  border: 2px solid #ccc;  /* subtle border */
+  background-color: #f0f0f0; /* fallback background */
 }
+
 
 .profile-info {
   flex: 1;
