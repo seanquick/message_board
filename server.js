@@ -19,9 +19,8 @@ const reportRoutes  = require('./Backend/Routes/report');
 const adminRoutes   = require('./Backend/Routes/admin');
 const searchRoutes  = require('./Backend/Routes/search');
 const notifRouter   = require('./Backend/Routes/notifications');
-const userRoutes    = require('./Backend/Routes/user'); // ✅ NEW
+const userRoutes    = require('./Backend/Routes/user');
 const profileRoutes = require('./Backend/Routes/profile');
-
 
 const app = express();
 app.set('trust proxy', 1);
@@ -76,7 +75,6 @@ function noStore(res) {
   });
 }
 
-// sessionGate
 function sessionGate(req, res, next) {
   const token = req.cookies?.token;
   if (!token) return res.redirect('/login.html');
@@ -97,21 +95,20 @@ function sessionGate(req, res, next) {
   }
 }
 
-// Static and page routes
+// ✅ Serve static assets like default-avatar.png
 const pubDir = path.join(__dirname, 'Frontend', 'public');
 app.use(express.static(pubDir));
 
-// ✅ Serve user-uploaded profile images (publicly accessible)
+// ✅ Serve uploaded profile images
 const uploadsDir = path.join(__dirname, 'Backend', 'public', 'uploads');
 app.use('/uploads', express.static(uploadsDir));
 
-
-// Guard admin.html so non‑admins cannot view it
+// Guard admin page
 app.get('/admin.html', sessionGate, requireAdmin, (_req, res) => {
   res.sendFile(path.join(pubDir, 'admin.html'));
 });
 
-// Other gated pages
+// Authenticated pages
 app.get('/threads.html', sessionGate, (_req, res) => res.sendFile(path.join(pubDir, 'threads.html')));
 app.get('/thread.html',  sessionGate, (_req, res) => res.sendFile(path.join(pubDir, 'thread.html')));
 app.get('/account.html', sessionGate, (_req, res) => res.sendFile(path.join(pubDir, 'account.html')));
@@ -124,7 +121,7 @@ app.get('/reset.html',    (_req, res) => res.sendFile(path.join(pubDir, 'reset.h
 app.get('/guidelines.html', (_req, res) => res.sendFile(path.join(pubDir, 'guidelines.html')));
 app.get('/', (req, res) => sessionGate(req, res, () => res.redirect('/threads.html')));
 
-// Mount APIs
+// API routes
 const pickRouter = (mod) => {
   if (mod && typeof mod === 'object') {
     if (typeof mod.router === 'function') return mod.router;
@@ -140,19 +137,18 @@ app.use('/api/report',        pickRouter(reportRoutes));
 app.use('/api/search',        pickRouter(searchRoutes));
 app.use('/api/admin',         pickRouter(adminRoutes));
 app.use('/api/notifications', notifRouter);
-app.use('/api/users',         pickRouter(userRoutes)); // ✅ NEW
+app.use('/api/users',         pickRouter(userRoutes));
 app.set('notifyUser', notifRouter.notifyUser);
 app.use('/api/profile', pickRouter(profileRoutes));
 
-
-// Health
+// Health check
 app.get('/api/health',  (_req, res) => res.json({ ok: true }));
 app.get('/api/healthz', (_req, res) => res.json({ ok: true, uptime: process.uptime(), ts: Date.now() }));
 
-// Fallback for SPA
+// Fallback
 app.get('*', (_req, res) => res.sendFile(path.join(pubDir, 'login.html')));
 
-// Startup and DB
+// Startup
 let server = null;
 let started = false;
 async function start() {
@@ -160,29 +156,34 @@ async function start() {
   started = true;
   try {
     mongoose.set('strictQuery', true);
-    await mongoose.connect(MONGO, { serverSelectionTimeoutMS: 10000, family: 4 });
+    await mongoose.connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 10000, family: 4 });
     console.log('✅ Mongo connected');
   } catch (e) {
     console.error('Mongo connect failed:', e.message);
     process.exit(1);
   }
+
   server = app.listen(process.env.PORT || 8000, '0.0.0.0', () => {
     console.log('Server listening');
   });
+
   server.on('error', (e) => {
     console.error('HTTP server error:', e);
     process.exit(1);
   });
+
   mongoose.connection.on('error', (e) => console.error('Mongo error:', e.message));
   mongoose.connection.on('disconnected', () => console.warn('Mongo disconnected'));
 }
 
+// Shutdown
 process.on('SIGTERM', async () => {
   console.log('SIGTERM, shutting down...');
-  try { await mongoose.disconnect(); } catch {} 
-  try { if (server) await new Promise(r => server.close(r)); } catch {} 
+  try { await mongoose.disconnect(); } catch {}
+  try { if (server) await new Promise(r => server.close(r)); } catch {}
   process.exit(0);
 });
+
 process.on('SIGINT', async () => {
   console.log('SIGINT, shutting down...');
   try { await mongoose.disconnect(); } catch {}
