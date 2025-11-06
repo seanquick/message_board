@@ -32,19 +32,25 @@ import { api, $, escapeHTML } from './main.js';
 
       // Profile photo logic
       const img = $('#profilePhoto');
-      const fallback = '/default-avatar.png';
-      const profilePhotoUrl = profile.profilePhotoUrl || profile.profilePhoto || fallback;
+        const fallback = '/default-avatar.png';
+        let profilePhotoUrl = profile.profilePhotoUrl || profile.profilePhoto;
 
-      if (img) {
+        if (!profilePhotoUrl || profilePhotoUrl.trim() === '') {
+        profilePhotoUrl = fallback;
+        }
+
+        if (img) {
+        img.onload = () => {
+            img.hidden = false;
+        };
+        img.onerror = () => {
+            img.onerror = null;
+            img.src = fallback;
+        };
         img.src = profilePhotoUrl;
         img.alt = `${profile.displayName || profile.name || 'User'}'s photo`;
-        img.hidden = false;
+        }
 
-        img.onerror = () => {
-          img.onerror = null;
-          img.src = fallback;
-        };
-      }
 
       // Bio
       if (profile.bio) {
