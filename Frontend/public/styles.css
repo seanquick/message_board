@@ -746,3 +746,24 @@ tr .row.gap-05 button {
 .profile-quotes ul {
   padding-left: 1.2rem;
 }
+
+.users‑grid {
+  display: grid;
+  grid-template-columns: repeat(auto‑fill, minmax(150px, 1fr));
+  gap: 16px;
+}
+
+.user-card {
+  text-decoration: none;
+  color: inherit;
+  text-align: center;
+}
+
+.user-card .profile-photo {
+  border‑radius: 50%;
+  object‑fit: cover;
+}
+.user-card .user-name {
+  margin-top: 8px;
+  font‑weight: bold;
+}

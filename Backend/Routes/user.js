@@ -107,4 +107,36 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// Backend/Routes/user.js
+
+// ===== LIST ALL (PUBLIC) PROFILES =====
+// GET /api/users  — Return minimal public info of all users who have set up profile
+router.get('/', async (req, res) => {
+  try {
+    const users = await User.find(
+      { /* optionally filter e.g. displayName exists */ },
+      {
+        _id: 1,
+        name: 1,
+        displayName: 1,
+        profilePhoto: 1,
+        profilePhotoUrl: 1
+      }
+    ).lean();
+
+    // Map to minimal response
+    const list = users.map(u => ({
+      _id: u._id,
+      name: u.name,
+      displayName: u.displayName || u.name,
+      photoUrl: (u.profilePhotoUrl || u.profilePhoto || '/default-avatar.png')
+    }));
+
+    res.json({ users: list });
+  } catch (err) {
+    console.error('[GET /users] Error:', err);
+    res.status(500).json({ error: 'Failed to fetch users list' });
+  }
+});
+
 module.exports = router;
