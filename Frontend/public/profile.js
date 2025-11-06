@@ -31,30 +31,28 @@ import { api, $, escapeHTML } from './main.js';
       }
 
     // Profile photo logic
-    const img = $('#profilePhoto');
-    const fallback = '/default-avatar.png';
-    let profilePhotoUrl = (profile.profilePhotoUrl || profile.profilePhoto || '').trim();
+        const img = $('#profilePhoto');
+        const fallback = '/default-avatar.png';
+        let profilePhotoUrl = (profile.profilePhotoUrl || profile.profilePhoto || '').trim();
+        console.log('Using profilePhotoUrl:', profilePhotoUrl);
 
-    // If empty or invalid, use fallback
-    if (!profilePhotoUrl || profilePhotoUrl === 'undefined') {
-    profilePhotoUrl = fallback;
-    }
+        if (!profilePhotoUrl) {
+        profilePhotoUrl = fallback;
+        }
 
-    if (img) {
-    img.alt = `${profile.displayName || profile.name || 'User'}'s photo`;
+        if (img) {
+        // remove hidden attribute so image element can render
+        img.removeAttribute('hidden');
+        img.alt = `${profile.displayName || profile.name || 'User'}'s photo`;
 
-    img.onload = () => {
-        img.hidden = false;
-    };
+        img.onerror = () => {
+            console.warn('img.onerror triggered — switching to fallback');
+            img.onerror = null;
+            img.src = fallback;
+        };
 
-    img.onerror = () => {
-        console.warn('Image failed to load, using fallback');
-        img.onerror = null;
-        img.src = fallback;
-    };
-
-    img.src = profilePhotoUrl;
-    }
+        img.src = profilePhotoUrl;
+        }
 
 
       // Bio
