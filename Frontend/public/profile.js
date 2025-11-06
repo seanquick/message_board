@@ -12,8 +12,8 @@ import { api, $, escapeHTML } from './main.js';
     const params = new URLSearchParams(window.location.search);
     const userId = params.get('id');
 
+    const errBox = $('#errorMsg');
     if (!userId) {
-      const errBox = $('#errorMsg');
       if (errBox) {
         errBox.textContent = 'No user ID provided';
         errBox.hidden = false;
@@ -24,23 +24,29 @@ import { api, $, escapeHTML } from './main.js';
     try {
       const profile = await api(`/api/users/${userId}`);
 
+      // Set name
       const nameEl = $('#userName');
       if (nameEl) {
         nameEl.textContent = escapeHTML(profile.displayName || profile.name || 'User');
       }
 
+      // Profile photo logic
       const img = $('#profilePhoto');
+      const fallback = '/default-avatar.png';
+      const profilePhotoUrl = profile.profilePhotoUrl || profile.profilePhoto || fallback;
+
       if (img) {
-        img.src = profile.profilePhoto || '/default-avatar.png';
+        img.src = profilePhotoUrl;
         img.alt = `${profile.displayName || profile.name || 'User'}'s photo`;
         img.hidden = false;
 
         img.onerror = () => {
           img.onerror = null;
-          img.src = '/default-avatar.png';
+          img.src = fallback;
         };
       }
 
+      // Bio
       if (profile.bio) {
         const bioEl = $('#userBio');
         if (bioEl) {
@@ -49,6 +55,7 @@ import { api, $, escapeHTML } from './main.js';
         }
       }
 
+      // Favorite quote
       if (profile.favoriteQuote) {
         const quoteText = $('#userQuoteText');
         const quoteBox = $('#userQuoteBox');
@@ -60,7 +67,6 @@ import { api, $, escapeHTML } from './main.js';
 
     } catch (err) {
       console.error('[profile.js] Failed to load profile:', err);
-      const errBox = $('#errorMsg');
       if (errBox) {
         errBox.textContent = err?.error || 'Failed to load user profile';
         errBox.hidden = false;

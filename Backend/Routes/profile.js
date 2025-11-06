@@ -13,13 +13,15 @@ router.get('/:userId', async (req, res) => {
     }
 
     res.json({
+      _id: user._id,
       name: user.name,
+      displayName: user.displayName || '',
       bio: user.bio || '',
-      photoUrl: user.photoUrl || '',
-      favoriteQuotes: Array.isArray(user.favoriteQuotes) ? user.favoriteQuotes : []
+      favoriteQuote: user.favoriteQuote || '',
+      profilePhotoUrl: user.profilePhotoUrl || '', // optional image URL
     });
   } catch (err) {
-    console.error('[profile view] error:', err);
+    console.error('[GET /api/profile/:userId] error:', err);
     res.status(500).json({ error: 'Failed to load profile' });
   }
 });
