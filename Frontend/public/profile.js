@@ -33,24 +33,25 @@ import { api, $, escapeHTML } from './main.js';
     // Profile photo logic
         const img = $('#profilePhoto');
         const fallback = '/default-avatar.png';
-        let profilePhotoUrl = profile.profilePhotoUrl || profile.profilePhoto;
+        let profilePhotoUrl = (profile.profilePhotoUrl || profile.profilePhoto || '').trim();
 
-        if (!profilePhotoUrl || profilePhotoUrl.trim() === '') {
+        if (!profilePhotoUrl) {
         profilePhotoUrl = fallback;
         }
 
         if (img) {
-        img.src = profilePhotoUrl;
+        img.removeAttribute('hidden');
+        img.style.display = 'block';
         img.alt = `${profile.displayName || profile.name || 'User'}'s photo`;
-
-        // Ensure it's always visible — even if image loads from cache
-        img.hidden = false;
 
         img.onerror = () => {
             img.onerror = null;
             img.src = fallback;
         };
+
+        img.src = profilePhotoUrl;
         }
+
 
 
       // Bio
