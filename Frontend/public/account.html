@@ -15,6 +15,17 @@
     <div id="profileErr" class="err" aria-live="polite" hidden></div>
 
     <form id="profileForm" class="profile-edit-form" enctype="multipart/form-data">
+      <!-- Inside your <form id="profileForm"> in account.html -->
+      <label>
+        <input type="checkbox" id="profilePublicInput" />
+        Make my profile public (so others can view)
+      </label><br/>
+
+      <label>
+        <input type="checkbox" id="emailPublicInput" />
+        Show my email on my public profile
+      </label><br/>
+
       <label for="profilePhotoInput">Profile Photo</label><br/>
       <img id="profilePhotoPreview" class="profile-photo" src="" alt="Profile Photo" hidden /><br/>
       <input type="file" id="profilePhotoInput" accept="image/*" /><br/><br/>
