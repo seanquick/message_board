@@ -10,7 +10,7 @@ import { api, $, escapeHTML } from './main.js';
   }
 
   async function main() {
-    // === 🔹 Setup & URL Params
+    // === 🔹 Setup
     const params = new URLSearchParams(window.location.search);
     const userId = params.get('id');
     const errorBox = $('#errorMsg');
@@ -20,27 +20,37 @@ import { api, $, escapeHTML } from './main.js';
     }
 
     try {
-      // === 🔹 Fetch Public Profile
+      // === 🔹 Fetch Profile
       const profile = await api(`/api/profile/${userId}`);
       console.log('PROFILE data:', profile);
 
-      // === 🔸 Handle Private or Missing Profile
+      // === 🔹 Debug: DOM element check
+      console.log('[DOM CHECK]', {
+        nameEl: !!$('#userName'),
+        photoEl: !!$('#profilePhoto'),
+        emailWrap: !!$('#userEmail'),
+        emailVal: !!$('#userEmailValue'),
+        bioEl: !!$('#userBio'),
+        quoteBox: !!$('#userQuoteBox'),
+        quoteText: !!$('#userQuoteText'),
+      });
+
+      // === 🔸 Profile not public (backend should block it, but double check)
       if (!profile || profile.profilePublic === false) {
-        showError("This user's profile is private or does not exist.");
-        return;
+        return showError("This user's profile is private or does not exist.");
       }
 
       const fallbackPhoto = '/default-avatar.png';
       const displayName = escapeHTML(profile.displayName || profile.name || 'User');
 
-      // === 🔸 Display Name
+      // === 🔸 Name
       const nameEl = $('#userName');
       if (nameEl) nameEl.textContent = displayName;
 
-      // === 🔸 Profile Photo (with fallback)
+      // === 🔸 Photo
       const img = $('#profilePhoto');
       if (img) {
-        img.src = profile.profilePhotoUrl || profile.profilePhoto || fallbackPhoto;
+        img.src = profile.profilePhotoUrl || fallbackPhoto;
         img.alt = `${displayName}'s profile photo`;
         img.classList.remove('hidden');
         img.onerror = () => {
@@ -49,10 +59,10 @@ import { api, $, escapeHTML } from './main.js';
         };
       }
 
-      // === 🔸 Email (only if public)
+      // === 🔸 Email
       const emailWrap = $('#userEmail');
       const emailVal = $('#userEmailValue');
-      if (emailWrap && emailVal && profile.email) {
+      if (emailWrap && emailVal && profile.email?.trim()) {
         emailVal.textContent = escapeHTML(profile.email);
         emailWrap.classList.remove('hidden');
       }
@@ -72,22 +82,10 @@ import { api, $, escapeHTML } from './main.js';
         quoteBox.classList.remove('hidden');
       }
 
-      // === 🔸 (Optional) Multiple Quotes
-      const quotesBox = $('#userQuotesBox');
-      const quotesList = $('#userQuotesList');
-      if (quotesBox && quotesList && Array.isArray(profile.favoriteQuotes) && profile.favoriteQuotes.length > 0) {
-        profile.favoriteQuotes.forEach(q => {
-          const li = document.createElement('li');
-          li.textContent = escapeHTML(q);
-          quotesList.appendChild(li);
-        });
-        quotesBox.classList.remove('hidden');
-      }
-
     } catch (err) {
       console.error('[profile.js] Failed to load profile:', err);
 
-      // === 🔹 Handle 404 (private or not found)
+      // === 🔹 Handle 404 or private profile response
       if (err?.status === 404) {
         showError("This user's profile is private or does not exist.");
       } else {
@@ -95,11 +93,12 @@ import { api, $, escapeHTML } from './main.js';
       }
     }
 
-    // === 🔹 Shared Error Display
+    // === 🔹 Error helper
     function showError(msg) {
-      if (!errorBox) return;
-      errorBox.textContent = msg;
-      errorBox.classList.remove('hidden');
+      const el = $('#errorMsg');
+      if (!el) return;
+      el.textContent = msg;
+      el.classList.remove('hidden');
     }
   }
 })();
