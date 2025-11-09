@@ -2,9 +2,11 @@
 
 import { api, $, escapeHTML } from './main.js';
 
-// === 🔧 Delay until DOM is fully parsed and nav.js finishes injecting
+// Delay until DOM + nav.js inject completed
 document.addEventListener('DOMContentLoaded', () => {
-  setTimeout(main, 50);
+  requestAnimationFrame(() => {
+    setTimeout(main, 100);
+  });
 });
 
 async function main() {
@@ -73,6 +75,7 @@ async function main() {
 
   } catch (err) {
     console.error('[profile.js] Failed to load profile:', err);
+
     if (err?.status === 404) {
       showError("This user's profile is private or does not exist.");
     } else {
