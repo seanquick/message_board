@@ -8,23 +8,33 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <!-- 🔹 Top Nav -->
   <script type="module" src="nav.js?v=1"></script>
 
   <main class="container narrow pad">
+    <!-- 🔹 Page Heading -->
     <h1 id="userName">Profile</h1>
 
+    <!-- 🔹 Profile Box -->
     <div id="profileBox" class="profile-box">
+      <!-- 🔸 Profile Photo -->
       <img id="profilePhoto" class="profile-photo hidden" src="" alt="Profile photo" />
 
+      <!-- 🔸 Info Fields -->
       <div class="profile-info">
+        <!-- 🔸 Email (conditionally shown) -->
         <p id="userEmail" class="hidden">Email: <span id="userEmailValue"></span></p>
+
+        <!-- 🔸 Bio -->
         <p id="userBio" class="hidden"></p>
 
+        <!-- 🔸 Favorite Quote -->
         <div id="userQuoteBox" class="hidden">
           <strong>Favorite Quote:</strong>
           <blockquote id="userQuoteText"></blockquote>
         </div>
 
+        <!-- 🔸 Optional Additional Quotes -->
         <div id="userQuotesBox" class="profile-quotes hidden">
           <h3>Other Favorite Quotes</h3>
           <ul id="userQuotesList"></ul>
@@ -32,9 +42,11 @@
       </div>
     </div>
 
+    <!-- 🔹 Error Display -->
     <p id="errorMsg" class="error hidden"></p>
   </main>
 
+  <!-- 🔹 Profile Script -->
   <script type="module" src="profile.js?v=2"></script>
 </body>
 </html>
