@@ -2,11 +2,10 @@
 
 import { api, $, escapeHTML } from './main.js';
 
-// Delay until DOM + nav.js inject completed
-document.addEventListener('DOMContentLoaded', () => {
-  requestAnimationFrame(() => {
-    setTimeout(main, 100);
-  });
+// === 🔧 Listen for custom nav:ready event before running
+document.addEventListener('nav:ready', () => {
+  // Now DOM is stable and nav injected
+  main();
 });
 
 async function main() {
@@ -22,37 +21,25 @@ async function main() {
     const profile = await api(`/api/profile/${userId}`);
     console.log('PROFILE data:', profile);
 
-    console.log('[DOM CHECK]', {
-      nameEl: !!$('#userName'),
-      photoEl: !!$('#profilePhoto'),
-      emailWrap: !!$('#userEmail'),
-      emailVal: !!$('#userEmailValue'),
-      bioEl: !!$('#userBio'),
-      quoteBox: !!$('#userQuoteBox'),
-      quoteText: !!$('#userQuoteText'),
-    });
-
-    if (!profile || profile.profilePublic === false) {
-      return showError("This user's profile is private or does not exist.");
-    }
-
-    const fallbackPhoto = '/default-avatar.png';
     const displayName = escapeHTML(profile.displayName || profile.name || 'User');
+    const fallbackPhoto = '/default-avatar.png';
 
+    // === 🔸 Name
     const nameEl = $('#userName');
     if (nameEl) nameEl.textContent = displayName;
 
+    // === 🔸 Profile Photo
     const img = $('#profilePhoto');
     if (img) {
       img.src = profile.profilePhotoUrl || fallbackPhoto;
       img.alt = `${displayName}'s profile photo`;
       img.classList.remove('hidden');
       img.onerror = () => {
-        img.onerror = null;
         img.src = fallbackPhoto;
       };
     }
 
+    // === 🔸 Email
     const emailWrap = $('#userEmail');
     const emailVal = $('#userEmailValue');
     if (emailWrap && emailVal && profile.email?.trim()) {
@@ -60,12 +47,14 @@ async function main() {
       emailWrap.classList.remove('hidden');
     }
 
+    // === 🔸 Bio
     const bioEl = $('#userBio');
     if (bioEl && profile.bio?.trim()) {
       bioEl.textContent = escapeHTML(profile.bio);
       bioEl.classList.remove('hidden');
     }
 
+    // === 🔸 Favorite Quote
     const quoteBox = $('#userQuoteBox');
     const quoteText = $('#userQuoteText');
     if (quoteBox && quoteText && profile.favoriteQuote?.trim()) {
@@ -75,7 +64,6 @@ async function main() {
 
   } catch (err) {
     console.error('[profile.js] Failed to load profile:', err);
-
     if (err?.status === 404) {
       showError("This user's profile is private or does not exist.");
     } else {
