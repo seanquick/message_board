@@ -22,37 +22,33 @@ import { api, $, escapeHTML } from './main.js';
     }
 
     try {
-      const profile = await api(`/api/users/${userId}`);
+      const profile = await api(`/api/users/${userId}`, { method: 'GET' });
 
-      // Set name
+      console.log('PROFILE data:', profile);
+
+      // Name
       const nameEl = $('#userName');
       if (nameEl) {
         nameEl.textContent = escapeHTML(profile.displayName || profile.name || 'User');
       }
 
-    // Profile photo logic
-        const img = $('#profilePhoto');
-        const fallback = '/default-avatar.png';
-        let profilePhotoUrl = (profile.profilePhotoUrl || profile.profilePhoto || '').trim();
-
-        if (!profilePhotoUrl) {
+      // Profile photo logic
+      const img = $('#profilePhoto');
+      const fallback = '/default-avatar.png';
+      let profilePhotoUrl = profile.profilePhotoUrl || profile.profilePhoto;
+      if (!profilePhotoUrl || profilePhotoUrl.trim() === '') {
         profilePhotoUrl = fallback;
-        }
-
-        if (img) {
-        img.removeAttribute('hidden');
-        img.style.display = 'block';
+      }
+      if (img) {
+        img.src = profilePhotoUrl;
         img.alt = `${profile.displayName || profile.name || 'User'}'s photo`;
+        img.hidden = false;
 
         img.onerror = () => {
-            img.onerror = null;
-            img.src = fallback;
+          img.onerror = null;
+          img.src = fallback;
         };
-
-        img.src = profilePhotoUrl;
-        }
-
-
+      }
 
       // Bio
       if (profile.bio) {
@@ -66,11 +62,23 @@ import { api, $, escapeHTML } from './main.js';
       // Favorite quote
       if (profile.favoriteQuote) {
         const quoteText = $('#userQuoteText');
-        const quoteBox = $('#userQuoteBox');
+        const quoteBox  = $('#userQuoteBox');
         if (quoteText && quoteBox) {
           quoteText.textContent = profile.favoriteQuote;
           quoteBox.hidden = false;
         }
+      }
+
+      // Email (if present)
+      if (profile.email) {
+        let emailEl = $('#userEmail');
+        if (!emailEl) {
+          emailEl = document.createElement('p');
+          emailEl.id = 'userEmail';
+          document.querySelector('.profile-info').appendChild(emailEl);
+        }
+        emailEl.textContent = `Email: ${escapeHTML(profile.email)}`;
+        emailEl.hidden = false;
       }
 
     } catch (err) {
