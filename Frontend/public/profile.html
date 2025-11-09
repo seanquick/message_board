@@ -8,34 +8,33 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <!-- Inject header nav -->
   <script type="module" src="nav.js?v=1"></script>
 
   <main class="container narrow pad">
     <h1 id="userName">Profile</h1>
 
     <div id="profileBox" class="profile-box">
-      <img id="profilePhoto" class="profile-photo" src="" alt="User Photo" hidden />
+      <img id="profilePhoto" class="profile-photo hidden" src="" alt="Profile photo" />
 
       <div class="profile-info">
-        <p id="userEmail" hidden></p>
-        <p id="userBio" hidden></p>
+        <p id="userEmail" class="hidden">Email: <span id="userEmailValue"></span></p>
+        <p id="userBio" class="hidden"></p>
 
-        <div id="userQuoteBox" hidden>
+        <div id="userQuoteBox" class="hidden">
           <strong>Favorite Quote:</strong>
           <blockquote id="userQuoteText"></blockquote>
         </div>
 
-        <div id="userQuotesBox" class="profile-quotes" hidden>
+        <div id="userQuotesBox" class="profile-quotes hidden">
           <h3>Other Favorite Quotes</h3>
           <ul id="userQuotesList"></ul>
         </div>
       </div>
     </div>
 
-    <p id="errorMsg" class="error" hidden></p>
+    <p id="errorMsg" class="error hidden"></p>
   </main>
 
-  <script type="module" src="profile.js?v=1"></script>
+  <script type="module" src="profile.js?v=2"></script>
 </body>
 </html>

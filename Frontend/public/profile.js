@@ -14,85 +14,59 @@ import { api, $, escapeHTML } from './main.js';
     const errBox = $('#errorMsg');
 
     if (!userId) {
-      if (errBox) {
-        errBox.textContent = 'No user ID provided';
-        errBox.hidden = false;
-      }
+      showError('No user ID provided');
       return;
     }
 
     try {
-      const profile = await api(`/api/profile/${userId}`, { method: 'GET' });
+      const profile = await api(`/api/profile/${userId}`);
       console.log('PROFILE data:', profile);
 
-      // Name
-      const nameEl = $('#userName');
-      if (nameEl) {
-        nameEl.textContent = escapeHTML(profile.displayName || profile.name || 'User');
-      }
+      const fallbackPhoto = '/default-avatar.png';
+      const name = profile.displayName || profile.name || 'User';
+
+      $('#userName').textContent = escapeHTML(name);
 
       // Profile photo
       const img = $('#profilePhoto');
-      const fallback = '/default-avatar.png';
-      let photoUrl = profile.profilePhoto || fallback;
-      if (!photoUrl || photoUrl.trim() === '') {
-        photoUrl = fallback;
-      }
-
       if (img) {
-        img.src = photoUrl;
-        img.alt = `${profile.displayName || profile.name || 'User'}'s photo`;
-        img.hidden = false;
-        img.style.display = 'block';
-
+        img.src = profile.profilePhoto || fallbackPhoto;
+        img.alt = `${name}'s profile photo`;
+        img.classList.remove('hidden');
         img.onerror = () => {
           img.onerror = null;
-          img.src = fallback;
-          img.style.display = 'block';
+          img.src = fallbackPhoto;
         };
       }
 
-      // Email
-      const emailEl   = $('#userEmail');
-      const emailVal  = $('#userEmailValue');
-      if (emailEl && emailVal) {
-        if (profile.email?.trim()) {
-          emailVal.textContent = escapeHTML(profile.email);
-          emailEl.hidden = false;
-        } else {
-          emailEl.hidden = true;
-        }
+      // Email visibility
+      if (profile.emailPublic && profile.email?.trim()) {
+        $('#userEmailValue').textContent = escapeHTML(profile.email);
+        $('#userEmail').classList.remove('hidden');
       }
 
       // Bio
-      const bioEl = $('#userBio');
-      if (bioEl) {
-        if (profile.bio?.trim()) {
-          bioEl.textContent = escapeHTML(profile.bio);
-          bioEl.hidden = false;
-        } else {
-          bioEl.hidden = true;
-        }
+      if (profile.bio?.trim()) {
+        $('#userBio').textContent = escapeHTML(profile.bio);
+        $('#userBio').classList.remove('hidden');
       }
 
       // Favorite Quote
-      const quoteBox  = $('#userQuoteBox');
-      const quoteText = $('#userQuoteText');
-      if (quoteBox && quoteText) {
-        if (profile.favoriteQuote?.trim()) {
-          quoteText.textContent = escapeHTML(profile.favoriteQuote);
-          quoteBox.hidden = false;
-        } else {
-          quoteBox.hidden = true;
-        }
+      if (profile.favoriteQuote?.trim()) {
+        $('#userQuoteText').textContent = escapeHTML(profile.favoriteQuote);
+        $('#userQuoteBox').classList.remove('hidden');
       }
 
+      // TODO: support userQuotesList if needed
     } catch (err) {
       console.error('[profile.js] Failed to load profile:', err);
-      if (errBox) {
-        errBox.textContent = err?.error || 'Failed to load user profile';
-        errBox.hidden = false;
-      }
+      showError(err?.error || 'Failed to load user profile');
+    }
+
+    function showError(msg) {
+      const el = $('#errorMsg');
+      el.textContent = msg;
+      el.classList.remove('hidden');
     }
   }
 })();
