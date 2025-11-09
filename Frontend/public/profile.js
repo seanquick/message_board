@@ -1,4 +1,3 @@
-// Frontend/public/profile.js
 import { api, $, escapeHTML } from './main.js';
 
 (async function init() {
@@ -11,8 +10,8 @@ import { api, $, escapeHTML } from './main.js';
   async function main() {
     const params = new URLSearchParams(window.location.search);
     const userId = params.get('id');
-
     const errBox = $('#errorMsg');
+
     if (!userId) {
       if (errBox) {
         errBox.textContent = 'No user ID provided';
@@ -23,7 +22,6 @@ import { api, $, escapeHTML } from './main.js';
 
     try {
       const profile = await api(`/api/users/${userId}`, { method: 'GET' });
-
       console.log('PROFILE data:', profile);
 
       // Name
@@ -32,15 +30,14 @@ import { api, $, escapeHTML } from './main.js';
         nameEl.textContent = escapeHTML(profile.displayName || profile.name || 'User');
       }
 
-      // Profile photo logic
+      // Profile Photo
       const img = $('#profilePhoto');
       const fallback = '/default-avatar.png';
-      let profilePhotoUrl = profile.profilePhotoUrl || profile.profilePhoto;
-      if (!profilePhotoUrl || profilePhotoUrl.trim() === '') {
-        profilePhotoUrl = fallback;
-      }
+      let photo = profile.profilePhotoUrl || profile.profilePhoto;
+      if (!photo || !photo.trim()) photo = fallback;
+
       if (img) {
-        img.src = profilePhotoUrl;
+        img.src = photo;
         img.alt = `${profile.displayName || profile.name || 'User'}'s photo`;
         img.hidden = false;
 
@@ -51,34 +48,41 @@ import { api, $, escapeHTML } from './main.js';
       }
 
       // Bio
-      if (profile.bio) {
-        const bioEl = $('#userBio');
-        if (bioEl) {
+      const bioEl = $('#userBio');
+      if (bioEl) {
+        if (profile.bio?.trim()) {
           bioEl.textContent = profile.bio;
           bioEl.hidden = false;
+        } else {
+          bioEl.hidden = true;
         }
       }
 
-      // Favorite quote
-      if (profile.favoriteQuote) {
-        const quoteText = $('#userQuoteText');
-        const quoteBox  = $('#userQuoteBox');
-        if (quoteText && quoteBox) {
+      // Favorite Quote
+      const quoteText = $('#userQuoteText');
+      const quoteBox = $('#userQuoteBox');
+      if (quoteBox && quoteText) {
+        if (profile.favoriteQuote?.trim()) {
           quoteText.textContent = profile.favoriteQuote;
           quoteBox.hidden = false;
+        } else {
+          quoteBox.hidden = true;
         }
       }
 
-      // Email (if present)
-      if (profile.email) {
-        let emailEl = $('#userEmail');
-        if (!emailEl) {
-          emailEl = document.createElement('p');
-          emailEl.id = 'userEmail';
-          document.querySelector('.profile-info').appendChild(emailEl);
-        }
-        emailEl.textContent = `Email: ${escapeHTML(profile.email)}`;
+      // Email
+      let emailEl = $('#userEmail');
+      if (!emailEl) {
+        emailEl = document.createElement('p');
+        emailEl.id = 'userEmail';
+        emailEl.className = 'profile-email';
+        document.querySelector('.profile-info')?.appendChild(emailEl);
+      }
+      if (profile.email?.trim()) {
+        emailEl.textContent = `Email: ${profile.email}`;
         emailEl.hidden = false;
+      } else {
+        emailEl.hidden = true;
       }
 
     } catch (err) {

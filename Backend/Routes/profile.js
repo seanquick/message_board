@@ -8,8 +8,8 @@ router.get('/:userId', async (req, res) => {
   try {
     const user = await User.findById(req.params.userId).lean();
 
-    if (!user || user.deletedAt) {
-      return res.status(404).json({ error: 'User not found' });
+    if (!user || user.deletedAt || !user.profilePublic) {
+      return res.status(404).json({ error: 'Profile not found or private' });
     }
 
     res.json({
@@ -18,7 +18,8 @@ router.get('/:userId', async (req, res) => {
       displayName: user.displayName || '',
       bio: user.bio || '',
       favoriteQuote: user.favoriteQuote || '',
-      profilePhotoUrl: user.profilePhotoUrl || '', // optional image URL
+      profilePhoto: user.profilePhotoUrl || '/default-avatar.png',
+      email: user.emailPublic ? user.email : undefined // Only if allowed
     });
   } catch (err) {
     console.error('[GET /api/profile/:userId] error:', err);
