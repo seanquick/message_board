@@ -1,62 +1,72 @@
 // Frontend/public/profile.js
+// Handles public user profile rendering on /profile.html
+// Depends on main.js for api(), $, and escapeHTML()
 
 import { api, $, escapeHTML } from './main.js';
 
-// === 🔧 Listen for custom nav:ready event before running
-document.addEventListener('nav:ready', () => {
-  // Now DOM is stable and nav injected
-  main();
-});
+/* 
+  🔹 Wait for nav.js to finish injecting the header
+  before running main() — ensures consistent DOM state.
+*/
+document.addEventListener('nav:ready', main);
 
 async function main() {
   const params = new URLSearchParams(window.location.search);
   const userId = params.get('id');
-  const errorBox = $('#errorMsg');
+  const errorBox = $('errorMsg');
 
   if (!userId) {
     return showError('No user ID provided.');
   }
 
   try {
+    // === Fetch the user profile data ===
     const profile = await api(`/api/profile/${userId}`);
     console.log('PROFILE data:', profile);
 
+    // === Validate visibility ===
+    if (!profile || profile.profilePublic === false) {
+      return showError("This user's profile is private or does not exist.");
+    }
+
+    // === Assign variables ===
     const displayName = escapeHTML(profile.displayName || profile.name || 'User');
     const fallbackPhoto = '/default-avatar.png';
 
-    // === 🔸 Name
-    const nameEl = $('#userName');
+    // === Display Name ===
+    const nameEl = $('userName');
     if (nameEl) nameEl.textContent = displayName;
 
-    // === 🔸 Profile Photo
-    const img = $('#profilePhoto');
+    // === Profile Photo ===
+    const img = $('profilePhoto');
     if (img) {
       img.src = profile.profilePhotoUrl || fallbackPhoto;
       img.alt = `${displayName}'s profile photo`;
       img.classList.remove('hidden');
+
       img.onerror = () => {
         img.src = fallbackPhoto;
       };
     }
 
-    // === 🔸 Email
-    const emailWrap = $('#userEmail');
-    const emailVal = $('#userEmailValue');
+    // === Email (if public) ===
+    const emailWrap = $('userEmail');
+    const emailVal = $('userEmailValue');
     if (emailWrap && emailVal && profile.email?.trim()) {
       emailVal.textContent = escapeHTML(profile.email);
       emailWrap.classList.remove('hidden');
     }
 
-    // === 🔸 Bio
-    const bioEl = $('#userBio');
+    // === Bio ===
+    const bioEl = $('userBio');
     if (bioEl && profile.bio?.trim()) {
       bioEl.textContent = escapeHTML(profile.bio);
       bioEl.classList.remove('hidden');
     }
 
-    // === 🔸 Favorite Quote
-    const quoteBox = $('#userQuoteBox');
-    const quoteText = $('#userQuoteText');
+    // === Favorite Quote ===
+    const quoteBox = $('userQuoteBox');
+    const quoteText = $('userQuoteText');
     if (quoteBox && quoteText && profile.favoriteQuote?.trim()) {
       quoteText.textContent = escapeHTML(profile.favoriteQuote);
       quoteBox.classList.remove('hidden');
@@ -71,8 +81,9 @@ async function main() {
     }
   }
 
+  // === Error Display Helper ===
   function showError(msg) {
-    const el = $('#errorMsg');
+    const el = $('errorMsg');
     if (!el) return;
     el.textContent = msg;
     el.classList.remove('hidden');
