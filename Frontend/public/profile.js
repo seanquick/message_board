@@ -1,3 +1,4 @@
+// Frontend/public/profile.js
 import { api, $, escapeHTML } from './main.js';
 
 (async function init() {
@@ -21,7 +22,8 @@ import { api, $, escapeHTML } from './main.js';
     }
 
     try {
-      const profile = await api(`/api/users/${userId}`, { method: 'GET' });
+      const profile = await api(`/api/profile/${userId}`, { method: 'GET' });
+
       console.log('PROFILE data:', profile);
 
       // Name
@@ -30,14 +32,13 @@ import { api, $, escapeHTML } from './main.js';
         nameEl.textContent = escapeHTML(profile.displayName || profile.name || 'User');
       }
 
-      // Profile Photo
+      // Profile photo
       const img = $('#profilePhoto');
       const fallback = '/default-avatar.png';
-      let photo = profile.profilePhotoUrl || profile.profilePhoto;
-      if (!photo || !photo.trim()) photo = fallback;
+      let photoUrl = profile.profilePhoto || fallback;
 
       if (img) {
-        img.src = photo;
+        img.src = photoUrl;
         img.alt = `${profile.displayName || profile.name || 'User'}'s photo`;
         img.hidden = false;
 
@@ -47,42 +48,33 @@ import { api, $, escapeHTML } from './main.js';
         };
       }
 
+      // Email
+      if (profile.email) {
+        const emailEl = $('#userEmail');
+        const emailValue = $('#userEmailValue');
+        if (emailEl && emailValue) {
+          emailValue.textContent = profile.email;
+          emailEl.hidden = false;
+        }
+      }
+
       // Bio
-      const bioEl = $('#userBio');
-      if (bioEl) {
-        if (profile.bio?.trim()) {
+      if (profile.bio) {
+        const bioEl = $('#userBio');
+        if (bioEl) {
           bioEl.textContent = profile.bio;
           bioEl.hidden = false;
-        } else {
-          bioEl.hidden = true;
         }
       }
 
       // Favorite Quote
-      const quoteText = $('#userQuoteText');
-      const quoteBox = $('#userQuoteBox');
-      if (quoteBox && quoteText) {
-        if (profile.favoriteQuote?.trim()) {
+      if (profile.favoriteQuote) {
+        const quoteBox = $('#userQuoteBox');
+        const quoteText = $('#userQuoteText');
+        if (quoteBox && quoteText) {
           quoteText.textContent = profile.favoriteQuote;
           quoteBox.hidden = false;
-        } else {
-          quoteBox.hidden = true;
         }
-      }
-
-      // Email
-      let emailEl = $('#userEmail');
-      if (!emailEl) {
-        emailEl = document.createElement('p');
-        emailEl.id = 'userEmail';
-        emailEl.className = 'profile-email';
-        document.querySelector('.profile-info')?.appendChild(emailEl);
-      }
-      if (profile.email?.trim()) {
-        emailEl.textContent = `Email: ${profile.email}`;
-        emailEl.hidden = false;
-      } else {
-        emailEl.hidden = true;
       }
 
     } catch (err) {
