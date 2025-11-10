@@ -761,23 +761,45 @@ tr .row.gap-05 button {
   padding-left: 1.2rem;
 }
 
-.users‑grid {
+/* === 📘 User Directory Styling === */
+.users-grid {
   display: grid;
-  grid-template-columns: repeat(auto‑fill, minmax(150px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1.5rem;
+  padding-top: 1rem;
 }
 
 .user-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #fff;
+  padding: 1rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   text-decoration: none;
   color: inherit;
-  text-align: center;
 }
 
-.user-card .profile-photo {
+.user-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.user-card img.user-photo {
+  width: 96px;
+  height: 96px;
   border-radius: 50%;
   object-fit: cover;
+  background: #f1f1f1;
 }
+
 .user-card .user-name {
-  margin-top: 8px;
-  font-weight: bold;
+  margin-top: 0.75rem;
+  font-weight: 600;
+  font-size: 1rem;
+  color: #222;
+  text-align: center;
+  word-break: break-word;
 }
