@@ -803,3 +803,47 @@ tr .row.gap-05 button {
   text-align: center;
   word-break: break-word;
 }
+
+/* === 📦 Account Form Layout === */
+.account-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.account-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* === ✅ Checkbox with label === */
+.checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+}
+
+.checkbox-group input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #007bff;
+}
+
+/* === 🖼️ Profile Photo === */
+.profile-preview {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* === 💾 Save Button === */
+.save-btn {
+  margin-top: 1rem;
+  padding: 0.5rem 1rem;
+  font-weight: bold;
+}

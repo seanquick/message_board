@@ -7,45 +7,40 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <!-- inject header nav -->
-<script type="module" src="nav.js?v=1"></script>
+  <!-- Inject header nav -->
+  <script type="module" src="nav.js?v=1"></script>
 
   <main class="container narrow pad">
     <h1>My Profile</h1>
     <div id="profileErr" class="err" aria-live="polite" hidden></div>
 
-    <form id="profileForm" class="profile-edit-form" enctype="multipart/form-data">
-      <!-- Inside your <form id="profileForm"> in account.html -->
-      <label>
+    <form id="profileForm" class="account-form" enctype="multipart/form-data">
+      <!-- 🔘 Public profile checkbox -->
+      <div class="checkbox-group">
         <input type="checkbox" id="profilePublicInput" />
-        Make my profile public (so others can view)
-      </label><br/>
+        <label for="profilePublicInput">Make my profile public (so others can view)</label>
+      </div>
 
-      <label>
+      <!-- 🔘 Email visibility checkbox -->
+      <div class="checkbox-group">
         <input type="checkbox" id="emailPublicInput" />
-        Show my email on my public profile
-      </label><br/>
+        <label for="emailPublicInput">Show my email on my public profile</label>
+      </div>
 
-      <label for="profilePhotoInput">Profile Photo</label><br/>
-      <img id="profilePhotoPreview" class="profile-photo" src="" alt="Profile Photo" hidden /><br/>
-      <input type="file" id="profilePhotoInput" accept="image/*" /><br/><br/>
+      <!-- 🖼️ Profile photo -->
+      <div class="account-section">
+        <label for="profilePhotoInput">Profile Photo</label>
+        <img id="profilePhotoPreview" class="profile-preview" src="" alt="Profile Photo" hidden />
+        <input type="file" id="profilePhotoInput" accept="image/*" />
+      </div>
 
-      <label for="displayNameInput">Display Name</label><br/>
-      <input type="text" id="displayNameInput" maxlength="100" placeholder="How you’d like to be shown" /><br/><br/>
+      <!-- 🧑 Display name -->
+      <div class="account-section">
+        <label for="displayNameInput">Display Name</label>
+        <input type="text" id="displayNameInput" maxlength="100" placeholder="How you’d like to be shown" />
+      </div>
 
-      <label for="bioInput">Short Bio</label><br/>
-      <textarea id="bioInput" maxlength="1000" rows="4" placeholder="Tell others about yourself…"></textarea><br/><br/>
-
-      <label for="favoriteQuoteInput">Favorite Quote</label><br/>
-      <textarea id="favoriteQuoteInput" maxlength="500" rows="2" placeholder="A quote you like"></textarea><br/><br/>
-
-      <button type="submit" class="btn">Save Profile</button>
-    </form>
-
-    <p id="saveMsg" class="meta" hidden>Profile saved successfully.</p>
-  </main>
-
-  <script type="module" src="account.js?v=1"></script>
-
-</body>
-</html>
+      <!-- ✍️ Short Bio -->
+      <div class="account-section">
+        <label for="bioInput">Short Bio</label>
+        <textarea id="bioInput" maxlength="1000" rows="4" placeholder="Tell
