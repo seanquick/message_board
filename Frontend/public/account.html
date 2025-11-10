@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <!-- Inject header nav -->
+  <!-- inject header nav -->
   <script type="module" src="nav.js?v=1"></script>
 
   <main class="container narrow pad">
@@ -15,32 +15,43 @@
     <div id="profileErr" class="err" aria-live="polite" hidden></div>
 
     <form id="profileForm" class="account-form" enctype="multipart/form-data">
-      <!-- 🔘 Public profile checkbox -->
       <div class="checkbox-group">
         <input type="checkbox" id="profilePublicInput" />
         <label for="profilePublicInput">Make my profile public (so others can view)</label>
       </div>
 
-      <!-- 🔘 Email visibility checkbox -->
       <div class="checkbox-group">
         <input type="checkbox" id="emailPublicInput" />
         <label for="emailPublicInput">Show my email on my public profile</label>
       </div>
 
-      <!-- 🖼️ Profile photo -->
       <div class="account-section">
         <label for="profilePhotoInput">Profile Photo</label>
         <img id="profilePhotoPreview" class="profile-preview" src="" alt="Profile Photo" hidden />
         <input type="file" id="profilePhotoInput" accept="image/*" />
       </div>
 
-      <!-- 🧑 Display name -->
       <div class="account-section">
         <label for="displayNameInput">Display Name</label>
         <input type="text" id="displayNameInput" maxlength="100" placeholder="How you’d like to be shown" />
       </div>
 
-      <!-- ✍️ Short Bio -->
       <div class="account-section">
         <label for="bioInput">Short Bio</label>
-        <textarea id="bioInput" maxlength="1000" rows="4" placeholder="Tell
+        <textarea id="bioInput" maxlength="1000" rows="4" placeholder="Tell others about yourself…"></textarea>
+      </div>
+
+      <div class="account-section">
+        <label for="favoriteQuoteInput">Favorite Quote</label>
+        <textarea id="favoriteQuoteInput" maxlength="500" rows="2" placeholder="A quote you like"></textarea>
+      </div>
+
+      <button type="submit" class="btn save-btn">Save Profile</button>
+    </form>
+
+    <p id="saveMsg" class="meta" hidden>Profile saved successfully.</p>
+  </main>
+
+  <script type="module" src="account.js?v=1"></script>
+</body>
+</html>

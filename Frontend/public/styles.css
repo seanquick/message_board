@@ -738,15 +738,16 @@ tr .row.gap-05 button {
   margin-top: 1rem;
 }
 
-.profile-photo {
-  width: 120px;            /* adjust size as desired */
-  height: 120px;
-  object-fit: cover;       /* ensures full coverage */
-  border-radius: 50%;      /* make it circular */
-  border: 2px solid #ccc;  /* subtle border */
-  background-color: #f0f0f0; /* fallback background */
+.profile-photo.hidden {
+  display: none;
 }
-
+.profile-preview {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-bottom: 0.5rem;
+}
 
 .profile-info {
   flex: 1;
