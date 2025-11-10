@@ -1,5 +1,5 @@
 // Frontend/public/auth-ui.js
-// Shared auth logic for login/register/forgot/reset (no inline JS, CSP-safe)
+// Shared auth logic for login/register/forgot/reset (CSP-safe)
 
 const $  = (s, r = document) => r.querySelector(s);
 const qs = () => new URLSearchParams(location.search);
@@ -89,6 +89,17 @@ async function initRegister() {
   $('#linkLogin')?.setAttribute('href', 'login.html?next=' + encodeURIComponent(next));
   $('#linkBack')?.setAttribute('href', next);
 
+  const terms = $('#termsCheckbox');
+  const submitBtn = $('#submitBtn');
+
+  // 🔹 Enable/disable button until guidelines accepted
+  if (terms && submitBtn) {
+    submitBtn.disabled = !terms.checked;
+    terms.addEventListener('change', () => {
+      submitBtn.disabled = !terms.checked;
+    });
+  }
+
   let csrf = await ensureCsrf();
 
   form.addEventListener('submit', async (e) => {
@@ -102,6 +113,7 @@ async function initRegister() {
     if (!name || name.length < 2) return setMsg('#err', 'Please enter your name.');
     if (!email || !email.includes('@')) return setMsg('#err', 'Please enter a valid email.');
     if (pw.length < 8) return setMsg('#err', 'Password must be at least 8 characters.');
+    if (!terms?.checked) return setMsg('#err', 'You must accept the Community Guidelines.');
 
     const btn = e.submitter;
     const txt = btn.textContent;
@@ -113,11 +125,14 @@ async function initRegister() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(csrf ? { 'X-CSRF-Token': csrf } : {}) },
         credentials: 'include',
-        body: JSON.stringify({ name, email, password: pw })
+        body: JSON.stringify({ name, email, password: pw, acceptedGuidelines: true })
       });
+
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.error) throw new Error(data.error || 'Registration failed.');
-      location.href = next || 'threads.html';
+
+      // ✅ Redirect new users to profile setup
+      location.href = '/account.html';
     } catch (err) {
       setMsg('#err', err.message || 'Could not create account.');
       csrf = await ensureCsrf();

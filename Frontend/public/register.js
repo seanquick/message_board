@@ -6,9 +6,14 @@ const form   = q('#regForm');
 const nameEl = q('#name');
 const mailEl = q('#email');
 const passEl = q('#password');
-const agree  = q('#agree');
+const agree  = q('#termsCheckbox');
 const errEl  = q('#err');
-const btnEl  = q('#go');
+const btnEl  = q('#submitBtn');
+
+// Disable button until guidelines are accepted
+agree?.addEventListener('change', () => {
+  btnEl.disabled = !agree.checked;
+});
 
 form?.addEventListener('submit', async (ev) => {
   ev.preventDefault();
@@ -38,9 +43,9 @@ form?.addEventListener('submit', async (ev) => {
       method: 'POST',
       body: { name, email, password, acceptedGuidelines }
     });
-    window.location.href = 'threads.html';
+    window.location.href = '/account.html';  // ✅ Redirect to profile setup
   } catch (e) {
-    errEl.textContent = e.message || 'Registration failed.';
+    errEl.textContent = e?.message || 'Registration failed.';
   } finally {
     btnEl.disabled = false;
   }
