@@ -780,7 +780,6 @@ router.post('/comments/bulk-delete', requireAdmin, async (req, res) => {
     res.status(500).json({ error: 'Bulk comments delete failed', detail: String(err) });
   }
 });
-
 // ===== THREADS LIST (admin) =====
 router.post('/threads', requireAdmin, async (req, res) => {
   try {
@@ -790,21 +789,43 @@ router.post('/threads', requireAdmin, async (req, res) => {
 
     const includeDeleted = req.body.includeDeleted === true || req.body.includeDeleted === '1';
 
-    // Build query
+    // Filter out deleted threads unless explicitly included
     const filter = includeDeleted ? {} : { isDeleted: { $ne: true } };
 
     const [threads, totalCount] = await Promise.all([
       Thread.find(filter)
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .populate('realAuthor', 'name email') // Optional: For internal display
+        .lean(),
       Thread.countDocuments(filter)
     ]);
 
     const totalPages = Math.ceil(totalCount / limit);
 
+    // Normalize thread data (ensure all required flags exist)
+    const processedThreads = threads.map(t => ({
+      _id: t._id,
+      title: t.title,
+      createdAt: t.createdAt,
+      upvoteCount: t.upvoteCount || 0,
+      commentCount: t.commentCount || 0,
+      isPinned: !!t.isPinned,
+      isLocked: !!t.isLocked,
+      isDeleted: !!t.isDeleted || !!t.deletedAt,
+      deletedAt: t.deletedAt || null,
+      isAnonymous: !!t.isAnonymous,
+      author_name: t.author_name || '',
+      realAuthor: t.realAuthor ? {
+        _id: t.realAuthor._id,
+        name: t.realAuthor.name || '',
+        email: t.realAuthor.email || ''
+      } : null
+    }));
+
     res.json({
-      threads,
+      threads: processedThreads,
       pagination: {
         totalCount,
         totalPages,

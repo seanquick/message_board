@@ -300,7 +300,6 @@ function showUserContentModal(user, threads, comments) {
   document.body.appendChild(modal);
   modal.querySelector('.close-modal')?.addEventListener('click', () => modal.remove());
 }
-
 // --- THREADS Section (with pagination + show deleted + page size) ---
 async function loadThreads({ page = 1 } = {}) {
   clearErrs();
@@ -311,17 +310,16 @@ async function loadThreads({ page = 1 } = {}) {
     const includeDeleted = q('#tIncludeDeleted')?.checked;
     const limit = parseInt(q('#tPageSize')?.value || 50);
     const url = `/api/admin/threads`;
-      const resp = await api(url, {
-        method: 'POST',
-        body: {
-          page,
-          limit,
-          includeDeleted
-        },
-        nocache: true,
-        skipHtmlRedirect: true
-      });
-
+    const resp = await api(url, {
+      method: 'POST',
+      body: {
+        page,
+        limit,
+        includeDeleted
+      },
+      nocache: true,
+      skipHtmlRedirect: true
+    });
 
     const threads = Array.isArray(resp.threads) ? resp.threads : [];
     const { totalPages = 1, totalCount = 0 } = resp.pagination || {};
@@ -348,6 +346,12 @@ async function loadThreads({ page = 1 } = {}) {
         ? `${publicAuthor} (internal: ${escapeHTML(internalAuthor)}${t.realAuthor?._id ? `, <a class="btn tiny" href="profile.html?id=${t.realAuthor._id}" target="_blank">View Profile</a>` : ''})`
         : `${escapeHTML(publicAuthor)}${t.realAuthor?._id ? ` <a class="btn tiny" href="profile.html?id=${t.realAuthor._id}" target="_blank">View Profile</a>` : ''}`;
 
+      // Build combined status text
+      const statusParts = [];
+      if (t.isPinned)  statusParts.push('Pinned');
+      if (t.isLocked)  statusParts.push('Locked');
+      if (t.deletedAt) statusParts.push('Deleted');
+      const statusText = statusParts.length ? statusParts.join(', ') : 'Active';
 
       tr.innerHTML = `
         <td><input type="checkbox" class="bulkSelectThread" /></td>
@@ -356,7 +360,7 @@ async function loadThreads({ page = 1 } = {}) {
         <td>${displayAuthor}</td>
         <td>${Number(t.upvoteCount ?? t.upvotes ?? 0)}</td>
         <td>${Number(t.commentCount ?? 0)}</td>
-        <td>${escapeHTML(t.status || '')}</td>
+        <td>${escapeHTML(statusText)}</td>
         <td class="row gap-05">
           <button class="btn tiny viewThread">View</button>
           <button class="btn tiny pinBtn">Pin/Unpin</button>
@@ -374,15 +378,12 @@ async function loadThreads({ page = 1 } = {}) {
     state.threads.total = totalCount;
     state.threads.totalPages = totalPages;
 
-    // Disable Prev/Next if at edge
     const tPrev = q('#tPrev');
-      if (tPrev) tPrev.disabled = page <= 1;
+    if (tPrev) tPrev.disabled = page <= 1;
 
     const tNext = q('#tNext');
-      if (tNext) tNext.disabled = page >= totalPages;
+    if (tNext) tNext.disabled = page >= totalPages;
 
-
-    // ✅ Update page info label
     const info = q('#tPageInfo');
     if (info) {
       info.textContent = `Page ${page} of ${totalPages} (${totalCount} threads)`;
@@ -395,10 +396,8 @@ async function loadThreads({ page = 1 } = {}) {
   }
 }
 
-
 // ===== BULK ACTIONS: Threads =====
 function bindThreadBulkActions() {
-  // 🟢 Select All Toggle
   q('#tSelectAll')?.addEventListener('change', ev => {
     const checked = ev.currentTarget.checked;
     qa('#threadsTable tbody tr input.bulkSelectThread').forEach(cb => {
@@ -406,13 +405,10 @@ function bindThreadBulkActions() {
     });
   });
 
-  // 🟥 Delete Selected Threads
   q('#tBulkDelete')?.addEventListener('click', async () => {
     const ids = Array.from(qa('#threadsTable tbody tr input.bulkSelectThread:checked'))
       .map(cb => cb.closest('tr')?.dataset.id)
       .filter(Boolean);
-
-    console.log('[Thread Bulk Delete] Selected IDs:', ids);
 
     if (!ids.length) {
       alert('No threads selected');
@@ -421,26 +417,20 @@ function bindThreadBulkActions() {
 
     const reason = prompt('Reason for delete (optional):');
     try {
-      const result = await api('/api/admin/threads/bulk-delete',   {
+      await api('/api/admin/threads/bulk-delete', {
         method: 'POST',
         body: { ids, restore: false, reason }
       });
-
-      console.log('[Thread Bulk Delete] Response:', result);
       await loadThreads({ page: state.threads.page });
     } catch (e) {
-      console.error('[Thread Bulk Delete] Error:', e);
       showErr(`Bulk threads delete failed: ${e?.error || e?.message}`);
     }
   });
 
-  // ✅ Restore Selected Threads
   q('#tBulkRestore')?.addEventListener('click', async () => {
     const ids = Array.from(qa('#threadsTable tbody tr input.bulkSelectThread:checked'))
       .map(cb => cb.closest('tr')?.dataset.id)
       .filter(Boolean);
-
-    console.log('[Thread Bulk Restore] Selected IDs:', ids);
 
     if (!ids.length) {
       alert('No threads selected');
@@ -448,22 +438,18 @@ function bindThreadBulkActions() {
     }
 
     try {
-      const result = await api('/api/admin/threads/bulk-delete',   {
+      await api('/api/admin/threads/bulk-delete', {
         method: 'POST',
         body: { ids, restore: true }
       });
-
-      console.log('[Thread Bulk Restore] Response:', result);
       await loadThreads({ page: state.threads.page });
     } catch (e) {
-      console.error('[Thread Bulk Restore] Error:', e);
       showErr(`Bulk threads restore failed: ${e?.error || e?.message}`);
     }
   });
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  // call the binding functions once the DOM is ready
   try {
     bindThreadBulkActions();
     bindCommentBulkActions();
@@ -473,14 +459,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-
 function renderThreadPagination(currentPage, totalPages, totalCount) {
   const container = q('#threadsPagination');
   if (!container) return;
 
   container.innerHTML = '';
-
-  if (totalPages <= 1) return; // no pagination needed
+  if (totalPages <= 1) return;
 
   const createBtn = (label, page, disabled = false) => {
     const btn = document.createElement('button');
@@ -505,7 +489,6 @@ function renderThreadPagination(currentPage, totalPages, totalCount) {
   container.appendChild(createBtn('Next ⟩', currentPage + 1, currentPage >= totalPages));
 }
 
-
 function bindThreadActions(tbody) {
   tbody.querySelectorAll('.viewThread').forEach(btn => btn.addEventListener('click', ev => {
     const tr = ev.currentTarget.closest('tr');
@@ -514,13 +497,13 @@ function bindThreadActions(tbody) {
   }));
 
   tbody.querySelectorAll('.pinBtn').forEach(btn => btn.addEventListener('click', async ev => {
-    const tr   = ev.currentTarget.closest('tr');
-    const tid  = tr?.dataset.id;
+    const tr  = ev.currentTarget.closest('tr');
+    const tid = tr?.dataset.id;
     if (!tid) return;
     const note = prompt('Note (optional):');
     try {
       await api(`/api/admin/threads/${encodeURIComponent(tid)}/pin`, { method: 'POST', body: { note } });
-      loadThreads({ page: state.threads.page });
+      await loadThreads({ page: state.threads.page });
     } catch (e) {
       showErr(`Failed to pin/unpin: ${e?.error || e?.message}`);
     }
@@ -533,7 +516,7 @@ function bindThreadActions(tbody) {
     const note = prompt('Note (optional):');
     try {
       await api(`/api/admin/threads/${encodeURIComponent(tid)}/lock`, { method: 'POST', body: { note } });
-      loadThreads({ page: state.threads.page });
+      await loadThreads({ page: state.threads.page });
     } catch (e) {
       showErr(`Failed to lock/unlock: ${e?.error || e?.message}`);
     }
@@ -546,12 +529,13 @@ function bindThreadActions(tbody) {
     const reason = prompt('Reason (optional):');
     try {
       await api(`/api/admin/threads/${encodeURIComponent(tid)}/delete`, { method: 'POST', body: { reason } });
-      loadThreads({ page: state.threads.page });
+      await loadThreads({ page: state.threads.page });
     } catch (e) {
       showErr(`Failed to delete/restore: ${e?.error || e?.message}`);
     }
   }));
 }
+
 
 // ===== LOAD ADMIN COMMENTS (with Pagination + Show Deleted + Page Size) =====
 async function loadAdminComments({ page = state.comments.page || 1 } = {}) {
