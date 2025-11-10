@@ -134,63 +134,6 @@
     </div>
   </div>
 
-  <!-- Password toggle + strength logic -->
-  <script type="module">
-    const pwdInput     = document.getElementById('password');
-    const toggleShow   = document.getElementById('toggleShowPwd');
-    const strengthFill = document.getElementById('pwdStrengthFill');
-    const strengthLbl  = document.getElementById('pwdStrengthLabel');
-    const termsBox     = document.getElementById('termsCheckbox');
-    const form         = document.getElementById('regForm');
-    const submitBtn    = document.getElementById('submitBtn');
-
-    // Toggle password visibility
-    toggleShow?.addEventListener('click', () => {
-      if (pwdInput.type === 'password') {
-        pwdInput.type = 'text';
-        toggleShow.textContent = 'Hide password';
-      } else {
-        pwdInput.type = 'password';
-        toggleShow.textContent = 'Show password';
-      }
-    });
-
-    // Password strength meter
-    function evalStrength(pwd) {
-      let score = 0;
-      if (pwd.length >= 8) score++;
-      if (/[A-Z]/.test(pwd)) score++;
-      if (/[a-z]/.test(pwd)) score++;
-      if (/[0-9]/.test(pwd)) score++;
-      if (/[^A-Za-z0-9]/.test(pwd)) score++;
-      return score;
-    }
-
-    function updateStrength(pwd) {
-      const score = evalStrength(pwd);
-      const pct = (score / 5) * 100;
-      strengthFill.style.width = pct + '%';
-      let color = '#ef4444', label = 'Very weak';
-      if (score === 2) { color = '#f59e0b'; label = 'Weak'; }
-      else if (score === 3) { color = '#60a5fa'; label = 'Moderate'; }
-      else if (score === 4) { color = '#22c55e'; label = 'Good'; }
-      else if (score === 5) { color = '#059669'; label = 'Strong'; }
-      strengthFill.style.background = color;
-      strengthLbl.textContent = 'Strength: ' + label;
-    }
-
-    pwdInput?.addEventListener('input', () => {
-      updateStrength(pwdInput.value);
-      validateForm();
-    });
-    termsBox?.addEventListener('change', validateForm);
-
-    function validateForm() {
-      const valid = pwdInput.value.length >= 8 && termsBox.checked;
-      submitBtn.disabled = !valid;
-    }
-  </script>
-
   <script type="module" src="auth-ui.js"></script>
 </body>
 </html>
