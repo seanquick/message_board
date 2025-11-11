@@ -333,15 +333,16 @@ function renderLoading() {
 
 function buildToolbar() {
   console.log('[thread.js] buildToolbar running, THREAD_ID =', THREAD_ID, 'me.id =', me?.id);
-  console.log('Attaching upvote listener to #threadUpvote');
 
   const host = q('#threadToolbar');
-  if (!host) return;
+  if (!host) {
+    console.warn('[thread.js] buildToolbar: #threadToolbar not found');
+    return;
+  }
 
   const loggedIn = !!me?.id;
   const isOwn = loggedIn && (String(me.id) === String(THREAD.author) || String(me.id) === String(THREAD.authorId));
   const canReport = loggedIn && !isOwn;
-
   const alreadyUpvoted = Array.isArray(THREAD.upvoters) && THREAD.upvoters.some(u => String(u) === String(me.id));
 
   host.innerHTML = `
@@ -353,8 +354,9 @@ function buildToolbar() {
     </button>
   `;
 
-  const upBtn = $('#threadUpvote');
+  const upBtn = q('#threadUpvote');
   if (upBtn) {
+    console.log('[thread.js] buildToolbar: attaching click listener to #threadUpvote');
     upBtn.addEventListener('click', async ev => {
       ev.preventDefault();
       if (!loggedIn) {
@@ -363,15 +365,18 @@ function buildToolbar() {
       }
       await toggleThreadUpvote(upBtn);
     });
+  } else {
+    console.warn('[thread.js] buildToolbar: #threadUpvote not found after inserting HTML');
   }
 
-  const rptBtn = $('#reportThreadBtn');
+  const rptBtn = q('#reportThreadBtn');
   if (rptBtn) {
     rptBtn.addEventListener('click', () => {
       if (canReport) openReportModal('thread', THREAD._id);
     });
   }
 }
+
 
 
 async function toggleThreadUpvote(btn) {
