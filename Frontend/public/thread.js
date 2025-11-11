@@ -473,10 +473,13 @@ function ensureScaffold() {
         </form>
       </div>
     `;
-    main.appendChild(sec);
-    q('#loadMoreCommentsBtn')?.addEventListener('click', () => loadComments(false));
+        main.appendChild(sec);
+      q('#loadMoreCommentsBtn')?.addEventListener('click', () => loadComments(false));
+    }
+
+    // ✅ ADD THIS LINE OUTSIDE the inner if-block
+    buildToolbar();
   }
-}
 
 /* --- Entry Point --- */
 document.addEventListener('DOMContentLoaded', init);
