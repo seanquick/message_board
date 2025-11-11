@@ -1,5 +1,7 @@
 // admin-comments.js
-import { api, q, qa, escapeHTML, renderErrorRow } from './main.js';
+// ✅ Update this line in admin-comments.js
+import { api, q, qa, escapeHTML } from './main.js';
+
 
 const state = {
   comments: {
