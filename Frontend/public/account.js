@@ -10,11 +10,12 @@ async function loadMyProfile() {
   try {
     const resp = await api('/api/users/profile', { method: 'GET' });
 
-    q('#displayNameInput')?.value     = resp.displayName || '';
-    q('#bioInput')?.value             = resp.bio || '';
-    q('#favoriteQuoteInput')?.value   = resp.favoriteQuote || '';
-    q('#profilePublicInput')?.checked = !!resp.profilePublic;
-    q('#emailPublicInput')?.checked   = !!resp.emailPublic;
+    q('#displayNameInput') && (q('#displayNameInput').value = resp.displayName || '');
+    q('#bioInput') && (q('#bioInput').value = resp.bio || '');
+    q('#favoriteQuoteInput') && (q('#favoriteQuoteInput').value = resp.favoriteQuote || '');
+    q('#profilePublicInput') && (q('#profilePublicInput').checked = !!resp.profilePublic);
+    q('#emailPublicInput') && (q('#emailPublicInput').checked = !!resp.emailPublic);
+
 
     if (resp.profilePhoto && q('#profilePhotoPreview')) {
       q('#profilePhotoPreview').src    = resp.profilePhoto;
