@@ -68,13 +68,14 @@ q('#profileForm')?.addEventListener('submit', async ev => {
     }
 
     const body = {
-      displayName:   q('#displayNameInput')?.value.trim() || '',
-      bio:           q('#bioInput')?.value.trim() || '',
-      favoriteQuote: q('#favoriteQuoteInput')?.value.trim() || '',
+      displayName:   (q('#displayNameInput')?.value || '').trim(),
+      bio:           (q('#bioInput')?.value || '').trim(),
+      favoriteQuote: (q('#favoriteQuoteInput')?.value || '').trim(),
       profilePhoto:  photoUrl,
       profilePublic: q('#profilePublicInput')?.checked || false,
       emailPublic:   q('#emailPublicInput')?.checked || false
     };
+
 
     await api('/api/users/profile', {
       method: 'POST',
