@@ -336,47 +336,80 @@ function buildToolbar() {
   if (!host) return;
 
   const loggedIn = !!me?.id;
-  const isOwn    = loggedIn && (me.id === THREAD.author || me.id === THREAD.authorId);
+  const isOwn    = loggedIn && (String(me.id) === String(THREAD.author) || String(me.id) === String(THREAD.authorId));
   const canReport = loggedIn && !isOwn;
 
-  const isUpvoted = Array.isArray(THREAD.upvoters) && THREAD.upvoters.includes(me?.id);
-  const upvoteClass = isUpvoted ? 'green' : '';
+  // Determine if user has up‑voted
+  const alreadyUpvoted = Array.isArray(THREAD.upvoters) && THREAD.upvoters.some(u => String(u) === String(me.id));
 
   host.innerHTML = `
-    <button id="threadUpvote" class="btn tiny ${upvoteClass}" ${!loggedIn ? 'disabled' : ''}>
+    <button id="threadUpvote" class="btn tiny${alreadyUpvoted ? ' success' : ''}" ${!loggedIn ? ' disabled' : ''}>
       ▲ Upvote <span id="threadUpCount" class="mono">${Number(THREAD.upvoteCount || 0)}</span>
     </button>
-    <button id="reportThreadBtn" class="btn tiny danger"${canReport ? '' : ' disabled'} data-thread-id="${escapeAttr(THREAD._id)}">
+    <button id="reportThreadBtn" class="btn tiny danger" ${canReport ? '' : ' disabled'} data-thread-id="${escapeAttr(THREAD._id)}">
       Report Thread
     </button>
   `;
 
-  $('#threadUpvote')?.addEventListener('click', async () => {
-    const isUndo = Array.isArray(THREAD.upvoters) && THREAD.upvoters.includes(me?.id);
-    try {
-      const res = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}/upvote`, {
-        method: 'POST',
-        body: isUndo ? { undo: true } : {}
-      });
-
-      if (typeof res.upvoteCount === 'number') {
-        THREAD.upvoteCount = res.upvoteCount;
-        if (isUndo) {
-          THREAD.upvoters = THREAD.upvoters.filter(u => u !== me?.id);
-        } else {
-          THREAD.upvoters.push(me?.id);
-        }
-        buildToolbar(); // re-render UI
+  const upBtn = $('#threadUpvote');
+  if (upBtn) {
+    upBtn.addEventListener('click', async ev => {
+      ev.preventDefault();
+      if (!loggedIn) {
+        alert('Please log in to upvote.');
+        return;
       }
-    } catch (err) {
-      console.error('Failed to toggle upvote:', err);
-    }
-  });
+      await toggleThreadUpvote(upBtn);
+    });
+  }
 
-  $('#reportThreadBtn')?.addEventListener('click', () => {
-    if (canReport) openReportModal('thread', THREAD_ID);
-  });
+  const rptBtn = $('#reportThreadBtn');
+  if (rptBtn) {
+    rptBtn.addEventListener('click', () => {
+      if (canReport) openReportModal('thread', THREAD._id);
+    });
+  }
 }
+
+async function toggleThreadUpvote(btn) {
+  const threadId = THREAD_ID;
+  if (!threadId) return console.error('toggleThreadUpvote: THREAD_ID missing');
+
+  btn.disabled = true;
+  const already = btn.classList.contains('success');
+  try {
+    const resp = await api(`/api/threads/${encodeURIComponent(threadId)}/upvote`, {
+      method: 'POST',
+      body: already ? { undo: true } : { undo: false }
+    });
+    if (resp && typeof resp.upvoteCount === 'number') {
+      THREAD.upvoteCount = resp.upvoteCount;
+
+      // update local upvoters list so UI knows
+      if (!Array.isArray(THREAD.upvoters)) THREAD.upvoters = [];
+      if (already) {
+        THREAD.upvoters = THREAD.upvoters.filter(u => String(u) !== String(me.id));
+        btn.classList.remove('success');
+      } else {
+        THREAD.upvoters.push(me.id);
+        btn.classList.add('success');
+      }
+
+      // update count display
+      const countEl = q('#threadUpCount');
+      if (countEl) countEl.textContent = resp.upvoteCount;
+
+    } else {
+      console.warn('toggleThreadUpvote: unexpected response', resp);
+    }
+  } catch (err) {
+    console.error('toggleThreadUpvote failed:', err);
+    alert('Failed to change upvote.');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 
 function renderThread(t) {
   safeSetHTML('#threadTitle', escapeHTML(t.title || '(untitled)'));
