@@ -330,6 +330,54 @@ function renderLoading() {
     body.innerHTML = `<div class="skeleton"><div class="bar"></div><div class="bar short"></div><div class="bar"></div></div>`;
   }
 }
+
+function buildToolbar() {
+  const host = q('#threadToolbar');
+  if (!host) return;
+
+  const loggedIn = !!me?.id;
+  const isOwn    = loggedIn && (me.id === THREAD.author || me.id === THREAD.authorId);
+  const canReport = loggedIn && !isOwn;
+
+  const isUpvoted = Array.isArray(THREAD.upvoters) && THREAD.upvoters.includes(me?.id);
+  const upvoteClass = isUpvoted ? 'green' : '';
+
+  host.innerHTML = `
+    <button id="threadUpvote" class="btn tiny ${upvoteClass}" ${!loggedIn ? 'disabled' : ''}>
+      ▲ Upvote <span id="threadUpCount" class="mono">${Number(THREAD.upvoteCount || 0)}</span>
+    </button>
+    <button id="reportThreadBtn" class="btn tiny danger"${canReport ? '' : ' disabled'} data-thread-id="${escapeAttr(THREAD._id)}">
+      Report Thread
+    </button>
+  `;
+
+  $('#threadUpvote')?.addEventListener('click', async () => {
+    const isUndo = Array.isArray(THREAD.upvoters) && THREAD.upvoters.includes(me?.id);
+    try {
+      const res = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}/upvote`, {
+        method: 'POST',
+        body: isUndo ? { undo: true } : {}
+      });
+
+      if (typeof res.upvoteCount === 'number') {
+        THREAD.upvoteCount = res.upvoteCount;
+        if (isUndo) {
+          THREAD.upvoters = THREAD.upvoters.filter(u => u !== me?.id);
+        } else {
+          THREAD.upvoters.push(me?.id);
+        }
+        buildToolbar(); // re-render UI
+      }
+    } catch (err) {
+      console.error('Failed to toggle upvote:', err);
+    }
+  });
+
+  $('#reportThreadBtn')?.addEventListener('click', () => {
+    if (canReport) openReportModal('thread', THREAD_ID);
+  });
+}
+
 function renderThread(t) {
   safeSetHTML('#threadTitle', escapeHTML(t.title || '(untitled)'));
 
