@@ -4,21 +4,21 @@ import { api, $, refreshMe, me } from './main.js';
 const q = sel => document.querySelector(sel);
 
 async function loadMyProfile() {
+  // Only run on pages with the profile form
+  if (!q('#profileForm')) return;
+
   try {
     const resp = await api('/api/users/profile', { method: 'GET' });
 
-    if (resp.displayName)     q('#displayNameInput').value   = resp.displayName;
-    if (resp.bio)             q('#bioInput').value           = resp.bio;
-    if (resp.favoriteQuote)   q('#favoriteQuoteInput').value = resp.favoriteQuote;
+    q('#displayNameInput')?.value     = resp.displayName || '';
+    q('#bioInput')?.value             = resp.bio || '';
+    q('#favoriteQuoteInput')?.value   = resp.favoriteQuote || '';
+    q('#profilePublicInput')?.checked = !!resp.profilePublic;
+    q('#emailPublicInput')?.checked   = !!resp.emailPublic;
 
-    // Set privacy toggles
-    q('#profilePublicInput').checked = !!resp.profilePublic;
-    q('#emailPublicInput').checked   = !!resp.emailPublic;
-
-    if (resp.profilePhoto) {
-      const img = q('#profilePhotoPreview');
-      img.src = resp.profilePhoto;
-      img.hidden = false;
+    if (resp.profilePhoto && q('#profilePhotoPreview')) {
+      q('#profilePhotoPreview').src    = resp.profilePhoto;
+      q('#profilePhotoPreview').hidden = false;
     }
 
   } catch (e) {
@@ -37,23 +37,24 @@ q('#profilePhotoInput')?.addEventListener('change', ev => {
   const reader = new FileReader();
   reader.onload = e => {
     const img = q('#profilePhotoPreview');
-    img.src = e.target.result;
-    img.hidden = false;
+    if (img) {
+      img.src = e.target.result;
+      img.hidden = false;
+    }
   };
   reader.readAsDataURL(file);
 });
 
 q('#profileForm')?.addEventListener('submit', async ev => {
   ev.preventDefault();
-  q('#profileErr').hidden = true;
-  q('#saveMsg').hidden   = true;
+  q('#profileErr')?.classList.add('hidden');
+  q('#saveMsg')?.classList.add('hidden');
 
   try {
     let photoUrl = '';
 
-    // If a new photo file is selected, upload it first
     const fileInput = q('#profilePhotoInput');
-    if (fileInput.files && fileInput.files[0]) {
+    if (fileInput?.files?.[0]) {
       const formData = new FormData();
       formData.append('profilePhoto', fileInput.files[0]);
 
@@ -66,14 +67,13 @@ q('#profileForm')?.addEventListener('submit', async ev => {
       photoUrl = uploadData.profilePhotoUrl || '';
     }
 
-    // Prepare body with new profile data + privacy flags
     const body = {
-      displayName:   q('#displayNameInput').value.trim(),
-      bio:           q('#bioInput').value.trim(),
-      favoriteQuote: q('#favoriteQuoteInput').value.trim(),
-      profilePhoto:  photoUrl,                       // will be empty string if none uploaded
-      profilePublic: q('#profilePublicInput').checked,
-      emailPublic:   q('#emailPublicInput').checked
+      displayName:   q('#displayNameInput')?.value.trim() || '',
+      bio:           q('#bioInput')?.value.trim() || '',
+      favoriteQuote: q('#favoriteQuoteInput')?.value.trim() || '',
+      profilePhoto:  photoUrl,
+      profilePublic: q('#profilePublicInput')?.checked || false,
+      emailPublic:   q('#emailPublicInput')?.checked || false
     };
 
     await api('/api/users/profile', {
@@ -81,30 +81,27 @@ q('#profileForm')?.addEventListener('submit', async ev => {
       body
     });
 
-    q('#saveMsg').hidden = false;
+    q('#saveMsg')?.classList.remove('hidden');
 
   } catch (e) {
     console.error('Error saving profile:', e);
     const errEl = q('#profileErr');
     if (errEl) {
       errEl.textContent = e?.message || 'Failed to save profile';
-      errEl.hidden = false;
+      errEl.classList.remove('hidden');
     }
   }
 });
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // First ensure user is authenticated
   await refreshMe();
   if (!me?.id) {
     window.location.href = '/login.html';
     return;
   }
 
-  // Load profile side data
   loadMyProfile();
 
-  // Also ensure password form logic still works (if present)
   const pwForm = $('#pwForm');
   const msg    = $('#msg');
   if (pwForm && msg) {
