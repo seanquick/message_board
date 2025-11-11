@@ -136,7 +136,11 @@ function renderCommentsTree(nodes = []) {
   }
 
   host.querySelectorAll('.replyBtn').forEach(b => b.addEventListener('click', onReplyClick));
-  host.querySelectorAll('.c-upvote').forEach(b => b.addEventListener('click', onUpvoteComment));
+  host.querySelectorAll('.c-upvote').forEach(b => {
+    b.removeEventListener('click', onUpvoteComment);  // safe cleanup
+    b.addEventListener('click', onUpvoteComment);     // rebind
+  });
+
   host.querySelectorAll('.c-report').forEach(b => {
     const cid = b.dataset.commentId;
     if (!b.disabled && cid) {
@@ -187,12 +191,11 @@ function renderCommentNode(c) {
     <div class="c-body">${body}</div>
     ${editedHtml}
     <div class="row wrap" style="gap:.5rem; margin-top:.35rem">
-      <button class="btn tiny c-upvote${ /* if already upvoted: */ ''}" 
+      <button class="btn tiny c-upvote${c.upvoters?.includes(me?.id) ? ' success' : ''}" 
               data-comment-id="${escapeAttr(String(c._id))}"
               ${isDeleted ? ' disabled':''}>
-        ▲ <span class="count">${up}</span>
+        ▲ <span class="c-upcount mono">${up}</span>
       </button>
-
       <button class="btn tiny replyBtn"${isDeleted ? ' disabled':''}>Reply</button>
       <button class="btn tiny danger c-report"${canReport ? '' : ' disabled'} title="${escapeAttr(tooltip)}" data-comment-id="${escapeAttr(c._id)}">
         Report
@@ -200,7 +203,6 @@ function renderCommentNode(c) {
     </div>
     ${childrenHTML}
   `;
-  return el;
 }
 
 function renderCommentChildHTML(child) {
@@ -311,25 +313,24 @@ function bindComposer() {
   }
 });
 }
+// Replace onUpvoteComment with:
 async function onUpvoteComment(ev) {
   const btn = ev.currentTarget;
-  const commentId = btn.dataset.commentId || btn.closest('.comment')?.dataset.id;
+  const commentId = btn.dataset.commentId;
   if (!commentId) return;
 
   btn.disabled = true;
   const already = btn.classList.contains('success');
-  
+
   try {
     const resp = await api(`/api/comments/${encodeURIComponent(commentId)}/upvote`, {
       method: 'POST',
-      body: { undo: already }  // if backend supports undo
+      body: { undo: already }
     });
 
     if (resp && typeof resp.upvoteCount === 'number') {
-      // update UI
-      const countSpan = btn.querySelector('.count');
+      const countSpan = btn.querySelector('.c‑upcount');
       if (countSpan) countSpan.textContent = resp.upvoteCount;
-      else btn.textContent = `▲ ${resp.upvoteCount}`;
 
       if (already) {
         btn.classList.remove('success');
@@ -339,7 +340,6 @@ async function onUpvoteComment(ev) {
     } else {
       console.warn('onUpvoteComment: unexpected response', resp);
     }
-
   } catch (err) {
     console.error('Upvote comment failed', err);
     alert('Failed to upvote comment.');
