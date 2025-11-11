@@ -337,10 +337,9 @@ function buildToolbar() {
   if (!host) return;
 
   const loggedIn = !!me?.id;
-  const isOwn    = loggedIn && (String(me.id) === String(THREAD.author) || String(me.id) === String(THREAD.authorId));
+  const isOwn = loggedIn && (String(me.id) === String(THREAD.author) || String(me.id) === String(THREAD.authorId));
   const canReport = loggedIn && !isOwn;
 
-  // Determine if user has up‑voted
   const alreadyUpvoted = Array.isArray(THREAD.upvoters) && THREAD.upvoters.some(u => String(u) === String(me.id));
 
   host.innerHTML = `
@@ -371,6 +370,7 @@ function buildToolbar() {
     });
   }
 }
+
 
 async function toggleThreadUpvote(btn) {
   console.log('[thread.js] toggleThreadUpvote invoked, btn classList =', btn.classList, 'THREAD.upvoteCount =', THREAD.upvoteCount);
@@ -430,48 +430,6 @@ function renderThread(t) {
 
   buildToolbar();
 }
-
-async function onUpvoteThread(ev) {
-  ev.preventDefault();
-  const btn = ev.currentTarget;
-  const threadId = THREAD_ID;
-
-  if (!threadId) {
-    console.error('onUpvoteThread: THREAD_ID missing');
-    return;
-  }
-
-  try {
-    btn.disabled = true;
-
-    // Toggle support — if already upvoted, unvote
-    const alreadyUpvoted = btn.classList.contains('success');
-    const resp = await api(`/api/threads/${encodeURIComponent(threadId)}/upvote`, {
-      method: 'POST',
-      body: { undo: alreadyUpvoted }  // 👈 backend must support this
-    });
-
-    const countEl = document.querySelector('#threadUpCount');
-    if (countEl && typeof resp.upvoteCount === 'number') {
-      countEl.textContent = resp.upvoteCount;
-    }
-
-    // Toggle .success class
-    if (alreadyUpvoted) {
-      btn.classList.remove('success');
-    } else {
-      btn.classList.add('success');
-    }
-
-  } catch (err) {
-    console.error('Failed to toggle upvote thread:', err);
-    alert('Failed to upvote thread.');
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-
 
 /* --- Scaffold Markup --- */
 function ensureScaffold() {
