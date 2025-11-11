@@ -537,27 +537,19 @@ function bindThreadActions(tbody) {
 }
 
 
-// ===== LOAD ADMIN COMMENTS (with Pagination + Show Deleted + Page Size) =====
-async function loadAdminComments({ page = state.comments.page || 1 } = {}) {
+// --- COMMENTS Section (with pagination + show deleted + page size) ---
+async function loadComments({ page = 1 } = {}) {
   clearErrs();
-
   const tbody = ensureTbody('#commentsTable');
   if (!tbody) return;
 
   try {
     const includeDeleted = q('#cIncludeDeleted')?.checked;
-    const limit = parseInt(q('#cPageSize')?.value || state.comments.limit || 50, 10);
-
-    const params = new URLSearchParams({
-      page: page.toString(),
-      limit: limit.toString(),
-      t: String(Date.now()) // bust cache
-    });
-    if (includeDeleted) params.set('includeDeleted', '1');
-
-    const url = `/api/admin/comments?${params.toString()}`;
+    const limit = parseInt(q('#cPageSize')?.value || 50, 10);
+    const url = `/api/admin/comments`;
     const resp = await api(url, {
-      method: 'GET',
+      method: 'POST',
+      body: { page, limit, includeDeleted },
       nocache: true,
       skipHtmlRedirect: true
     });
@@ -567,10 +559,7 @@ async function loadAdminComments({ page = state.comments.page || 1 } = {}) {
 
     tbody.innerHTML = '';
     if (!comments.length) {
-      tbody.innerHTML = `<tr><td colspan="8" class="empty">No comments found.</td></tr>`;
-      q('#cPageInfo').textContent = `0 results`;
-      q('#cPrev')?.setAttribute('disabled', true);
-      q('#cNext')?.setAttribute('disabled', true);
+      tbody.innerHTML = '<tr><td colspan="8">No comments found.</td></tr>';
       return;
     }
 
@@ -589,48 +578,49 @@ async function loadAdminComments({ page = state.comments.page || 1 } = {}) {
         ? `${publicAuthor} (internal: ${escapeHTML(internalAuthor)}${c.realAuthor?._id ? `, <a class="btn tiny" href="profile.html?id=${c.realAuthor._id}" target="_blank">View Profile</a>` : ''})`
         : `${escapeHTML(publicAuthor)}${c.realAuthor?._id ? ` <a class="btn tiny" href="profile.html?id=${c.realAuthor._id}" target="_blank">View Profile</a>` : ''}`;
 
+      // Extract thread reference safely
+      const threadId = (c.thread && typeof c.thread === 'object' && c.thread._id) ? c.thread._id : (typeof c.thread === 'string' ? c.thread : '');
+      const threadTitle = (c.thread && typeof c.thread === 'object' && c.thread.title) ? c.thread.title : '';
+
+      tr.dataset.threadId = threadId || '';
 
       tr.innerHTML = `
         <td><input type="checkbox" class="bulkSelectComment" /></td>
         <td>${escapeHTML(new Date(c.createdAt || Date.now()).toLocaleString())}</td>
         <td>${escapeHTML(c.snippet || '(no snippet)')}</td>
         <td>${displayAuthor}</td>
-        <td>${escapeHTML(String(c.thread || ''))}</td>
+        <td>${escapeHTML(threadTitle || threadId || '(unknown thread)')}</td>
         <td>${Number(c.upvoteCount ?? 0)}</td>
         <td>${c.isDeleted ? 'Deleted' : 'Active'}</td>
         <td class="row gap-05">
           <button class="btn tiny viewComment">View</button>
-          <button class="btn tiny delRestoreComment">Delete/Restore</button>
+          <button class="btn tiny delRestoreComment">${c.isDeleted ? 'Restore' : 'Delete'}</button>
         </td>
       `;
-
       tbody.appendChild(tr);
     });
 
-    state.comments.page = page;
-    state.comments.limit = limit;
-    state.comments.total = totalCount;
+    renderCommentPagination(page, totalPages, totalCount);
+
+    state.comments.page       = page;
+    state.comments.total      = totalCount;
     state.comments.totalPages = totalPages;
 
-    q('#cPageInfo').textContent = `Page ${page} of ${totalPages} (${totalCount} comments)`;
+    const cPrev = q('#cPrev'); if (cPrev) cPrev.disabled = page <= 1;
+    const cNext = q('#cNext'); if (cNext) cNext.disabled = page >= totalPages;
 
-    q('#cPrev')?.toggleAttribute('disabled', page <= 1);
-    q('#cNext')?.toggleAttribute('disabled', page >= totalPages);
+    const info = q('#cPageInfo');
+    if (info) info.textContent = `Page ${page} of ${totalPages} (${totalCount} comments)`;
 
-    bindCommentAdminActions(tbody);
+    bindCommentActions(tbody);
 
   } catch (e) {
-    console.error('[AdminComments] Error loading comments:', e);
     renderErrorRow('#commentsTable', `Error loading comments: ${e?.error || e?.message}`, 8);
   }
 }
 
-
-
-
 // ===== BULK ACTIONS: Comments =====
 function bindCommentBulkActions() {
-  // 🟢 Select All Toggle for comments
   q('#cSelectAll')?.addEventListener('change', ev => {
     const checked = ev.currentTarget.checked;
     qa('#commentsTable tbody tr input.bulkSelectComment').forEach(cb => {
@@ -638,98 +628,115 @@ function bindCommentBulkActions() {
     });
   });
 
-  // 🟥 Delete Selected Comments
   q('#cBulkDelete')?.addEventListener('click', async () => {
     const ids = Array.from(qa('#commentsTable tbody tr input.bulkSelectComment:checked'))
       .map(cb => cb.closest('tr')?.dataset.id)
       .filter(Boolean);
-
-    console.log('[Comment Bulk Delete] Selected IDs:', ids);
-
     if (!ids.length) {
       alert('No comments selected');
       return;
     }
-
     const reason = prompt('Reason for delete (optional):');
     try {
-      const result = await api('/api/admin/comments/bulk-delete', {
+      await api('/api/admin/comments/bulk-delete', {
         method: 'POST',
         body: { ids, restore: false, reason }
       });
-
-      console.log('[Comment Bulk Delete] Response:', result);
-      await loadAdminComments();
+      await loadComments({ page: state.comments.page });
     } catch (e) {
-      console.error('[Comment Bulk Delete] Error:', e);
-      showErr(`Bulk comments delete failed: ${e?.error || e?.message}`);
+      showErr(`Bulk comment delete failed: ${e?.error || e?.message}`);
     }
   });
 
-  // ✅ Restore Selected Comments
   q('#cBulkRestore')?.addEventListener('click', async () => {
     const ids = Array.from(qa('#commentsTable tbody tr input.bulkSelectComment:checked'))
       .map(cb => cb.closest('tr')?.dataset.id)
       .filter(Boolean);
-
-    console.log('[Comment Bulk Restore] Selected IDs:', ids);
-
     if (!ids.length) {
       alert('No comments selected');
       return;
     }
-
     try {
-      const result = await api('/api/admin/comments/bulk-delete', {
+      await api('/api/admin/comments/bulk-delete', {
         method: 'POST',
         body: { ids, restore: true }
       });
-
-      console.log('[Comment Bulk Restore] Response:', result);
-      await loadAdminComments();
+      await loadComments({ page: state.comments.page });
     } catch (e) {
-      console.error('[Comment Bulk Restore] Error:', e);
-      showErr(`Bulk comments restore failed: ${e?.error || e?.message}`);
+      showErr(`Bulk comment restore failed: ${e?.error || e?.message}`);
     }
   });
 }
 
-
-
-function bindCommentAdminActions(tbody) {
+// ===== Individual Actions =====
+function bindCommentActions(tbody) {
   tbody.querySelectorAll('.viewComment').forEach(btn => btn.addEventListener('click', ev => {
     const tr = ev.currentTarget.closest('tr');
-    const tid= tr.querySelector('td:nth-child(4)')?.textContent?.trim();
-    if (tid) window.open(`thread.html?id=${encodeURIComponent(tid)}`, '_blank');
-  }));
-
-  tbody.querySelectorAll('.replyComment').forEach(btn => btn.addEventListener('click', ev => {
-    const tr = ev.currentTarget.closest('tr');
-    const cid= tr?.dataset.id;
-    if (cid) showReplyEditor(tr, cid);
-  }));
-
-  tbody.querySelectorAll('.editComment').forEach(btn => btn.addEventListener('click', ev => {
-    const tr    = ev.currentTarget.closest('tr');
-    const cid   = tr?.dataset.id;
-    const body  = tr.querySelector('td:nth-child(2)')?.textContent?.trim() || '';
-    if (cid) showEditEditor(tr, cid, body);
+    const tid = tr?.dataset.threadId;
+    if (!tid) {
+      alert('Thread ID missing');
+      return;
+    }
+    window.open(`thread.html?id=${encodeURIComponent(tid)}`, '_blank');
   }));
 
   tbody.querySelectorAll('.delRestoreComment').forEach(btn => btn.addEventListener('click', async ev => {
-    const tr  = ev.currentTarget.closest('tr');
+    const tr = ev.currentTarget.closest('tr');
     const cid = tr?.dataset.id;
     if (!cid) return;
-    const toDeleted = !(tr.dataset.deleted === 'true');
-    const reason    = prompt('Reason (optional):');
+    const isDeleted = tr.dataset.deleted === 'true';
+    const note = prompt('Reason (optional):');
     try {
-      await api(`/api/admin/comments/${encodeURIComponent(cid)}/delete`, { method: 'POST', body: { reason } });
-      loadAdminComments();
+      await api(`/api/admin/comments/${encodeURIComponent(cid)}/delete`, {
+        method: 'POST',
+        body: { restore: isDeleted, note }
+      });
+      await loadComments({ page: state.comments.page });
     } catch (e) {
-      showErr(`Failed comment delete/restore: ${e?.error || e?.message}`);
+      showErr(`Failed to delete/restore comment: ${e?.error || e?.message}`);
     }
   }));
 }
+
+// ===== Pagination render =====
+function renderCommentPagination(currentPage, totalPages, totalCount) {
+  const container = q('#commentsPagination');
+  if (!container) return;
+
+  container.innerHTML = '';
+  if (totalPages <= 1) return;
+
+  const createBtn = (label, page, disabled = false) => {
+    const btn = document.createElement('button');
+    btn.textContent = label;
+    btn.className = 'btn tiny';
+    if (disabled) {
+      btn.disabled = true;
+    } else {
+      btn.addEventListener('click', () => loadComments({ page }));
+    }
+    return btn;
+  };
+
+  container.appendChild(createBtn('⟨ Prev', currentPage - 1, currentPage <= 1));
+  for (let p = 1; p <= totalPages; p++) {
+    const btn = createBtn(p, p, false);
+    if (p === currentPage) btn.classList.add('active');
+    container.appendChild(btn);
+  }
+  container.appendChild(createBtn('Next ⟩', currentPage + 1, currentPage >= totalPages));
+}
+
+// ===== Boot =====
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    bindCommentBulkActions();
+    loadComments({ page: 1 });
+  } catch (e) {
+    console.error('[Admin Comments Init] Error:', e);
+  }
+});
+
 
 // --- REPORTS Section ---
 async function loadReports() {
