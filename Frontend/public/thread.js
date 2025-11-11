@@ -187,7 +187,12 @@ function renderCommentNode(c) {
     <div class="c-body">${body}</div>
     ${editedHtml}
     <div class="row wrap" style="gap:.5rem; margin-top:.35rem">
-      <button class="btn tiny c-upvote"${isDeleted ? ' disabled':''}>▲ ${up}</button>
+      <button class="btn tiny c-upvote${ /* if already upvoted: */ ''}" 
+              data-comment-id="${escapeAttr(String(c._id))}"
+              ${isDeleted ? ' disabled':''}>
+        ▲ <span class="count">${up}</span>
+      </button>
+
       <button class="btn tiny replyBtn"${isDeleted ? ' disabled':''}>Reply</button>
       <button class="btn tiny danger c-report"${canReport ? '' : ' disabled'} title="${escapeAttr(tooltip)}" data-comment-id="${escapeAttr(c._id)}">
         Report
@@ -306,21 +311,43 @@ function bindComposer() {
   }
 });
 }
-function onUpvoteComment(ev) {
-  const commentId = ev.currentTarget.closest('.comment')?.dataset.id;
+async function onUpvoteComment(ev) {
+  const btn = ev.currentTarget;
+  const commentId = btn.dataset.commentId || btn.closest('.comment')?.dataset.id;
   if (!commentId) return;
 
-  api(`/api/comments/${encodeURIComponent(commentId)}/upvote`, { method: 'POST' })
-    .then(res => {
-      if (res?.ok && typeof res.upvoteCount === 'number') {
-        ev.currentTarget.innerHTML = `▲ ${res.upvoteCount}`;
-      }
-    })
-    .catch(err => {
-      console.error('Upvote comment failed', err);
-      alert('Failed to upvote comment.');
+  btn.disabled = true;
+  const already = btn.classList.contains('success');
+  
+  try {
+    const resp = await api(`/api/comments/${encodeURIComponent(commentId)}/upvote`, {
+      method: 'POST',
+      body: { undo: already }  // if backend supports undo
     });
+
+    if (resp && typeof resp.upvoteCount === 'number') {
+      // update UI
+      const countSpan = btn.querySelector('.count');
+      if (countSpan) countSpan.textContent = resp.upvoteCount;
+      else btn.textContent = `▲ ${resp.upvoteCount}`;
+
+      if (already) {
+        btn.classList.remove('success');
+      } else {
+        btn.classList.add('success');
+      }
+    } else {
+      console.warn('onUpvoteComment: unexpected response', resp);
+    }
+
+  } catch (err) {
+    console.error('Upvote comment failed', err);
+    alert('Failed to upvote comment.');
+  } finally {
+    btn.disabled = false;
+  }
 }
+
 
 /* --- Thread Rendering --- */
 function renderLoading() {
