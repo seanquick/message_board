@@ -332,6 +332,7 @@ function renderLoading() {
 }
 
 function buildToolbar() {
+  console.log('[thread.js] buildToolbar running, THREAD_ID =', THREAD_ID, 'me.id =', me?.id);
   const host = q('#threadToolbar');
   if (!host) return;
 
@@ -372,6 +373,7 @@ function buildToolbar() {
 }
 
 async function toggleThreadUpvote(btn) {
+  console.log('[thread.js] toggleThreadUpvote invoked, btn classList =', btn.classList, 'THREAD.upvoteCount =', THREAD.upvoteCount);
   const threadId = THREAD_ID;
   if (!threadId) return console.error('toggleThreadUpvote: THREAD_ID missing');
 
