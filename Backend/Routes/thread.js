@@ -314,18 +314,36 @@ router.post(
 
 
 /* ============================== UPVOTE ============================== */
+// Example: backend/routes/threads.js
 router.post('/:id/upvote', requireAuth, async (req, res) => {
-  try {
-    const t = await Thread.findById(req.params.id);
-    if (!t || t.isDeleted === true) return res.status(404).json({ error: 'Thread not found' });
+  const threadId = req.params.id;
+  const userId   = req.user.id;          // or however you identify user
+  const undo     = req.body.undo === true;
 
-    const result = await t.toggleUpvote(req.user.uid);
-    return res.json(result);
-  } catch (e) {
-    console.error('[threads] upvote error:', e);
-    res.status(500).json({ error: 'Failed to upvote thread' });
+  try {
+    const thread = await Thread.findById(threadId);
+    if (!thread) return res.status(404).json({ error: 'Thread not found' });
+
+    const already = thread.upvoters.includes(userId);
+
+    if (undo && already) {
+      // Remove the upvote
+      thread.upvoters = thread.upvoters.filter(u => String(u) !== String(userId));
+      thread.upvoteCount = thread.upvoters.length;
+    } else if (!undo && !already) {
+      // Add the upvote
+      thread.upvoters.push(userId);
+      thread.upvoteCount = thread.upvoters.length;
+    }
+
+    await thread.save();
+    return res.json({ ok: true, upvoteCount: thread.upvoteCount });
+  } catch (err) {
+    console.error('Upvote error', err);
+    return res.status(500).json({ error: 'Failed to upvote' });
   }
 });
+
 
 /* ============================== REPORT (enum‑safe‑ish) ============================== */
 /**

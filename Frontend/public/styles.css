@@ -848,3 +848,10 @@ tr .row.gap-05 button {
   padding: 0.5rem 1rem;
   font-weight: bold;
 }
+
+/* === Upvote Button Success === */
+button.success {
+  background-color: #2ecc71; /* Green */
+  color: white;
+  border-color: #27ae60;
+}

@@ -348,28 +348,47 @@ function renderThread(t) {
   buildToolbar();
 }
 
-function buildToolbar() {
-  const host     = q('#threadToolbar');
-  if (!host) return;
-  const loggedIn = !!me?.id;
-  const isOwn    = loggedIn && (me.id === THREAD.author || me.id === THREAD.authorId);
-  const canReport = loggedIn && !isOwn;
-  host.innerHTML = `
-    <button id="threadUpvote" class="btn tiny"${!loggedIn ? ' disabled':''}>▲ Upvote <span id="threadUpCount" class="mono">${Number(THREAD.upvoteCount || 0)}</span></button>
-    <button id="reportThreadBtn" class="btn tiny danger"${canReport ? '' : ' disabled'} data-thread-id="${escapeAttr(THREAD._id)}">Report Thread</button>
-  `;
-  $('#threadUpvote')?.addEventListener('click', onUpvoteThread);
-  $('#reportThreadBtn')?.addEventListener('click', () => canReport && openReportModal('thread', THREAD_ID));
-}
-async function onUpvoteThread() {
+async function onUpvoteThread(ev) {
+  ev.preventDefault();
+  const btn = ev.currentTarget;
+  const threadId = THREAD_ID;
+
+  if (!threadId) {
+    console.error('onUpvoteThread: THREAD_ID missing');
+    return;
+  }
+
   try {
-    const res = await api(`/api/threads/${encodeURIComponent(THREAD_ID)}/upvote`, { method: 'POST' });
-    safeSetText('#threadUpCount', Number(res?.upvoteCount || 0));
-  } catch (e) {
-    console.error('[thread.js]init] Upvote thread error', e);
-    alert('Failed to upvote.');
+    btn.disabled = true;
+
+    // Toggle support — if already upvoted, unvote
+    const alreadyUpvoted = btn.classList.contains('success');
+    const resp = await api(`/api/threads/${encodeURIComponent(threadId)}/upvote`, {
+      method: 'POST',
+      body: { undo: alreadyUpvoted }  // 👈 backend must support this
+    });
+
+    const countEl = document.querySelector('#threadUpCount');
+    if (countEl && typeof resp.upvoteCount === 'number') {
+      countEl.textContent = resp.upvoteCount;
+    }
+
+    // Toggle .success class
+    if (alreadyUpvoted) {
+      btn.classList.remove('success');
+    } else {
+      btn.classList.add('success');
+    }
+
+  } catch (err) {
+    console.error('Failed to toggle upvote thread:', err);
+    alert('Failed to upvote thread.');
+  } finally {
+    btn.disabled = false;
   }
 }
+
+
 
 /* --- Scaffold Markup --- */
 function ensureScaffold() {
