@@ -333,6 +333,8 @@ function renderLoading() {
 
 function buildToolbar() {
   console.log('[thread.js] buildToolbar running, THREAD_ID =', THREAD_ID, 'me.id =', me?.id);
+  console.log('Attaching upvote listener to #threadUpvote');
+
   const host = q('#threadToolbar');
   if (!host) return;
 
@@ -412,7 +414,6 @@ async function toggleThreadUpvote(btn) {
   }
 }
 
-
 function renderThread(t) {
   safeSetHTML('#threadTitle', escapeHTML(t.title || '(untitled)'));
 
@@ -427,9 +428,10 @@ function renderThread(t) {
 
   safeSetHTML('#threadMeta', `${author} • ${timeAgo(t.createdAt)} • ▲ ${Number(t.upvoteCount ?? 0)}`);
   safeSetHTML('#threadBody', safeParagraphs(t.body ?? ''));
-
-  buildToolbar();
+  
+  // 💥 Removed buildToolbar() from here
 }
+
 
 /* --- Scaffold Markup --- */
 function ensureScaffold() {
@@ -536,6 +538,8 @@ async function init() {
     await loadComments(true);
     bindComposer();
     initReportUI();
+    buildToolbar(); // ✅ Ensure the toolbar is built after scaffold & data are ready
+
     console.log('[thread.js:init] Complete: thread & comments loaded.');
   } catch (e) {
     console.error('[thread.js:init] Error loading thread:', e);
