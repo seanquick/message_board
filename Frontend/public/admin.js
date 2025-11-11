@@ -600,8 +600,6 @@ async function loadComments({ page = 1 } = {}) {
       tbody.appendChild(tr);
     });
 
-    renderCommentPagination(page, totalPages, totalCount);
-
     state.comments.page       = page;
     state.comments.total      = totalCount;
     state.comments.totalPages = totalPages;
@@ -698,34 +696,7 @@ function bindCommentActions(tbody) {
   }));
 }
 
-// ===== Pagination render =====
-function renderCommentPagination(currentPage, totalPages, totalCount) {
-  const container = q('#commentsPagination');
-  if (!container) return;
 
-  container.innerHTML = '';
-  if (totalPages <= 1) return;
-
-  const createBtn = (label, page, disabled = false) => {
-    const btn = document.createElement('button');
-    btn.textContent = label;
-    btn.className = 'btn tiny';
-    if (disabled) {
-      btn.disabled = true;
-    } else {
-      btn.addEventListener('click', () => loadComments({ page }));
-    }
-    return btn;
-  };
-
-  container.appendChild(createBtn('⟨ Prev', currentPage - 1, currentPage <= 1));
-  for (let p = 1; p <= totalPages; p++) {
-    const btn = createBtn(p, p, false);
-    if (p === currentPage) btn.classList.add('active');
-    container.appendChild(btn);
-  }
-  container.appendChild(createBtn('Next ⟩', currentPage + 1, currentPage >= totalPages));
-}
 
 // ===== Boot =====
 document.addEventListener('DOMContentLoaded', () => {
@@ -1029,13 +1000,6 @@ async function init() {
     }
   });
 
-  // COMMENT CONTROLS
-  q('#cPageSize')?.addEventListener('change', () => loadAdminComments({ page: 1 }));
-  q('#cIncludeDeleted')?.addEventListener('change', () => loadAdminComments({ page: 1 }));
-  q('#cPrev')?.addEventListener('click', () => { if (state.comments.page > 1) {state.comments.page--; loadAdminComments({ page: state.comments.page }); } });
-  q('#cNext')?.addEventListener('click', () => { if (state.comments.page < state.comments.totalPages) {state.comments.page++; loadAdminComments({ page: state.comments.page }); } });
-
-
   // REPORT CONTROLS
   q('#rRefresh')?.addEventListener('click', loadReports);
   q('#rGroup')?.addEventListener('change', loadReports);
@@ -1062,41 +1026,11 @@ async function init() {
   await loadMetrics();
   await loadUsers();
   await loadThreads({ page: state.threads.page });
-  await loadAdminComments();
   await loadReports();
 
   console.log('[admin.js] init complete');
 }
 
-// ===== COMMENT PAGINATION (admin) =====
-function renderCommentPagination(currentPage, totalPages, totalCount) {
-  const container = document.getElementById('commentsPagination');
-  if (!container) return;
-
-  container.innerHTML = ''; // Clear previous buttons
-
-  const makeBtn = (text, page, disabled = false, bold = false) => {
-    const btn = document.createElement('button');
-    btn.className = 'btn tiny';
-    if (bold) btn.style.fontWeight = 'bold';
-    btn.disabled = disabled;
-    btn.textContent = text;
-    if (!disabled) {
-      btn.addEventListener('click', () => {
-        loadAdminComments({ page });
-      });
-    }
-    return btn;
-  };
-
-  if (totalPages <= 1) return;
-
-  container.appendChild(makeBtn('❮ Prev', currentPage - 1, currentPage <= 1));
-  for (let i = 1; i <= totalPages; i++) {
-    container.appendChild(makeBtn(String(i), i, false, i === currentPage));
-  }
-  container.appendChild(makeBtn('Next ❯', currentPage + 1, currentPage >= totalPages));
-}
 
 
 async function doSearch() {

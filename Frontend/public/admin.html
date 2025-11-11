@@ -284,8 +284,9 @@
   <script type="module" src="/adminExport.js"></script>
   <script type="module" src="/adminTest.js"></script>
 
-  <script type="module">
-    import { api, q, qa, escapeHTML, renderErrorRow } from './main.js';
+  <!-- ✅ New: Comments logic -->
+  <script type="module" src="admin-comments.js"></script>
+
 
     const state = {
       comments: {
