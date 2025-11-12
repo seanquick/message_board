@@ -13,16 +13,15 @@ router.get('/:userId', async (req, res) => {
       return res.status(404).json({ error: 'Profile not found or private' });
     }
 
-    // 🔸 Safe public response payload
+    // 🔸 Safe public response payload (profilePhotoUrl removed)
     res.json({
       _id: user._id,
       name: user.name,
       displayName: user.displayName || '',
       bio: user.bio || '',
       favoriteQuote: user.favoriteQuote || '',
-      profilePhotoUrl: user.profilePhotoUrl || '/default-avatar.png',
-      email: user.emailPublic ? user.email : undefined, // Only if allowed
-      profilePublic: user.profilePublic                   // ✅ Added here
+      email: user.emailPublic ? user.email : undefined,
+      profilePublic: user.profilePublic
     });
   } catch (err) {
     console.error('[GET /api/profile/:userId] error:', err);

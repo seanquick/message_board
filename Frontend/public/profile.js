@@ -29,25 +29,10 @@ async function main() {
       return showError("This user's profile is private or does not exist.");
     }
 
-    // === Assign variables ===
-    const displayName = escapeHTML(profile.displayName || profile.name || 'User');
-    const fallbackPhoto = '/default-avatar.png';
-
     // === Display Name ===
+    const displayName = escapeHTML(profile.displayName || profile.name || 'User');
     const nameEl = $('userName');
     if (nameEl) nameEl.textContent = displayName;
-
-    // === Profile Photo ===
-    const img = $('profilePhoto');
-    if (img) {
-      img.src = profile.profilePhotoUrl || fallbackPhoto;
-      img.alt = `${displayName}'s profile photo`;
-      img.classList.remove('hidden');
-
-      img.onerror = () => {
-        img.src = fallbackPhoto;
-      };
-    }
 
     // === Email (if public) ===
     const emailWrap = $('userEmail');

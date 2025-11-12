@@ -7,9 +7,9 @@ const UserSchema = new mongoose.Schema({
   email:        { type: String, trim: true, lowercase: true, maxlength: 200, unique: true, index: true },
 
   /* ──────────────── AUTH / SECURITY ──────────────── */
-  passwordHash: { type: String, select: true },  // modern password field
-  password:     { type: String, select: false }, // legacy compatibility
-  hash:         { type: String, select: false }, // legacy compatibility
+  passwordHash: { type: String, select: true },
+  password:     { type: String, select: false },
+  hash:         { type: String, select: false },
 
   role:         { type: String, enum: ['user', 'admin'], default: 'user', index: true },
   isBanned:     { type: Boolean, default: false, index: true },
@@ -35,15 +35,9 @@ const UserSchema = new mongoose.Schema({
   bio:           { type: String, default: '', maxlength: 1000 },
   favoriteQuote: { type: String, default: '', maxlength: 500 },
 
-  // ✅ profilePhoto: legacy field (base64 or inline)
-  profilePhoto:  { type: String, default: '' },
-
-  // ✅ profilePhotoUrl: new upload or cloud‑hosted URL
-  profilePhotoUrl: { type: String, default: '' },
-
   // ✅ Privacy settings
-  profilePublic: { type: Boolean, default: false }, // public if true, private by default
-  emailPublic:   { type: Boolean, default: false }, // show email on profile if true
+  profilePublic: { type: Boolean, default: false },
+  emailPublic:   { type: Boolean, default: false },
 }, { timestamps: true });
 
 /* ──────────────── INDEXES ──────────────── */
