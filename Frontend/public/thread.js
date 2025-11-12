@@ -203,7 +203,10 @@ function renderCommentNode(c) {
     </div>
     ${childrenHTML}
   `;
+
+  return el; // ✅ <—— add this line
 }
+
 
 function renderCommentChildHTML(child) {
   const id     = escapeAttr(String(child._id));
