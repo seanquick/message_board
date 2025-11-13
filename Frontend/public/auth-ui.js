@@ -12,11 +12,12 @@ function safeNext(def = 'threads.html') {
 }
 
 function readCookie(name) {
-  const m = document.cookie.match(
-    new RegExp('(?:^|; )' + name.replace(/[-./*+?^${}()|[\]\\]/g, '\\$&') + '=([^;]*)')
-  );
-  return m ? decodeURIComponent(m[1]) : '';
+  return document.cookie.split('; ').reduce((acc, pair) => {
+    const [k, v] = pair.split('=');
+    return k === name ? decodeURIComponent(v) : acc;
+  }, '');
 }
+
 
 async function ensureCsrf() {
   try { await fetch('/api/auth/csrf', { credentials: 'include' }); } catch {}
@@ -71,6 +72,7 @@ async function initLogin() {
 
       location.href = next || 'threads.html';
     } catch (err) {
+        console.error('[initLogin] Error:', err);
       const msg = err.message || 'Could not sign in.';
       setMsg('#err', msg);
 
@@ -167,6 +169,7 @@ async function initRegister() {
       // ✅ Redirect new users to profile setup
       location.href = '/account.html';
     } catch (err) {
+        console.error('[initLogin] Error:', err);   
       setMsg('#err', err.message || 'Could not create account.');
       csrf = await ensureCsrf();
     } finally {
@@ -214,6 +217,7 @@ async function initForgot() {
       if (!res.ok || data.error) throw new Error(data.error || 'Request failed.');
       setMsg('#ok', 'If that email exists, we just sent a reset link. Please check your inbox.');
     } catch (err) {
+        console.error('[initLogin] Error:', err);
       setMsg('#err', err.message || 'Could not send reset email.');
       csrf = await ensureCsrf();
     } finally {
@@ -278,6 +282,7 @@ async function initReset() {
       setMsg('#ok', 'Password updated. Redirecting to sign in…');
       setTimeout(() => { location.href = 'login.html?next=' + encodeURIComponent(next); }, 900);
     } catch (err) {
+        console.error('[initLogin] Error:', err);
       setMsg('#err', err.message || 'Could not update password.');
       csrf = await ensureCsrf();
     } finally {

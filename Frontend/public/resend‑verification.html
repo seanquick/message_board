@@ -50,6 +50,8 @@
 
       try {
         const csrf = await ensureCsrf();
+        console.log('[resend-verification] Using CSRF:', csrf);
+
         const res = await fetch('/api/auth/resend-verification', {
           method: 'POST',
           headers: {
@@ -60,12 +62,15 @@
           body: JSON.stringify({ email })
         });
 
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.error || 'Failed to resend verification email.');
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.error) {
+          throw new Error(data.error || 'Failed to resend verification email.');
+        }
 
         infoMsg.textContent = data.message || 'Verification email sent. Please check your inbox.';
         infoMsg.classList.remove('hidden');
       } catch (err) {
+        console.error('[resend-verification] error:', err);
         errorMsg.textContent = err?.message || 'Failed to resend verification email.';
         errorMsg.classList.remove('hidden');
       } finally {
