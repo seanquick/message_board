@@ -6,7 +6,7 @@ const getCookie = (name) =>
   document.cookie.split('; ').find((x) => x.startsWith(name + '='))?.split('=')[1];
 
 function showErr(msg) {
-  const el = $('#topErr');
+  const el = $('#err');
   if (!el) return;
 
   el.innerHTML = ''; // Clear previous content
