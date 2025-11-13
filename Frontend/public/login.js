@@ -5,10 +5,24 @@ const $ = (s, r=document) => r.querySelector(s);
 const getCookie = (name) => document.cookie.split('; ').find(x => x.startsWith(name+'='))?.split('=')[1];
 
 function showErr(msg) {
-  const el = $('#topErr'); if (!el) return;
+  const el = $('#topErr');
+  if (!el) return;
+
+  el.innerHTML = ''; // Clear previous content
   el.textContent = msg || 'Something went wrong.';
   el.style.display = '';
+
+  // If the message includes email verification, show a helpful link
+  if (msg && msg.toLowerCase().includes('verify your email')) {
+    const link = document.createElement('a');
+    link.href = 'resend-verification.html';
+    link.textContent = 'Resend verification email';
+    link.style.display = 'block';
+    link.style.marginTop = '0.5rem';
+    el.appendChild(link);
+  }
 }
+
 
 async function seedCsrfIfMissing() {
   try {

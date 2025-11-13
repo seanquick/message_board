@@ -132,7 +132,7 @@ router.get('/csrf', (req, res) => {
   res.json({ ok: true, token });
 });
 
-// Register
+// Register (with email verification)
 router.post('/register', async (req, res) => {
   try {
     const name = s.string({ trim: true, max: 120 }).parse(req.body?.name || '');
@@ -143,41 +143,168 @@ router.post('/register', async (req, res) => {
     if (exists) return res.status(400).json({ error: 'Email already registered' });
 
     const passwordHash = await bcrypt.hash(password, 12);
-    const u = await User.create({ name, email, passwordHash, role: 'user', tokenVersion: 0 });
 
-    const token = signToken(u);
-    setAuthCookies(res, token);
-    res.json({ ok: true, user: { id: u._id, name: u.name, email: u.email, role: u.role } });
+    // 🔥 Create a verification token
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    const u = await User.create({
+      name,
+      email,
+      passwordHash,
+      role: 'user',
+      tokenVersion: 0,
+      emailVerified: false,
+      emailVerifyToken: tokenHash,
+      emailVerifyExpires: new Date(Date.now() + 1000 * 60 * 60 * 24) // 24 hours
+    });
+
+    // 🔥 Send email verification
+    try {
+      const { sendMail } = require('../Services/mailer');
+      const base = process.env.PUBLIC_ORIGIN || '';
+      const verifyLink = `${base}/verify-email.html?token=${encodeURIComponent(token)}`;
+
+      await sendMail({
+        to: u.email,
+        subject: 'Verify your email address',
+        text: `Welcome ${name}!\n\nPlease verify your email by clicking the link:\n${verifyLink}\n\nThe link is valid for 24 hours.`
+      });
+    } catch (e) {
+      console.error('[auth] failed to send verification email:', e.message);
+      // Not fatal — user can request a resend
+    }
+
+    res.json({
+      ok: true,
+      message: 'Registration successful! Check your email for a verification link.'
+    });
+
   } catch (e) {
     res.status(400).json({ error: e?.message || 'Failed to register' });
   }
 });
 
+
+
 // Login
 router.post('/login', async (req, res) => {
   try {
-    const email = s.string({ trim: true, lowercase: true, email: true, max: 200 }).parse(req.body?.email || '');
-    const password = s.string({ trim: true, min: 1, max: 200 }).parse(req.body?.password || '');
+    const email = s.string({ trim: true, lowercase: true, email: true, max: 200 })
+      .parse(req.body?.email || '');
+    const password = s.string({ trim: true, min: 1, max: 200 })
+      .parse(req.body?.password || '');
 
     const user = await User.findOne({ email });
     if (!user) {
       await new Promise(r => setTimeout(r, 150));
       return res.status(401).json({ error: 'Invalid email or password' });
     }
-    if (user.isBanned) return res.status(403).json({ error: 'This account has been banned.' });
+
+    if (user.isBanned) {
+      return res.status(403).json({ error: 'This account has been banned.' });
+    }
+
+    // ✅ Require email verification
+    if (!user.emailVerified) {
+      return res.status(403).json({ error: 'Please verify your email before logging in.' });
+    }
 
     const check = await verifyPassword(user, password);
-    if (!check.ok) return res.status(401).json({ error: 'Invalid email or password' });
+    if (!check.ok) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
 
     await upgradePasswordHashIfNeeded(user, password, check);
 
     const token = signToken(user);
     setAuthCookies(res, token);
-    res.json({ ok: true, user: { id: user._id, name: user.name, email: user.email, role: user.role || 'user' } });
+
+    res.json({
+      ok: true,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role || 'user'
+      }
+    });
   } catch (e) {
     res.status(400).json({ error: e?.message || 'Failed to login' });
   }
 });
+
+
+
+// Verify email
+router.get('/verify-email', async (req, res) => {
+  try {
+    const raw = String(req.query.token || '');
+    if (!raw) return res.status(400).json({ error: 'Missing token' });
+
+    const tokenHash = crypto.createHash('sha256').update(raw).digest('hex');
+
+    const user = await User.findOne({
+      emailVerifyToken: tokenHash,
+      emailVerifyExpires: { $gt: new Date() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid or expired verification token' });
+    }
+
+    user.emailVerified = true;
+    user.emailVerifyToken = undefined;
+    user.emailVerifyExpires = undefined;
+    await user.save();
+
+    res.json({ ok: true, message: 'Email verified successfully!' });
+
+  } catch (e) {
+    console.error('[verify-email] error:', e);
+    res.status(500).json({ error: 'Failed to verify email' });
+  }
+});
+
+// Resend verification email
+router.post('/resend-verification', async (req, res) => {
+  try {
+    const email = s.string({ trim: true, lowercase: true, email: true }).parse(req.body?.email || '');
+
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (user.emailVerified) return res.status(400).json({ error: 'Email already verified' });
+
+    // create new token
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    await User.updateOne(
+      { _id: user._id },
+      {
+        emailVerifyToken: tokenHash,
+        emailVerifyExpires: new Date(Date.now() + 24 * 60 * 60 * 1000)
+      }
+    );
+
+    const { sendMail } = require('../Services/mailer');
+    const base = process.env.PUBLIC_ORIGIN || '';
+    const verifyLink = `${base}/verify-email.html?token=${encodeURIComponent(token)}`;
+
+    await sendMail({
+      to: user.email,
+      subject: 'Verify your email address (Resent)',
+      text: `Click to verify your email:\n${verifyLink}`
+    });
+
+    res.json({ ok: true, message: 'Verification email resent.' });
+
+  } catch (e) {
+    res.status(400).json({ error: e?.message || 'Failed to resend verification email' });
+  }
+});
+
+
 
 // Logout
 router.post('/logout', async (_req, res) => {

@@ -22,6 +22,12 @@ const UserSchema = new mongoose.Schema({
   resetTokenHash: { type: String, select: false },
   resetTokenExp:  { type: Date,   select: false },
 
+  /* ──────────────── EMAIL VERIFICATION ──────────────── */
+  // ✅ Add these NEW fields:
+  emailVerified:     { type: Boolean, default: false },
+  emailVerifyToken:  { type: String, select: false },
+  emailVerifyExpires:{ type: Date,   select: false },
+
   /* ──────────────── AUDIT INFO ──────────────── */
   lastActionAt:  { type: Date },
   lastActionBy:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -35,7 +41,7 @@ const UserSchema = new mongoose.Schema({
   bio:           { type: String, default: '', maxlength: 1000 },
   favoriteQuote: { type: String, default: '', maxlength: 500 },
 
-  // ✅ Privacy settings
+  // Privacy settings
   profilePublic: { type: Boolean, default: false },
   emailPublic:   { type: Boolean, default: false },
 }, { timestamps: true });

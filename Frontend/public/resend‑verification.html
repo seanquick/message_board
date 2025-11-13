@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Resend Verification Email</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="container narrow pad">
+    <h1>Resend Email Verification</h1>
+    <p>If you registered but didn’t receive your email, enter your email address below to resend the verification link.</p>
+
+    <form id="resendForm">
+      <div>
+        <label for="emailInput">Email:</label><br />
+        <input type="email" id="emailInput" name="email" required placeholder="you@example.com" />
+      </div>
+      <button type="submit" class="btn primary mt-2" id="submitBtn">Resend Verification</button>
+    </form>
+
+    <p id="infoMsg" class="hidden"></p>
+    <p id="errorMsg" class="error hidden"></p>
+  </main>
+
+  <script type="module">
+    import { api, q } from './main.js';
+
+    const form     = q('#resendForm');
+    const emailIn  = q('#emailInput');
+    const infoMsg  = q('#infoMsg');
+    const errorMsg = q('#errorMsg');
+    const submitBtn= q('#submitBtn');
+
+    form.addEventListener('submit', async ev => {
+      ev.preventDefault();
+      infoMsg.classList.add('hidden');
+      errorMsg.classList.add('hidden');
+
+      const email = emailIn.value.trim();
+      if (!email) {
+        errorMsg.textContent = 'Please enter your email.';
+        errorMsg.classList.remove('hidden');
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Sending…';
+
+      try {
+        const resp = await api('/api/auth/resend-verification', {
+          method: 'POST',
+          body: { email }
+        });
+        infoMsg.textContent = resp.message || 'Verification email sent. Please check your inbox.';
+        infoMsg.classList.remove('hidden');
+      } catch (err) {
+        errorMsg.textContent = err?.error || 'Failed to resend verification email.';
+        errorMsg.classList.remove('hidden');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Resend Verification';
+      }
+    });
+  </script>
+</body>
+</html>
