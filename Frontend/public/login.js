@@ -129,9 +129,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   resendSubmitBtn?.addEventListener('click', async (ev) => {
-    console.log('[resend] Clicked Send with:', email);
     ev.preventDefault();
+
     const email = resendEmailInput?.value.trim();
+    console.log('[resend] Clicked Send with email:', email);
+
     if (!email) {
       resendMsg.textContent = 'Please enter your email.';
       return;
@@ -142,12 +144,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     try {
       const resp = await postJSON('/api/auth/resend-verification', { email });
+      console.log('[resend] Server response:', resp);
       resendMsg.textContent = resp.message || 'Verification email sent. Check your inbox.';
     } catch (err) {
+      console.error('[resend] Error sending request:', err);
       resendMsg.textContent = err?.message || 'Failed to resend verification email.';
     } finally {
       resendSubmitBtn.disabled = false;
       resendSubmitBtn.textContent = 'Send';
     }
   });
+
 });
