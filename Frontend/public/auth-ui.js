@@ -68,16 +68,49 @@ async function initLogin() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.error) throw new Error(data.error || 'Login failed.');
+
       location.href = next || 'threads.html';
     } catch (err) {
-      setMsg('#err', err.message || 'Could not sign in.');
+      const msg = err.message || 'Could not sign in.';
+      setMsg('#err', msg);
+
+      // Show resend link if the error looks like “verify your email”
+      if (msg.toLowerCase().includes('verify your email')) {
+        const errEl = $('#err');
+        if (errEl) {
+          const link = document.createElement('a');
+          link.href = '#';
+          link.textContent = 'Resend verification email';
+          link.style.display = 'block';
+          link.style.marginTop = '0.5rem';
+          link.className = 'link';
+          link.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            const promptEl = $('#resendPrompt');
+            if (promptEl) promptEl.classList.remove('hidden');
+            const inputEl = $('#resendEmailInput');
+            if (inputEl) inputEl.value = email; // prefill with the same email
+            if (inputEl) inputEl.focus();
+          });
+          errEl.appendChild(link);
+        }
+      }
+
       csrf = await ensureCsrf();
     } finally {
       btn.disabled = false;
       btn.textContent = txt;
     }
   });
+
+  // UX: Enter key
+  ['email','password'].forEach(id => {
+    $(`#${id}`)?.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') form?.requestSubmit();
+    });
+  });
 }
+
 
 /* ========================= REGISTER ========================== */
 async function initRegister() {
