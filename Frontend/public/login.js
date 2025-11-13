@@ -129,6 +129,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   resendSubmitBtn?.addEventListener('click', async (ev) => {
+    console.log('[resend] Clicked Send with:', email);
     ev.preventDefault();
     const email = resendEmailInput?.value.trim();
     if (!email) {
