@@ -294,3 +294,5 @@ document.addEventListener('DOMContentLoaded', () => {
   initForgot();
   initReset();
 });
+
+export { ensureCsrf };

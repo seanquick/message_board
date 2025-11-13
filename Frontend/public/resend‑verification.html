@@ -24,13 +24,14 @@
   </main>
 
   <script type="module">
-    import { api, q } from './main.js';
+    import { q } from './main.js';
+    import { ensureCsrf } from './auth-ui.js';
 
-    const form     = q('#resendForm');
-    const emailIn  = q('#emailInput');
-    const infoMsg  = q('#infoMsg');
-    const errorMsg = q('#errorMsg');
-    const submitBtn= q('#submitBtn');
+    const form      = q('#resendForm');
+    const emailIn   = q('#emailInput');
+    const infoMsg   = q('#infoMsg');
+    const errorMsg  = q('#errorMsg');
+    const submitBtn = q('#submitBtn');
 
     form.addEventListener('submit', async ev => {
       ev.preventDefault();
@@ -48,14 +49,24 @@
       submitBtn.textContent = 'Sending…';
 
       try {
-        const resp = await api('/api/auth/resend-verification', {
+        const csrf = await ensureCsrf();
+        const res = await fetch('/api/auth/resend-verification', {
           method: 'POST',
-          body: { email }
+          headers: {
+            'Content-Type': 'application/json',
+            ...(csrf ? { 'X-CSRF-Token': csrf } : {})
+          },
+          credentials: 'include',
+          body: JSON.stringify({ email })
         });
-        infoMsg.textContent = resp.message || 'Verification email sent. Please check your inbox.';
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || 'Failed to resend verification email.');
+
+        infoMsg.textContent = data.message || 'Verification email sent. Please check your inbox.';
         infoMsg.classList.remove('hidden');
       } catch (err) {
-        errorMsg.textContent = err?.error || 'Failed to resend verification email.';
+        errorMsg.textContent = err?.message || 'Failed to resend verification email.';
         errorMsg.classList.remove('hidden');
       } finally {
         submitBtn.disabled = false;

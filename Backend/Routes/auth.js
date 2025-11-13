@@ -266,7 +266,7 @@ router.get('/verify-email', async (req, res) => {
   }
 });
 
-// Resend verification email (no login required)
+// Resend verification email (unauthenticated)
 router.post('/resend-verification', async (req, res) => {
   try {
     const email = String(req.body?.email || '').trim().toLowerCase();
@@ -276,23 +276,22 @@ router.post('/resend-verification', async (req, res) => {
 
     const user = await User.findOne({ email }).lean();
     if (!user) {
-      // Do not reveal whether email exists
-      return res.json({ message: 'If that email exists, a verification link has been sent.' });
+      // mask existence
+      return res.json({ message: 'If that email exists, a verification link will be sent.' });
     }
 
     if (user.emailVerified) {
       return res.json({ message: 'Email already verified.' });
     }
 
-    // Generate new verification token
     const token = crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    const expires = new Date(Date.now() + 60 * 60 * 1000); // e.g., 1h expiry
+    const expires   = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-    await User.updateOne({ _id: user._id }, {
-      emailVerifyToken: tokenHash,
-      emailVerifyExpires: expires
-    });
+    await User.updateOne(
+      { _id: user._id },
+      { emailVerifyToken: tokenHash, emailVerifyExpires: expires }
+    );
 
     const { sendMail } = require('../Services/mailer');
     const base = process.env.PUBLIC_ORIGIN || '';
@@ -300,15 +299,14 @@ router.post('/resend-verification', async (req, res) => {
 
     await sendMail({
       to: email,
-      subject: 'Verify your email address',
-      text: `Hello ${user.name || ''},\n\nPlease verify your email by clicking this link: ${link}\n\nIf you did not request this, please ignore this message.`,
-      html: `<p>Hello ${escapeHTML(user.name || '')},</p><p>Click <a href="${link}">here to verify your email</a>.</p>`
+      subject: 'Please verify your email',
+      text: `Click this link to verify your email: ${link}`,
+      html: `<p>Click <a href="${link}">here</a> to verify your email.</p>`
     });
 
     res.json({ message: 'Verification email sent. Please check your inbox.' });
-
   } catch (err) {
-    console.error('[auth/resend-verification] Error:', err);
+    console.error('[resend-verification] Error:', err);
     res.status(500).json({ error: 'Failed to send verification email.' });
   }
 });
