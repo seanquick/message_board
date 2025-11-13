@@ -70,7 +70,7 @@ async function postJSON(url, body) {
 document.addEventListener('DOMContentLoaded', async () => {
   const form = $('#loginForm');
   const btn = $('#submitBtn');
-  const err = $('#topErr');
+  const err = $('#err');
 
   await seedCsrfIfMissing();
 
