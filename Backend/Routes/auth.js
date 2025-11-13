@@ -266,45 +266,54 @@ router.get('/verify-email', async (req, res) => {
   }
 });
 
-// Resend verification email
+// After other auth routes in backend/routes/auth.js
 router.post('/resend-verification', async (req, res) => {
   try {
-    const email = s.string({ trim: true, lowercase: true, email: true }).parse(req.body?.email || '');
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'Invalid email' });
+    }
 
-    const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    if (user.emailVerified) return res.status(400).json({ error: 'Email already verified' });
+    const user = await User.findOne({ email }).lean();
+    if (!user) {
+      // Do not reveal that email is missing — respond success silently
+      return res.json({ message: 'Verification email sent if the address exists.' });
+    }
 
-    // create new token
+    // Check if already verified
+    if (user.emailVerified) {
+      return res.json({ message: 'Email already verified.' });
+    }
+
+    // Generate verification token
     const token = crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const expires = new Date(Date.now() + (60 * 60 * 1000)); // 1 hour expiry
 
-    await User.updateOne(
-      { _id: user._id },
-      {
-        emailVerifyToken: tokenHash,
-        emailVerifyExpires: new Date(Date.now() + 24 * 60 * 60 * 1000)
-      }
-    );
+    await User.updateOne({ _id: user._id }, {
+      emailVerifyToken: tokenHash,
+      emailVerifyExpires: expires
+    });
 
     const { sendMail } = require('../Services/mailer');
     const base = process.env.PUBLIC_ORIGIN || '';
-    const verifyLink = `${base}/verify-email.html?token=${encodeURIComponent(token)}`;
+    const link = `${base}/verify-email.html?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
 
     await sendMail({
-      to: user.email,
-      subject: 'Verify your email address (Resent)',
-      text: `Click to verify your email:\n${verifyLink}`
+      to: email,
+      subject: 'Please verify your email',
+      text: `Hello ${user.displayName || user.name},\n\nClick here to verify your email: ${link}\n\nIf you did not request this, ignore this message.`,
+      html: `<p>Hello ${escapeHTML(user.displayName || user.name)},</p>
+             <p>Click <a href="${link}">here to verify your email</a>.</p>
+             <p>If you did not request this, ignore this message.</p>`
     });
 
-    res.json({ ok: true, message: 'Verification email resent.' });
-
-  } catch (e) {
-    res.status(400).json({ error: e?.message || 'Failed to resend verification email' });
+    res.json({ message: 'Verification email sent. Please check your inbox.' });
+  } catch (err) {
+    console.error('[POST /api/auth/resend-verification] Error:', err);
+    res.status(500).json({ error: 'Failed to send verification email.' });
   }
 });
-
-
 
 // Logout
 router.post('/logout', async (_req, res) => {
