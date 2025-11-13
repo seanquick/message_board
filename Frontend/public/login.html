@@ -50,13 +50,30 @@
 
         <div class="footer">
           <div class="row" style="gap:.75rem">
-            <a id="linkForgot" class="link" href="forgot.html">Forgot?</a>
-            <a id="linkRegister" class="link" href="register.html">Register</a>
-            <a id="linkResend" class="link" href="resend-verification.html">Resend verification email</a>
-            <a id="linkBack" class="link" href="index.html">Back to site</a>
+            <a id="linkForgot"    class="link" href="forgot.html">Forgot?</a>
+            <a id="linkRegister"  class="link" href="register.html">Register</a>
+            <a id="linkBack"      class="link" href="index.html">Back to site</a>
+            <!-- Placeholder for dynamic link -->
+            <a id="linkResend"    class="link hidden" href="#">Resend verification email</a>
           </div>
           <button class="btn" type="submit">Sign in</button>
         </div>
+
+        <!-- Inline prompt/modal for resend email -->
+        <div id="resendPrompt" class="hidden" style="position:fixed; top:0; left:0; width:100%; height:100%; 
+            display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.5);">
+          <div style="background:#111c2f; padding:2rem; border-radius:12px; max-width:320px; width:90%;">
+            <h2 style="margin-top:0; color:#e5e7eb;">Resend Verification</h2>
+            <p style="color:#94a3b8; font-size:.9rem;">Enter your email to resend the verification link.</p>
+            <input type="email" id="resendEmailInput" placeholder="you@example.com" style="width:100%; padding:.75rem; margin-top:1rem; border-radius:10px; border:1px solid rgba(255,255,255,.12); background:#0c1526; color:#e5e7eb;" required>
+            <div style="margin-top:1rem; display:flex; justify-content:space-between;">
+              <button id="resendCancelBtn" class="btn ghost">Cancel</button>
+              <button id="resendSubmitBtn" class="btn">Send</button>
+            </div>
+            <p id="resendMsg" style="margin-top:1rem; color:#94a3b8; font-size:.9rem;"></p>
+          </div>
+        </div>
+
       </form>
     </div>
   </div>
