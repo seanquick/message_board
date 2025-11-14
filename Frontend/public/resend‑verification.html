@@ -9,7 +9,7 @@
 <body>
   <main class="container narrow pad">
     <h1>Resend Email Verification</h1>
-    <p>If you registered but didn’t receive your email, enter your email address below to resend the verification link.</p>
+    <p>If you registered but didn't receive your email, enter your email address below to resend the verification link.</p>
 
     <form id="resendForm">
       <div>
@@ -39,7 +39,10 @@
       errorMsg.classList.add('hidden');
 
       const email = emailIn.value.trim();
+      console.log('[resend-verification] Submitted email:', email);
+
       if (!email) {
+        console.warn('[resend-verification] Email field empty');
         errorMsg.textContent = 'Please enter your email.';
         errorMsg.classList.remove('hidden');
         return;
@@ -50,7 +53,10 @@
 
       try {
         const csrf = await ensureCsrf();
-        console.log('[resend-verification] Using CSRF:', csrf);
+        console.log('[resend-verification] CSRF token acquired:', csrf);
+
+        const payload = { email };
+        console.log('[resend-verification] Sending payload:', payload);
 
         const res = await fetch('/api/auth/resend-verification', {
           method: 'POST',
@@ -59,10 +65,12 @@
             ...(csrf ? { 'X-CSRF-Token': csrf } : {})
           },
           credentials: 'include',
-          body: JSON.stringify({ email })
+          body: JSON.stringify(payload)
         });
 
         const data = await res.json().catch(() => ({}));
+        console.log('[resend-verification] Response received:', data);
+
         if (!res.ok || data.error) {
           throw new Error(data.error || 'Failed to resend verification email.');
         }
@@ -70,7 +78,7 @@
         infoMsg.textContent = data.message || 'Verification email sent. Please check your inbox.';
         infoMsg.classList.remove('hidden');
       } catch (err) {
-        console.error('[resend-verification] error:', err);
+        console.error('[resend-verification] Error during resend:', err);
         errorMsg.textContent = err?.message || 'Failed to resend verification email.';
         errorMsg.classList.remove('hidden');
       } finally {
