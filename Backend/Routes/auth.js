@@ -271,19 +271,23 @@ router.post('/resend-verification', async (req, res) => {
   try {
     const email = String(req.body?.email || '').trim().toLowerCase();
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      console.warn('[resend-verification] Invalid email input:', req.body?.email);
       return res.status(400).json({ error: 'Invalid email' });
     }
 
     const user = await User.findOne({ email }).lean();
     if (!user) {
-      // mask existence
+      console.info(`[resend-verification] No user found for email ${email} — masking response`);
       return res.json({ message: 'If that email exists, a verification link will be sent.' });
     }
 
     if (user.emailVerified) {
+      console.info(`[resend-verification] Email already verified for userId ${user._id}, email ${email}`);
       return res.json({ message: 'Email already verified.' });
     }
 
+    // generate token
+    const crypto = require('crypto');
     const token = crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const expires   = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
@@ -297,19 +301,26 @@ router.post('/resend-verification', async (req, res) => {
     const base = process.env.PUBLIC_ORIGIN || '';
     const link = `${base}/verify-email.html?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
 
-    await sendMail({
+    // send email
+    const mailResult = await sendMail({
       to: email,
-      subject: 'Please verify your email',
-      text: `Click this link to verify your email: ${link}`,
-      html: `<p>Click <a href="${link}">here</a> to verify your email.</p>`
+      subject: 'Please verify your email address',
+      text: `Hello ${user.name || ''},\n\nPlease verify your email by clicking the link:\n${link}\n\nThe link is valid for 1 hour.\n`,
+      html: `<p>Hello ${user.name || ''},</p>
+             <p>Please verify your email by clicking the link below:</p>
+             <p><a href="${link}">Verify email</a></p>
+             <p>The link is valid for 1 hour.</p>`
     });
 
+    console.info(`[resend-verification] Email sent to ${email}. MailResult:`, mailResult);
     res.json({ message: 'Verification email sent. Please check your inbox.' });
+
   } catch (err) {
     console.error('[resend-verification] Error:', err);
     res.status(500).json({ error: 'Failed to send verification email.' });
   }
 });
+
 
 // Logout
 router.post('/logout', async (_req, res) => {
