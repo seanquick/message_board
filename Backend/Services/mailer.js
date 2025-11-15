@@ -1,4 +1,5 @@
 // Backend/Services/mailer.js
+require('dotenv').config();
 const nodemailer = require('nodemailer');
 
 // 🔔 Module‑load log
