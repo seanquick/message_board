@@ -27,7 +27,7 @@ async function sendMail({ to, subject, text, html }) {
       text,
       html,
     });
-    console.log(`[mailer] ✅ Sent email to ${to} — Message ID: ${info.messageId}`);
+    console.log(`[mailer] ✅ Sent email to ${to} — Message ID: ${info.messageId}, envelope:`, info.envelope);
     return info;
   } catch (err) {
     console.error('[mailer] ❌ Failed to send email:', err);

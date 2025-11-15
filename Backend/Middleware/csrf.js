@@ -71,6 +71,7 @@ module.exports = function csrf(options = {}) {
       return next();
     }
 
-    return res.status(403).json({ error: 'CSRF token invalid or missing' });
+     console.warn('[csrf] Failed check — cookie:', cookieToken, 'header:', headerToken, 'originOk:', isValidOrigin);
+     return res.status(403).json({ error: 'CSRF token invalid or missing' });
   };
 };
