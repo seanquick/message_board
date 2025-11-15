@@ -299,7 +299,9 @@ router.post('/resend-verification', async (req, res) => {
 
     const { sendMail } = require('../Services/mailer');
     const base = process.env.PUBLIC_ORIGIN || '';
-    const link = `${base}/verify-email.html?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
+    const siteUrl = process.env.SITE_URL || 'http://localhost:3000';
+    const link = `${siteUrl}/verify-email.html?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
+
 
     // send email
     const mailResult = await sendMail({
