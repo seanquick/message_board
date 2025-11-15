@@ -323,6 +323,42 @@ router.post('/resend-verification', async (req, res) => {
   }
 });
 
+// … existing requires & router setup above …
+
+// Email Verification route
+router.post('/verify-email', async (req, res) => {
+  try {
+    const { token, email } = req.body;
+    console.log('[verify-email] Received token:', token, 'email:', email);
+
+    if (!token) {
+      return res.status(400).json({ error: 'Missing token' });
+    }
+
+    const now = new Date();
+    const user = await User.findOne({
+      emailVerifyToken: token,
+      emailVerifyExpires: { $gt: now },
+      ...(email ? { email: String(email).trim().toLowerCase() } : {})
+    });
+
+    if (!user) {
+      console.warn('[verify-email] Invalid or expired token for:', email);
+      return res.status(400).json({ error: 'Invalid or expired verification token' });
+    }
+
+    user.emailVerified = true;
+    user.emailVerifyToken = undefined;
+    user.emailVerifyExpires = undefined;
+    await user.save();
+    console.log('[verify-email] ✅ Verified user:', user.email);
+
+    res.json({ ok: true, message: 'Email verified successfully!' });
+  } catch (err) {
+    console.error('[verify-email] Error during verification:', err);
+    res.status(500).json({ error: 'Failed to verify email' });
+  }
+});
 
 // Logout
 router.post('/logout', async (_req, res) => {
