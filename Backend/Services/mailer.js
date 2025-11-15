@@ -10,6 +10,8 @@ async function sendMail({ to, subject, text, html }) {
   console.log('[mailer] Preparing to send email…');
   console.log('[mailer] Config auth.user:', user, 'auth.pass defined:', !!pass);
   console.log('[mailer] From:', from, 'To:', to, 'Subject:', subject);
+  console.log('[mailer] Module loaded at:', new Date().toISOString());
+
 
   if (!user || !pass) {
     const msg = '[mailer] ❌ SMTP_USER or SMTP_PASS is undefined — cannot send email.';
