@@ -1,14 +1,19 @@
 // Backend/Services/mailer.js
 const nodemailer = require('nodemailer');
 
+// ✅ DEBUG: Log SMTP credentials presence
+const user = process.env.SMTP_USER;
+const pass = process.env.SMTP_PASS;
+console.log('[mailer] Using SMTP_USER:', user, '| SMTP_PASS set:', !!pass);
+
 // Set up transport using Microsoft 365 SMTP
 const transporter = nodemailer.createTransport({
   host: 'smtp.office365.com',
   port: 587,
   secure: false, // Use STARTTLS
   auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
+    user,
+    pass,
   },
   tls: {
     ciphers: 'SSLv3',
@@ -17,7 +22,7 @@ const transporter = nodemailer.createTransport({
 
 // Email sender
 async function sendMail({ to, subject, text, html }) {
-  const from = process.env.FROM_EMAIL || process.env.SMTP_USER || 'no-reply@quickclickswebsites.com';
+  const from = process.env.FROM_EMAIL || user || 'no-reply@quickclickswebsites.com';
 
   try {
     const info = await transporter.sendMail({
