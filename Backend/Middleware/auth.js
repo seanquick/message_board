@@ -95,9 +95,11 @@ async function requireAuth(req, res, next) {
     if (LOG_AUTH) console.log('[requireAuth] Verified:', req.user.email);
     next();
   } catch (err) {
-    console.error('[requireAuth] Error:', err);
+    console.error('[requireAuth] Error:', err.message);
+    console.error(err.stack); // Logs full stack trace
     res.status(401).json({ error: 'Authentication failed' });
   }
+
 }
 
 // -------------------------------------------------------
