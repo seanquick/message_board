@@ -449,17 +449,14 @@ router.post('/verify-email', async (req, res) => {
     }
 
     const now = new Date();
-      const normalizedEmail = String(email || '').trim().toLowerCase();
-      console.log('[verify-email] Looking for token:', token);
-      console.log('[verify-email] Normalized email:', normalizedEmail);
+    // Simplified query: token + valid expiry
+    const query = {
+      emailVerifyToken: token,
+      emailVerifyExpires: { $gt: now }
+    };
+    console.log('[verify-email] Using query:', query);
 
-      const user = await User.findOne({
-        emailVerifyToken: token,
-        emailVerifyExpires: { $gt: now },
-        email: normalizedEmail,
-      });
-
-
+    const user = await User.findOne(query);
     console.log('[verify-email] user found:', user ? user.email : null);
 
     if (!user) {
@@ -467,19 +464,22 @@ router.post('/verify-email', async (req, res) => {
       return res.status(400).json({ error: 'Invalid or expired verification token' });
     }
 
+    console.log('[verify-email] DB token:', user.emailVerifyToken, 'expires:', user.emailVerifyExpires);
+
     // Mark as verified
     user.emailVerified = true;
     user.emailVerifyToken = undefined;
     user.emailVerifyExpires = undefined;
     await user.save();
-
     console.log('[verify-email] ✅ Verified user:', user.email);
+
     res.json({ ok: true, message: 'Email verified successfully!' });
   } catch (err) {
     console.error('[verify-email] Error during verification:', err);
     res.status(500).json({ error: 'Failed to verify email' });
   }
 });
+
 
 /* ==================== END refresh addition ==================== */
 
