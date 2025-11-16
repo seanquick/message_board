@@ -15,7 +15,7 @@ const msg = q('#message');
   }
 
   try {
-    const res = await apiPost('/auth/verify-email', { token, email });
+    const res = await apiPost('/api/auth/verify-email', { token, email });
     if (res?.error) throw new Error(res.error);
     msg.textContent = '✅ Your email has been verified. You may now sign in.';
   } catch (err) {
