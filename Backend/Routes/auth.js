@@ -323,46 +323,6 @@ router.post('/resend-verification', async (req, res) => {
   }
 });
 
-// Email verification route (user clicked the link)
-router.post('/verify-email', async (req, res) => {
-  try {
-    const { token, email } = req.body;
-    console.log('[verify-email] start for token:', token, 'email:', email);
-
-    if (!token) {
-      return res.status(400).json({ error: 'Missing verification token' });
-    }
-
-    const now = new Date();
-    const user = await User.findOne({
-      emailVerifyToken: token,
-      emailVerifyExpires: { $gt: now },
-      ...(email ? { email: String(email).trim().toLowerCase() } : {})
-    });
-
-    console.log('[verify-email] user found:', user ? user.email : null);
-
-    if (!user) {
-      console.warn('[verify-email] Invalid or expired token for:', email);
-      return res.status(400).json({ error: 'Invalid or expired verification token' });
-    }
-
-    // Mark as verified
-    user.emailVerified = true;
-    user.emailVerifyToken = undefined;
-    user.emailVerifyExpires = undefined;
-    await user.save();
-
-    console.log('[verify-email] ✅ Verified user:', user.email);
-    res.json({ ok: true, message: 'Email verified successfully!' });
-  } catch (err) {
-    console.error('[verify-email] Error during verification:', err);
-    res.status(500).json({ error: 'Failed to verify email' });
-  }
-});
-
-
-
 // Logout
 router.post('/logout', async (_req, res) => {
   clearAuthCookies(res);
@@ -475,6 +435,49 @@ router.post('/refresh', async (req, res) => {
   } catch (e) {
     console.error('[auth:refresh] error:', e.message || e);
     res.status(401).json({ error: 'Invalid or expired token' });
+  }
+});
+
+// Email verification route (user clicked the link)
+router.post('/verify-email', async (req, res) => {
+  try {
+    const { token, email } = req.body;
+    console.log('[verify-email] start for token:', token, 'email:', email);
+
+    if (!token) {
+      return res.status(400).json({ error: 'Missing verification token' });
+    }
+
+    const now = new Date();
+      const normalizedEmail = String(email || '').trim().toLowerCase();
+      console.log('[verify-email] Looking for token:', token);
+      console.log('[verify-email] Normalized email:', normalizedEmail);
+
+      const user = await User.findOne({
+        emailVerifyToken: token,
+        emailVerifyExpires: { $gt: now },
+        email: normalizedEmail,
+      });
+
+
+    console.log('[verify-email] user found:', user ? user.email : null);
+
+    if (!user) {
+      console.warn('[verify-email] Invalid or expired token for:', email);
+      return res.status(400).json({ error: 'Invalid or expired verification token' });
+    }
+
+    // Mark as verified
+    user.emailVerified = true;
+    user.emailVerifyToken = undefined;
+    user.emailVerifyExpires = undefined;
+    await user.save();
+
+    console.log('[verify-email] ✅ Verified user:', user.email);
+    res.json({ ok: true, message: 'Email verified successfully!' });
+  } catch (err) {
+    console.error('[verify-email] Error during verification:', err);
+    res.status(500).json({ error: 'Failed to verify email' });
   }
 });
 
