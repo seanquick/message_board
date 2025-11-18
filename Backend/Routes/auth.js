@@ -237,35 +237,64 @@ router.post('/login', async (req, res) => {
 
 
 
-// Verify email
-router.get('/verify-email', async (req, res) => {
-  try {
-    const raw = String(req.query.token || '');
-    if (!raw) return res.status(400).json({ error: 'Missing token' });
+  // Email verification (POST — called by verify-email.js)
+  router.post('/verify-email', async (req, res) => {
+    try {
+      const { token, email } = req.body;
+      console.log('[verify-email] start for token:', token, 'email:', email);
 
-    const tokenHash = crypto.createHash('sha256').update(raw).digest('hex');
+      if (!token) {
+        return res.status(400).json({ error: 'Missing verification token' });
+      }
 
-    const user = await User.findOne({
-      emailVerifyToken: tokenHash,
-      emailVerifyExpires: { $gt: new Date() }
-    });
+      // Email is optional — but if present, normalize it
+      const normalizedEmail = email ? String(email).trim().toLowerCase() : undefined;
 
-    if (!user) {
-      return res.status(400).json({ error: 'Invalid or expired verification token' });
+      // 🔥 Hash incoming raw token before lookup
+      const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+      console.log('[verify-email] tokenHash:', tokenHash);
+
+      // 🔥 Build DB query
+      const query = {
+        emailVerifyToken: tokenHash,
+        emailVerifyExpires: { $gt: new Date() }
+      };
+
+      if (normalizedEmail) query.email = normalizedEmail;
+
+      console.log('[verify-email] Using query:', query);
+
+      const user = await User.findOne(query);
+      console.log('[verify-email] user found:', user ? user.email : null);
+
+      if (!user) {
+        console.warn('[verify-email] Invalid or expired token for:', normalizedEmail);
+        return res.status(400).json({ error: 'Invalid or expired verification token' });
+      }
+
+      console.log(
+        '[verify-email] DB stored tokenHash:',
+        user.emailVerifyToken,
+        'expires:',
+        user.emailVerifyExpires
+      );
+
+      // 🔥 Mark verified
+      user.emailVerified = true;
+      user.emailVerifyToken = undefined;
+      user.emailVerifyExpires = undefined;
+
+      await user.save();
+      console.log('[verify-email] ✅ Verified user:', user.email);
+
+      return res.json({ ok: true, message: 'Email verified successfully!' });
+
+    } catch (err) {
+      console.error('[verify-email] Error during verification:', err);
+      return res.status(500).json({ error: 'Failed to verify email' });
     }
+  });
 
-    user.emailVerified = true;
-    user.emailVerifyToken = undefined;
-    user.emailVerifyExpires = undefined;
-    await user.save();
-
-    res.json({ ok: true, message: 'Email verified successfully!' });
-
-  } catch (e) {
-    console.error('[verify-email] error:', e);
-    res.status(500).json({ error: 'Failed to verify email' });
-  }
-});
 
 // Resend verification email (unauthenticated)
 router.post('/resend-verification', async (req, res) => {
