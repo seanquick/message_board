@@ -163,13 +163,14 @@ router.post('/register', async (req, res) => {
     try {
       const { sendMail } = require('../Services/mailer');
       const base = process.env.PUBLIC_ORIGIN || '';
-      const verifyLink = `${base}/verify-email.html?token=${encodeURIComponent(token)}`;
+      const verifyLink = `${base}/verify-email.html?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
 
       await sendMail({
         to: u.email,
         subject: 'Verify your email address',
         text: `Welcome ${name}!\n\nPlease verify your email by clicking the link:\n${verifyLink}\n\nThe link is valid for 24 hours.`
       });
+
     } catch (e) {
       console.error('[auth] failed to send verification email:', e.message);
       // Not fatal — user can request a resend
