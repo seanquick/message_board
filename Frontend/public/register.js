@@ -1,15 +1,14 @@
-// Frontend/public/register.js
-// Handles registration + Guidelines acceptance + password strength toggle (CSP-safe)
+// public/register.js
 import { api, q } from './main.js';
 
-const form       = q('#regForm');
-const nameEl     = q('#name');
-const mailEl     = q('#email');
-const passEl     = q('#password');
-const agreeBox   = q('#termsCheckbox');
-const errEl      = q('#err');
-const btnEl      = q('#submitBtn');
-const toggleShow = q('#toggleShowPwd');
+const form         = q('#regForm');
+const nameEl       = q('#name');
+const mailEl       = q('#email');
+const passEl       = q('#password');
+const agreeBox     = q('#termsCheckbox');
+const errEl        = q('#err');
+const btnEl        = q('#submitBtn');
+const toggleShow   = q('#toggleShowPwd');
 const strengthFill = q('#pwdStrengthFill');
 const strengthLbl  = q('#pwdStrengthLabel');
 
@@ -24,7 +23,7 @@ toggleShow?.addEventListener('click', () => {
   }
 });
 
-// Password strength evaluation
+// Password strength logic
 function evalStrength(pwd) {
   let score = 0;
   if (pwd.length >= 8) score++;
@@ -50,7 +49,6 @@ function updateStrength(pwd) {
   strengthLbl.textContent = 'Strength: ' + label;
 }
 
-// Revalidate form for password length + terms checkbox
 function validateForm() {
   const valid = passEl.value.length >= 8 && agreeBox.checked;
   btnEl.disabled = !valid;
@@ -86,14 +84,24 @@ form?.addEventListener('submit', async (ev) => {
   }
 
   btnEl.disabled = true;
+
   try {
-    await api('/api/auth/register', {
+    const res = await api('/api/auth/register', {
       method: 'POST',
       body: { name, email, password, acceptedGuidelines }
     });
-    window.location.href = '/account.html';
+
+    // Replace form with success message
+    const card = document.querySelector('.card');
+    card.innerHTML = `
+      <h1>🎉 Account Created!</h1>
+      <p>✅ Thanks for signing up, <strong>${name}</strong>.</p>
+      <p>📧 Please check <strong>${email}</strong> for a verification email.</p>
+      <p>Once verified, you can <a href="/login.html" class="link">sign in here</a>.</p>
+    `;
   } catch (e) {
     errEl.textContent = e?.message || 'Registration failed.';
+    errEl.style.display = 'block';
   } finally {
     btnEl.disabled = false;
   }

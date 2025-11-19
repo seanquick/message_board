@@ -140,11 +140,12 @@ router.post('/register', async (req, res) => {
     const password = s.string({ trim: true, min: 8, max: 200 }).parse(req.body?.password || '');
 
     const exists = await User.findOne({ email }).select('_id').lean();
-    if (exists) return res.status(400).json({ error: 'Email already registered' });
+    if (exists) {
+      return res.status(400).json({ error: 'Email already registered' });
+    }
 
     const passwordHash = await bcrypt.hash(password, 12);
 
-    // 🔥 Create a verification token
     const token = crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
@@ -156,33 +157,34 @@ router.post('/register', async (req, res) => {
       tokenVersion: 0,
       emailVerified: false,
       emailVerifyToken: tokenHash,
-      emailVerifyExpires: new Date(Date.now() + 1000 * 60 * 60 * 24) // 24 hours
+      emailVerifyExpires: new Date(Date.now() + 24 * 60 * 60 * 1000)
     });
 
-    // 🔥 Send email verification
+    console.log('[register] Created user:', u.email, 'raw token:', token);
+
+    // Build full link
+    const base = process.env.PUBLIC_ORIGIN || process.env.SITE_URL || 'https://board.quickclickswebsites.com';
+    const verifyLink = `${base}/verify-email.html?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
+
     try {
       const { sendMail } = require('../Services/mailer');
-      const base = process.env.PUBLIC_ORIGIN || '';
-      const verifyLink = `${base}/verify-email.html?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
-
       await sendMail({
         to: u.email,
         subject: 'Verify your email address',
         text: `Welcome ${name}!\n\nPlease verify your email by clicking the link:\n${verifyLink}\n\nThe link is valid for 24 hours.`
       });
-
+      console.log('[register] Mail sent to:', u.email);
     } catch (e) {
       console.error('[auth] failed to send verification email:', e.message);
-      // Not fatal — user can request a resend
     }
 
-    res.json({
+    return res.json({
       ok: true,
       message: 'Registration successful! Check your email for a verification link.'
     });
-
   } catch (e) {
-    res.status(400).json({ error: e?.message || 'Failed to register' });
+    console.error('[register] Error:', e);
+    return res.status(400).json({ error: e?.message || 'Failed to register' });
   }
 });
 
@@ -237,63 +239,44 @@ router.post('/login', async (req, res) => {
 
 
 
-  // Email verification (POST — called by verify-email.js)
+  // Verify email
   router.post('/verify-email', async (req, res) => {
+    const { token, email } = req.body || {};
+    console.log('[verify-email] start for token:', token, 'email:', email);
+
+    if (!token || !email) {
+      return res.status(400).json({ error: 'Missing token or email' });
+    }
+
     try {
-      const { token, email } = req.body;
-      console.log('[verify-email] start for token:', token, 'email:', email);
-
-      if (!token) {
-        return res.status(400).json({ error: 'Missing verification token' });
-      }
-
-      // Email is optional — but if present, normalize it
-      const normalizedEmail = email ? String(email).trim().toLowerCase() : undefined;
-
-      // 🔥 Hash incoming raw token before lookup
       const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-      console.log('[verify-email] tokenHash:', tokenHash);
 
-      // 🔥 Build DB query
-      const query = {
+      const user = await User.findOne({
+        email: email.toLowerCase(),
         emailVerifyToken: tokenHash,
         emailVerifyExpires: { $gt: new Date() }
-      };
+      });
 
-      if (normalizedEmail) query.email = normalizedEmail;
-
-      console.log('[verify-email] Using query:', query);
-
-      const user = await User.findOne(query);
-      console.log('[verify-email] user found:', user ? user.email : null);
+      console.log('[verify-email] user found:', user ? user._id : 'null');
 
       if (!user) {
-        console.warn('[verify-email] Invalid or expired token for:', normalizedEmail);
         return res.status(400).json({ error: 'Invalid or expired verification token' });
       }
 
-      console.log(
-        '[verify-email] DB stored tokenHash:',
-        user.emailVerifyToken,
-        'expires:',
-        user.emailVerifyExpires
-      );
-
-      // 🔥 Mark verified
       user.emailVerified = true;
       user.emailVerifyToken = undefined;
       user.emailVerifyExpires = undefined;
-
       await user.save();
-      console.log('[verify-email] ✅ Verified user:', user.email);
 
-      return res.json({ ok: true, message: 'Email verified successfully!' });
+      console.log('[verify-email] success for user:', user.email);
 
+      res.json({ ok: true });
     } catch (err) {
-      console.error('[verify-email] Error during verification:', err);
-      return res.status(500).json({ error: 'Failed to verify email' });
+      console.error('[verify-email] error:', err);
+      res.status(500).json({ error: 'Server error verifying email' });
     }
   });
+
 
 
 // Resend verification email (unauthenticated)
