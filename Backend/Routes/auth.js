@@ -240,6 +240,7 @@ router.post('/login', async (req, res) => {
 
 
   // Verify email
+  // In auth.js
   router.post('/verify-email', async (req, res) => {
     const { token, email } = req.body || {};
     console.log('[verify-email] start for token:', token, 'email:', email);
@@ -250,14 +251,12 @@ router.post('/login', async (req, res) => {
 
     try {
       const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-
       const user = await User.findOne({
-        email: email.toLowerCase(),
+        email: String(email).toLowerCase(),
         emailVerifyToken: tokenHash,
         emailVerifyExpires: { $gt: new Date() }
       });
-
-      console.log('[verify-email] user found:', user ? user._id : 'null');
+      console.log('[verify-email] user found:', user ? user.email : null);
 
       if (!user) {
         return res.status(400).json({ error: 'Invalid or expired verification token' });
@@ -268,14 +267,15 @@ router.post('/login', async (req, res) => {
       user.emailVerifyExpires = undefined;
       await user.save();
 
-      console.log('[verify-email] success for user:', user.email);
+      console.log('[verify-email] ✅ Verified user:', user.email);
+      return res.json({ ok: true, message: 'Email verified successfully!' });
 
-      res.json({ ok: true });
     } catch (err) {
       console.error('[verify-email] error:', err);
-      res.status(500).json({ error: 'Server error verifying email' });
+      return res.status(500).json({ error: 'Server error verifying email' });
     }
   });
+
 
 
 
