@@ -147,7 +147,10 @@ router.post('/register', async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 12);
 
     const token = crypto.randomBytes(32).toString('hex');
+    console.log('[auth:register] raw verify token for', email, '=', token);
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    console.log('[auth:register] storing tokenHash for', email, '=', tokenHash);
+
 
     const u = await User.create({
       name,
@@ -159,7 +162,8 @@ router.post('/register', async (req, res) => {
       emailVerifyToken: tokenHash,
       emailVerifyExpires: new Date(Date.now() + 24 * 60 * 60 * 1000)
     });
-
+    
+    console.log('[auth:register] user created:', u._id.toString(), u.email);
     console.log('[register] Created user:', u.email, 'raw token:', token);
 
     // Build full link
