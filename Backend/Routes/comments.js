@@ -21,7 +21,7 @@ const Comment = require('../Models/Comment');
 const Thread  = require('../Models/Thread');
 const User    = require('../Models/User');
 const Report  = require('../Models/Report');
-const notifyUser = require('../Utils/notify');
+const notifyUser = require('../Util/notify');
 
 const { requireAuth, requireAdmin }           = require('../Middleware/auth');
 const ensureThreadUnlocked                   = require('../Middleware/ensureThreadUnlocked');
