@@ -721,6 +721,34 @@ router.get('/users/:userId/content', requireAdmin, async (req, res) => {
   }
 });
 
+// UPDATE user role
+router.post('/users/:userId/role', requireAdmin, async (req, res) => {
+  try {
+    const uid = req.params.userId;
+    const { role } = req.body;
+
+    if (!mongoose.isValidObjectId(uid)) {
+      return res.status(400).json({ error: 'Invalid user ID' });
+    }
+
+    if (!['user', 'admin'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role' });
+    }
+
+    const user = await User.findByIdAndUpdate(uid, { role }, { new: true }).select('email role');
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ ok: true, message: `Role updated to ${role}`, user });
+
+  } catch (e) {
+    console.error('[admin] role update error:', e);
+    res.status(500).json({ error: 'Failed to update role', detail: String(e) });
+  }
+});
+
+
 // ===== BULK THREADS DELETE/RESTORE (admin) =====
 router.post('/threads/bulk-delete', requireAdmin, async (req, res) => {
   try {
