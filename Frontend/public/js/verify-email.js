@@ -28,7 +28,7 @@ console.log('[verify-email] Parsed params:', { token, email });
     console.log('[verify-email] Response:', data);
 
     if (data?.ok) {
-      msg.textContent = '✅ Your email has been verified. You may now sign in.';
+      msg.innerHTML = '✅ Your email has been verified. You may now <a href="/login.html">sign in</a>.';
     } else {
       msg.textContent = `❌ ${data?.error || 'Verification failed.'}`;
     }

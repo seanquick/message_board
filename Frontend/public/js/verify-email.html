@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <title>Email Verification</title>
   <link rel="stylesheet" href="styles.css">
-  <meta http-equiv="Content-Security-Policy" content="script-src 'self'; object-src 'none'; base-uri 'self';">
+  <!-- ✅ FIX: loosen CSP for script-src -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'self';">
 </head>
 <body>
 
@@ -13,7 +14,8 @@
   <p id="message">Verifying...</p>
 </main>
 
-<script type="module" src="js/verify-email.js"></script>
+<!-- ✅ FIXED PATH TO SCRIPT BELOW -->
+<script type="module" src="/js/verify-email.js"></script>
 
 </body>
 </html>
