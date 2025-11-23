@@ -132,65 +132,72 @@
     res.json({ ok: true, token });
   });
 
-  // Register (with email verification)
-  router.post('/register', async (req, res) => {
-    try {
-      const name = s.string({ trim: true, max: 120 }).parse(req.body?.name || '');
-      const email = s.string({ trim: true, lowercase: true, email: true, max: 200 }).parse(req.body?.email || '');
-      const password = s.string({ trim: true, min: 8, max: 200 }).parse(req.body?.password || '');
+  // Register (with email verification) — ✅ REPLACEMENT BLOCK START
+router.post('/register', async (req, res) => {
+  try {
+    const name = s.string({ trim: true, max: 120 }).parse(req.body?.name || '');
+    const email = s.string({ trim: true, lowercase: true, email: true, max: 200 }).parse(req.body?.email || '');
+    const password = s.string({ trim: true, min: 8, max: 200 }).parse(req.body?.password || '');
 
-      const exists = await User.findOne({ email }).select('_id').lean();
-      if (exists) {
-        return res.status(400).json({ error: 'Email already registered' });
-      }
-
-      const passwordHash = await bcrypt.hash(password, 12);
-
-      const token = crypto.randomBytes(32).toString('hex');
-      console.log('[auth:register] raw verify token for', email, '=', token);
-      const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-      console.log('[auth:register] storing tokenHash for', email, '=', tokenHash);
-
-
-      const u = await User.create({
-        name,
-        email,
-        passwordHash,
-        role: 'user',
-        tokenVersion: 0,
-        emailVerified: false,
-        emailVerifyToken: tokenHash,
-        emailVerifyExpires: new Date(Date.now() + 24 * 60 * 60 * 1000)
-      });
-      
-      console.log('[auth:register] user created:', u._id.toString(), u.email);
-      console.log('[register] Created user:', u.email, 'raw token:', token);
-
-      // Build full link
-      const base = process.env.PUBLIC_ORIGIN || process.env.SITE_URL || 'https://board.quickclickswebsites.com';
-      const verifyLink = `${base}/verify-email.html?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
-
-      try {
-        const { sendMail } = require('../Services/mailer');
-        await sendMail({
-          to: u.email,
-          subject: 'Verify your email address',
-          text: `Welcome ${name}!\n\nPlease verify your email by clicking the link:\n${verifyLink}\n\nThe link is valid for 24 hours.`
-        });
-        console.log('[register] Mail sent to:', u.email);
-      } catch (e) {
-        console.error('[auth] failed to send verification email:', e.message);
-      }
-
-      return res.json({
-        ok: true,
-        message: 'Registration successful! Check your email for a verification link.'
-      });
-    } catch (e) {
-      console.error('[register] Error:', e);
-      return res.status(400).json({ error: e?.message || 'Failed to register' });
+    const exists = await User.findOne({ email }).select('_id').lean();
+    if (exists) {
+      return res.status(400).json({ error: 'Email already registered' });
     }
-  });
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    // === BEGIN: Email verification token generation & storage (REGISTER) ===
+    const rawVerifyToken = crypto.randomBytes(32).toString('hex');
+    console.log('[auth:register] raw verify token for', email, '=', rawVerifyToken);
+
+    const verifyTokenHash = crypto
+      .createHash('sha256')
+      .update(rawVerifyToken)
+      .digest('hex');
+    console.log('[auth:register] storing verifyTokenHash for', email, '=', verifyTokenHash);
+
+    const verificationExpires = Date.now() + 24 * 60 * 60 * 1000; // 24h
+    const u = await User.create({
+      name,
+      email,
+      passwordHash,
+      role: 'user',
+      tokenVersion: 0,
+      emailVerified: false,
+      emailVerifyToken: verifyTokenHash,
+      emailVerifyExpires: new Date(verificationExpires)
+    });
+
+    console.log('[auth:register] user created:', u._id.toString(), u.email);
+    console.log('[auth:register] raw token to be emailed:', rawVerifyToken);
+
+    const baseUrl = process.env.PUBLIC_ORIGIN || process.env.SITE_URL || 'https://board.quickclickswebsites.com';
+    const verificationLink = `${baseUrl}/verify-email.html?token=${encodeURIComponent(rawVerifyToken)}&email=${encodeURIComponent(email)}`;
+
+    try {
+      const { sendMail } = require('../Services/mailer');
+      await sendMail({
+        to: u.email,
+        subject: 'Verify your email address',
+        text: `Welcome ${name}!\n\nPlease verify your email by clicking the link:\n${verificationLink}\n\nThe link is valid for 24 hours.`
+      });
+      console.log('[auth:register] Mail sent to:', u.email);
+    } catch (mailErr) {
+      console.error('[auth:register] failed to send verification email:', mailErr.message);
+    }
+    // === END: Email verification token generation & storage (REGISTER) ===
+
+    return res.json({
+      ok: true,
+      message: 'Registration successful! Check your email for a verification link.'
+    });
+  } catch (e) {
+    console.error('[register] Error:', e);
+    return res.status(400).json({ error: e?.message || 'Failed to register' });
+  }
+});
+// ✅ REPLACEMENT BLOCK END
+
 
 
 
