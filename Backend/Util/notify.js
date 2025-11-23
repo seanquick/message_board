@@ -1,6 +1,7 @@
 // Backend/Utils/notify.js
 const Notification = require('../Models/Notification');
-const sendMail = require('./mailer');
+const { sendMail } = require('../Services/mailer');
+
 
 async function notifyUser({ userId, type, title, body, link = '', meta = {}, email }) {
   // Save to DB
