@@ -287,65 +287,75 @@ router.post('/register', async (req, res) => {
       }
     });
 
+  // Resend verification email (unauthenticated) — ✅ REPLACEMENT BLOCK START
+router.post('/resend-verification', async (req, res) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      console.warn('[resend-verification] Invalid email input:', req.body?.email);
+      return res.status(400).json({ error: 'Invalid email' });
+    }
 
+    const user = await User.findOne({ email }).lean();
+    if (!user) {
+      console.info(`[resend-verification] No user found for email ${email} — masking response`);
+      return res.json({ message: 'If that email exists, a verification link will be sent.' });
+    }
 
+    if (user.emailVerified) {
+      console.info(`[resend-verification] Email already verified for userId ${user._id}, email ${email}`);
+      return res.json({ message: 'Email already verified.' });
+    }
 
-  // Resend verification email (unauthenticated)
-  router.post('/resend-verification', async (req, res) => {
+    // === BEGIN: Email verification token regeneration & storage (RESEND) ===
+    const rawVerifyToken = crypto.randomBytes(32).toString('hex');
+    console.log('[auth:resend-verification] raw verify token for', email, '=', rawVerifyToken);
+
+    const verifyTokenHash = crypto
+      .createHash('sha256')
+      .update(rawVerifyToken)
+      .digest('hex');
+    console.log('[auth:resend-verification] storing verifyTokenHash for', email, '=', verifyTokenHash);
+
+    const verificationExpires = Date.now() + 1 * 60 * 60 * 1000; // 1 hour
+    await User.updateOne(
+      { _id: user._id },
+      {
+        emailVerifyToken: verifyTokenHash,
+        emailVerifyExpires: new Date(verificationExpires)
+      }
+    );
+    console.log('[auth:resend-verification] DB updated for user:', user._id, 'expires at', new Date(verificationExpires));
+
+    const baseUrl = process.env.PUBLIC_ORIGIN || process.env.SITE_URL || 'http://localhost:3000';
+    const verificationLink = `${baseUrl}/verify-email.html?token=${encodeURIComponent(rawVerifyToken)}&email=${encodeURIComponent(email)}`;
+    console.log('[auth:resend-verification] verification link generated for', email, '=', verificationLink);
+
     try {
-      const email = String(req.body?.email || '').trim().toLowerCase();
-      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        console.warn('[resend-verification] Invalid email input:', req.body?.email);
-        return res.status(400).json({ error: 'Invalid email' });
-      }
-
-      const user = await User.findOne({ email }).lean();
-      if (!user) {
-        console.info(`[resend-verification] No user found for email ${email} — masking response`);
-        return res.json({ message: 'If that email exists, a verification link will be sent.' });
-      }
-
-      if (user.emailVerified) {
-        console.info(`[resend-verification] Email already verified for userId ${user._id}, email ${email}`);
-        return res.json({ message: 'Email already verified.' });
-      }
-
-      // generate token
-      const crypto = require('crypto');
-      const token = crypto.randomBytes(32).toString('hex');
-      const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-      const expires   = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-
-      await User.updateOne(
-        { _id: user._id },
-        { emailVerifyToken: tokenHash, emailVerifyExpires: expires }
-      );
-
       const { sendMail } = require('../Services/mailer');
-      const base = process.env.PUBLIC_ORIGIN || '';
-      const siteUrl = process.env.SITE_URL || 'http://localhost:3000';
-      const link = `${siteUrl}/verify-email.html?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
-
-
-      // send email
       const mailResult = await sendMail({
         to: email,
         subject: 'Please verify your email address',
-        text: `Hello ${user.name || ''},\n\nPlease verify your email by clicking the link:\n${link}\n\nThe link is valid for 1 hour.\n`,
+        text: `Hello ${user.name || ''},\n\nPlease verify your email by clicking the link:\n${verificationLink}\n\nThe link is valid for 1 hour.\n`,
         html: `<p>Hello ${user.name || ''},</p>
               <p>Please verify your email by clicking the link below:</p>
-              <p><a href="${link}">Verify email</a></p>
+              <p><a href="${verificationLink}">Verify email</a></p>
               <p>The link is valid for 1 hour.</p>`
       });
-
-      console.info(`[resend-verification] Email sent to ${email}. MailResult:`, mailResult);
-      res.json({ message: 'Verification email sent. Please check your inbox.' });
-
-    } catch (err) {
-      console.error('[resend-verification] Error:', err);
-      res.status(500).json({ error: 'Failed to send verification email.' });
+      console.info('[auth:resend-verification] Email sent to', email, 'MailResult:', mailResult);
+    } catch (mailErr) {
+      console.error('[auth:resend-verification] failed to send verification email:', mailErr.message);
     }
-  });
+    // === END: Email verification token regeneration & storage (RESEND) ===
+
+    res.json({ message: 'Verification email sent. Please check your inbox.' });
+  } catch (err) {
+    console.error('[resend-verification] Error:', err);
+    res.status(500).json({ error: 'Failed to send verification email.' });
+  }
+});
+// ✅ REPLACEMENT BLOCK END
+
 
   // Logout
   router.post('/logout', async (_req, res) => {
