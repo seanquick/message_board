@@ -252,40 +252,48 @@ router.post('/register', async (req, res) => {
 
     // Verify email
     // In auth.js
-    router.post('/verify-email', async (req, res) => {
-      const { token, email } = req.body || {};
-      console.log('[verify-email] start for token:', token, 'email:', email);
+    // === BEGIN: Verify email endpoint (drop‑in replacement) ===
+router.post('/verify-email', async (req, res) => {
+  console.log('[verify-email] endpoint reached with body:', req.body);
 
-      if (!token || !email) {
-        return res.status(400).json({ error: 'Missing token or email' });
-      }
+  const { token, email } = req.body || {};
+  console.log('[verify-email] Received params token:', token, 'email:', email);
 
-      try {
-        const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-        const user = await User.findOne({
-          email: String(email).toLowerCase(),
-          emailVerifyToken: tokenHash,
-          emailVerifyExpires: { $gt: new Date() }
-        });
-        console.log('[verify-email] user found:', user ? user.email : null);
+  if (!token || !email) {
+    console.warn('[verify-email] Missing token or email');
+    return res.status(400).json({ error: 'Missing token or email' });
+  }
 
-        if (!user) {
-          return res.status(400).json({ error: 'Invalid or expired verification token' });
-        }
+  try {
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    console.log('[verify-email] Hashed token:', tokenHash);
 
-        user.emailVerified = true;
-        user.emailVerifyToken = undefined;
-        user.emailVerifyExpires = undefined;
-        await user.save();
-
-        console.log('[verify-email] ✅ Verified user:', user.email);
-        return res.json({ ok: true, message: 'Email verified successfully!' });
-
-      } catch (err) {
-        console.error('[verify-email] error:', err);
-        return res.status(500).json({ error: 'Server error verifying email' });
-      }
+    const user = await User.findOne({
+      email: String(email).toLowerCase(),
+      emailVerifyToken: tokenHash,
+      emailVerifyExpires: { $gt: new Date() }
     });
+    console.log('[verify-email] Looked up user:', user ? user.email : null);
+
+    if (!user) {
+      console.warn('[verify-email] No matching user or expired token');
+      return res.status(400).json({ error: 'Invalid or expired verification token' });
+    }
+
+    user.emailVerified = true;
+    user.emailVerifyToken = undefined;
+    user.emailVerifyExpires = undefined;
+    await user.save();
+    console.log('[verify-email] ✅ Verified user:', user.email);
+
+    return res.json({ ok: true, message: 'Email verified successfully!' });
+  } catch (err) {
+    console.error('[verify-email] error:', err);
+    return res.status(500).json({ error: 'Server error verifying email' });
+  }
+});
+// === END: Verify email endpoint replacement ===
+
 
   // Resend verification email (unauthenticated) — ✅ REPLACEMENT BLOCK START
 router.post('/resend-verification', async (req, res) => {
