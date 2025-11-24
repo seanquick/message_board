@@ -183,6 +183,7 @@ router.post('/:threadId', creationMiddleware, async (req, res) => {
           const prefs = recipient.notificationPrefs || {};
           if (prefs.emailReplies !== false) {
             const notifyLink = `/thread.html?id=${threadId}#comment-${c._id}`;
+            console.log(`[comments] Sending reply notification email to: ${recipient.email}`);
             await notifyUser({
               userId: recipient._id,
               type: 'reply',
