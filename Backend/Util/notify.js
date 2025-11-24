@@ -9,12 +9,13 @@ async function notifyUser({ userId, type, title, body, link = '', meta = {}, ema
 
   // Optionally send email
   if (email) {
-    await sendMail({
-      to: email,
-      subject: title,
-      html: `<p>${body}</p><p><a href="${link}">View</a></p>`
-    });
-  }
+  await sendMail({
+    to: String(email),
+    subject: title,
+    html: `<p>${body}</p><p><a href="${link}">View</a></p>`
+  });
+}
+
 }
 
 module.exports = notifyUser;
