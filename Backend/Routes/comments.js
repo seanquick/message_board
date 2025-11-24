@@ -132,13 +132,13 @@ const creationMiddleware = [
 
 router.post('/:threadId', creationMiddleware, async (req, res) => {
   try {
-    const me = await User.findById(req.user.uid).select('name email isBanned').lean();
+    const me = await User.findById(req.user.uid).select('name email isBanned notificationPrefs').lean();
     if (!me) return bad(res, 401, 'Unauthorized');
     if (me.isBanned) return bad(res, 403, 'Account is banned from posting.');
 
     const threadId = toId(req.params.threadId);
     if (!threadId) return bad(res, 400, 'Invalid thread id.');
-    const thread = await Thread.findById(threadId).select('title author isDeleted').lean();
+    const thread = await Thread.findById(threadId).select('_id title isDeleted userId').lean();
     if (!thread || thread.isDeleted) return bad(res, 404, 'Thread not found');
 
     const { body, content, parentId: rawParentId, isAnonymous } = req.body || {};
@@ -172,58 +172,44 @@ router.post('/:threadId', creationMiddleware, async (req, res) => {
 
     const c = await Comment.create(newCommentData);
 
-    // ✅ Send notification
-    const Notification = require('../Models/Notification');
-    const { sendMail } = require('../Services/mailer');
-
-    let notifyUserId = null;
-    let notifyEmail = null;
-    let notifyTitle = '';
-    let notifyLink = `/thread.html?id=${thread._id}`;
-
+    // ✉️ Reply-to-comment email notification
     if (parentId) {
-      const parentComment = await Comment.findById(parentId).select('userId body').populate('userId', 'email').lean();
-      if (parentComment?.userId?._id?.toString() !== req.user.uid) {
-        notifyUserId = parentComment.userId._id;
-        notifyEmail = parentComment.userId.email;
-        notifyTitle = 'Someone replied to your comment';
-      }
-    } else if (thread.author?.toString() !== req.user.uid) {
-      const threadAuthor = await User.findById(thread.author).select('email').lean();
-      if (threadAuthor) {
-        notifyUserId = threadAuthor._id;
-        notifyEmail = threadAuthor.email;
-        notifyTitle = 'New comment on your thread';
-      }
-    }
+      const parent = await Comment.findById(parentId).select('userId isAnonymous').lean();
+      if (parent?.userId && String(parent.userId) !== String(req.user.uid)) {
+        const recipient = await User.findById(parent.userId).select('email notificationPrefs name').lean();
 
-    if (notifyUserId && notifyEmail) {
-      await Notification.create({
-        userId: notifyUserId,
-        type: 'comment_reply',
-        title: notifyTitle,
-        body: finalBody.slice(0, 500),
-        link: notifyLink
-      });
-
-      try {
-        await sendMail({
-          to: notifyEmail,
-          subject: notifyTitle,
-          text: `Someone has commented:\n\n"${finalBody.slice(0, 300)}"\n\nView it: ${process.env.PUBLIC_ORIGIN || 'https://board.quickclickswebsites.com'}${notifyLink}`
-        });
-      } catch (mailErr) {
-        console.error('[comment notify] Failed to send email:', mailErr.message);
+        if (recipient?.email) {
+          // Optional: check user preferences
+          const prefs = recipient.notificationPrefs || {};
+          if (prefs.emailReplies !== false) {
+            const notifyLink = `/thread.html?id=${threadId}#comment-${c._id}`;
+            await notifyUser({
+              userId: recipient._id,
+              type: 'reply',
+              title: `New reply to your comment`,
+              body: `${me.name} replied to your comment.`,
+              link: notifyLink,
+              email: {
+                to: recipient.email,
+                subject: `New reply to your comment from ${me.name}`,
+                html: `
+                  <p><strong>${me.name}</strong> replied to your comment on the thread "<strong>${thread.title}</strong>".</p>
+                  <p><a href="https://board.quickclickswebsites.com${notifyLink}">View reply</a></p>
+                `
+              }
+            });
+          }
+        }
       }
     }
 
     return res.status(201).json({ id: c._id });
-
   } catch (e) {
     console.error('[comments] create error:', e);
     return bad(res, 500, 'Failed to create comment');
   }
 });
+
 
 
 // ===================================================================

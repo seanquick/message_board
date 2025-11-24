@@ -71,6 +71,29 @@ import { api } from './utils.js';
           location.href = '/login.html';
         });
       }
+
+      // === 🔔 Add notification bell ===
+      const bell = document.createElement('a');
+      bell.href = 'notifications.html';
+      bell.className = 'btn ghost notification-bell';
+      bell.innerHTML = '🔔';
+
+      const countSpan = document.createElement('span');
+      countSpan.className = 'notification-count';
+      bell.appendChild(countSpan);
+      navRight?.insertBefore(bell, navRight.firstChild);
+
+      try {
+        const unreadData = await api('/api/notifications/unread-count');
+        if (unreadData?.count > 0) {
+          countSpan.textContent = unreadData.count;
+          countSpan.style.display = 'inline-block';
+        } else {
+          countSpan.style.display = 'none';
+        }
+      } catch (e) {
+        console.warn('[nav] notification count fetch failed:', e);
+      }
     }
 
   } catch (e) {
