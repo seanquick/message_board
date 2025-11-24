@@ -78,23 +78,28 @@ async function main() {
         // Set initial toggle state based on current preference
         toggle.checked = profile.notificationPrefs?.emailReplies !== false;
 
-        toggle.addEventListener('change', async () => {
+        let saveTimeout;
+
+        toggle.addEventListener('change', () => {
+          clearTimeout(saveTimeout);
+          saveTimeout = setTimeout(() => savePrefs(toggle.checked), 500);
+        });
+
+        async function savePrefs(value) {
           status.textContent = 'Saving...';
           try {
             await api('/api/profile/notifications', {
               method: 'POST',
-              body: {
-                emailReplies: toggle.checked
-              }
+              body: { emailReplies: value }
             });
             status.textContent = 'Saved ✓';
           } catch (err) {
             console.error('Failed to save notification preferences:', err);
             status.textContent = 'Failed ✖';
           }
-
           setTimeout(() => (status.textContent = ''), 3000);
-        });
+        }
+
       }
     }
 
