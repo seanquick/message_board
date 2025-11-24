@@ -4,7 +4,6 @@ import { api, $, refreshMe, me } from './main.js';
 const q = sel => document.querySelector(sel);
 
 async function loadMyProfile() {
-  // Only run on pages with the profile form
   if (!q('#profileForm')) return;
 
   try {
@@ -15,10 +14,10 @@ async function loadMyProfile() {
     q('#favoriteQuoteInput') && (q('#favoriteQuoteInput').value = resp.favoriteQuote || '');
     q('#profilePublicInput') && (q('#profilePublicInput').checked = !!resp.profilePublic);
     q('#emailPublicInput') && (q('#emailPublicInput').checked = !!resp.emailPublic);
-
+    q('#emailRepliesInput') && (q('#emailRepliesInput').checked = resp.notificationPrefs?.emailReplies !== false);
 
     if (resp.profilePhoto && q('#profilePhotoPreview')) {
-      q('#profilePhotoPreview').src    = resp.profilePhoto;
+      q('#profilePhotoPreview').src = resp.profilePhoto;
       q('#profilePhotoPreview').hidden = false;
     }
 
@@ -74,9 +73,9 @@ q('#profileForm')?.addEventListener('submit', async ev => {
       favoriteQuote: (q('#favoriteQuoteInput')?.value || '').trim(),
       profilePhoto:  photoUrl,
       profilePublic: q('#profilePublicInput')?.checked || false,
-      emailPublic:   q('#emailPublicInput')?.checked || false
+      emailPublic:   q('#emailPublicInput')?.checked || false,
+      emailReplies:  q('#emailRepliesInput')?.checked ?? true
     };
-
 
     await api('/api/users/profile', {
       method: 'POST',

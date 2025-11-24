@@ -14,16 +14,23 @@
     <h1>My Profile</h1>
     <div id="profileErr" class="err" aria-live="polite" hidden></div>
 
-    <form id="profileForm" class="account-form" enctype="multipart/form-data">
-      <div class="checkbox-group">
-        <input type="checkbox" id="profilePublicInput" />
-        <label for="profilePublicInput">Make my profile public (so others can view)</label>
-      </div>
+      <form id="profileForm" class="account-form" enctype="multipart/form-data">
+        <div class="checkbox-group">
+          <input type="checkbox" id="profilePublicInput" />
+          <label for="profilePublicInput">Make my profile public (so others can view)</label>
+        </div>
 
-      <div class="checkbox-group">
-        <input type="checkbox" id="emailPublicInput" />
-        <label for="emailPublicInput">Show my email on my public profile</label>
-      </div>
+        <div class="checkbox-group">
+          <input type="checkbox" id="emailPublicInput" />
+          <label for="emailPublicInput">Show my email on my public profile</label>
+        </div>
+
+        <!-- ✅ NEW: Notification Preference Checkbox -->
+        <div class="checkbox-group">
+          <input type="checkbox" id="emailRepliesInput" />
+          <label for="emailRepliesInput">Receive email notifications for comment replies</label>
+        </div>
+
 
       <div class="account-section">
         <label for="profilePhotoInput">Profile Photo</label>
