@@ -66,6 +66,38 @@ async function main() {
     }
   }
 
+    const authUser = await api('/api/auth/me'); // get current user
+    if (authUser && authUser.id === userId) {
+      const prefsBox = $('notificationPrefsBox');
+      const toggle = $('emailNotifyToggle');
+      const status = $('saveStatus');
+
+      if (prefsBox && toggle) {
+        prefsBox.classList.remove('hidden');
+
+        // Set initial toggle state based on current preference
+        toggle.checked = profile.notificationPrefs?.emailReplies !== false;
+
+        toggle.addEventListener('change', async () => {
+          status.textContent = 'Saving...';
+          try {
+            await api('/api/profile/notifications', {
+              method: 'POST',
+              body: {
+                emailReplies: toggle.checked
+              }
+            });
+            status.textContent = 'Saved ✓';
+          } catch (err) {
+            console.error('Failed to save notification preferences:', err);
+            status.textContent = 'Failed ✖';
+          }
+
+          setTimeout(() => (status.textContent = ''), 3000);
+        });
+      }
+    }
+
   // === Error Display Helper ===
   function showError(msg) {
     const el = $('errorMsg');

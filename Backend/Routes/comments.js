@@ -196,6 +196,11 @@ router.post('/:threadId', creationMiddleware, async (req, res) => {
                 html: `
                   <p><strong>${me.name}</strong> replied to your comment on the thread "<strong>${thread.title}</strong>".</p>
                   <p><a href="https://board.quickclickswebsites.com${notifyLink}">View reply</a></p>
+                  <hr>
+                  <p style="font-size: 12px; color: #777;">
+                    Don't want these emails? 
+                    <a href="https://board.quickclickswebsites.com/settings.html#notifications">Manage your preferences</a>.
+                  </p>
                 `
               }
             });

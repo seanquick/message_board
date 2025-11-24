@@ -29,4 +29,24 @@ router.get('/:userId', async (req, res) => {
   }
 });
 
+// Backend/Routes/profile.js
+router.post('/notifications', requireAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.uid);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    user.notificationPrefs = {
+      ...user.notificationPrefs,
+      emailReplies: !!req.body.emailReplies
+    };
+
+    await user.save();
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[profile] Failed to update notificationPrefs:', e);
+    res.status(500).json({ error: 'Failed to update preferences' });
+  }
+});
+
+
 module.exports = router;
