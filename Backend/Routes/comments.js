@@ -197,6 +197,7 @@ router.post('/:threadId', creationMiddleware, async (req, res) => {
                   <p><a href="https://board.quickclickswebsites.com${notifyLink}">View reply</a></p>
                 `
               }
+
             });
           }
         }
