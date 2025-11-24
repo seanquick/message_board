@@ -5,22 +5,19 @@
   <title>Notifications</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="styles.css">
+
+  <!-- 🧠 Load nav.js early so it can inject the header before DOMContentLoaded -->
+  <script type="module" src="nav.js?v=1"></script>
+  <script type="module" src="notifications.js" defer></script>
 </head>
 <body>
-
-  <!-- ✅ Inject Nav Bar -->
-  <script type="module" src="nav.js?v=1"></script>
+  <!-- 🧩 Header will be injected into this container by nav.js -->
   <header class="site-header"></header>
 
   <main class="container pad narrow">
     <h1>Your Notifications</h1>
     <button id="clearNotifsBtn" class="btn danger small">Clear All</button>
     <div id="notifList" class="notif-list"></div>
-    </main>
-
-
-  <!-- ✅ Load Notifications Logic -->
-  <script type="module" src="notifications.js?v=1"></script>
-
+  </main>
 </body>
 </html>
