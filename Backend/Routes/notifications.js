@@ -106,6 +106,18 @@ router.post('/mark-read', requireAuth, async (req, res) => {
   }
 });
 
+// POST /api/notifications/clear — Clear all notifications for current user
+router.post('/clear', requireAuth, async (req, res) => {
+  try {
+    await Notification.deleteMany({ userId: req.user.uid });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[notifications] clear error:', err);
+    res.status(500).json({ error: 'Failed to clear notifications' });
+  }
+});
+
+
 /* =========================== GET /stream (SSE) =========================== */
 router.get('/stream', requireAuth, async (req, res) => {
   try {

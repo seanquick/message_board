@@ -36,3 +36,18 @@ async function loadNotifications() {
 }
 
 document.addEventListener('DOMContentLoaded', loadNotifications);
+
+document.addEventListener('DOMContentLoaded', () => {
+  const clearBtn = document.getElementById('clearNotifsBtn');
+  clearBtn?.addEventListener('click', async () => {
+    if (!confirm('Are you sure you want to clear all notifications?')) return;
+
+    try {
+      await api('/api/notifications/clear', { method: 'POST' });
+      document.getElementById('notifList').innerHTML = '<p>No notifications.</p>';
+    } catch (err) {
+      console.error('Failed to clear notifications:', err);
+      alert('Failed to clear notifications.');
+    }
+  });
+});
