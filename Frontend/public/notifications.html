@@ -5,20 +5,17 @@
   <title>Notifications</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="styles.css">
+  <script type="module" src="nav.js?v=1"></script>
 </head>
 <body>
 
-  <!-- 🔹 Navigation header placeholder -->
-  <header class="site-header"></header>
-
+  <!-- ✅ Don't define an empty header, nav.js will insert it -->
   <main class="container pad narrow">
     <h1>Your Notifications</h1>
     <button id="clearNotifsBtn" class="btn danger small">Clear All</button>
     <div id="notifList" class="notif-list"></div>
   </main>
 
-  <!-- 🔹 Scripts -->
-  <script type="module" src="nav.js?v=1"></script>
   <script type="module" src="notifications.js?v=1"></script>
 </body>
 </html>
