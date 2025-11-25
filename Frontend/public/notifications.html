@@ -5,11 +5,13 @@
   <title>Notifications</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="styles.css">
-  <script type="module" src="nav.js?v=1"></script>
 </head>
 <body>
+  <!-- Load nav AFTER body starts -->
+  <script type="module" src="nav.js?v=1"></script>
 
-  <!-- ✅ Don't define an empty header, nav.js will insert it -->
+  <header class="site-header"></header>
+
   <main class="container pad narrow">
     <h1>Your Notifications</h1>
     <button id="clearNotifsBtn" class="btn danger small">Clear All</button>
