@@ -21,9 +21,10 @@ async function notifyUser({ userId, type, title, body, link = '', meta = {}, ema
   });
 
   // 2️⃣ Handle optional email
-  if (email && email.to && email.subject && email.html) {
+  if (email && email.to?.trim() && email.subject && email.html) {
+    const recipientEmail = email.to.trim();
+
     try {
-      // Auto‑append unsubscribe footer
       const footer = `
         <hr>
         <p style="font-size: 12px; color: #777;">
@@ -33,28 +34,31 @@ async function notifyUser({ userId, type, title, body, link = '', meta = {}, ema
       `;
 
       const finalHTML = `${email.html}${footer}`;
-      const finalText = email.text || stripHTML(email.html) + 
+      const finalText = email.text || stripHTML(email.html) +
         `\n\nManage your email preferences at: https://board.quickclickswebsites.com/settings.html#notifications`;
 
-      // 3️⃣ Send email
       await sendMail({
-        to: email.to,
+        to: recipientEmail,
         subject: email.subject,
         html: finalHTML,
         text: finalText
       });
 
-      // 4️⃣ Mark emailSent = true
       await Notification.updateOne(
         { _id: notification._id },
         { $set: { emailSent: true } }
       );
-
     } catch (err) {
       console.error('[notify] ❌ Email failed — but notification saved:', err);
-      // Do NOT throw → users should not see an error when posting a comment
     }
+  } else {
+    console.warn('[notify] ⚠️ Email not sent: invalid email fields', {
+      to: email?.to,
+      subject: email?.subject,
+      htmlPresent: !!email?.html
+    });
   }
+
 }
 
 module.exports = notifyUser;

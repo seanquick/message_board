@@ -173,17 +173,16 @@ router.post('/:threadId', creationMiddleware, async (req, res) => {
     const c = await Comment.create(newCommentData);
 
     // ✉️ Reply-to-comment email notification
+    // ...
     if (parentId) {
       const parent = await Comment.findById(parentId).select('userId isAnonymous').lean();
       if (parent?.userId && String(parent.userId) !== String(req.user.uid)) {
         const recipient = await User.findById(parent.userId).select('email notificationPrefs name').lean();
 
-        if (recipient?.email) {
-          // Optional: check user preferences
+        if (recipient?.email && recipient.email.trim()) {
           const prefs = recipient.notificationPrefs || {};
           if (prefs.emailReplies !== false) {
             const notifyLink = `/thread.html?id=${threadId}#comment-${c._id}`;
-            console.log(`[comments] Sending reply notification email to: ${recipient.email}`);
             await notifyUser({
               userId: recipient._id,
               type: 'reply',
@@ -191,16 +190,11 @@ router.post('/:threadId', creationMiddleware, async (req, res) => {
               body: `${me.name} replied to your comment.`,
               link: notifyLink,
               email: {
-                to: recipient.email,
+                to: recipient.email.trim(),
                 subject: `New reply to your comment from ${me.name}`,
                 html: `
                   <p><strong>${me.name}</strong> replied to your comment on the thread "<strong>${thread.title}</strong>".</p>
                   <p><a href="https://board.quickclickswebsites.com${notifyLink}">View reply</a></p>
-                  <hr>
-                  <p style="font-size: 12px; color: #777;">
-                    Don't want these emails? 
-                    <a href="https://board.quickclickswebsites.com/settings.html#notifications">Manage your preferences</a>.
-                  </p>
                 `
               }
             });
@@ -208,6 +202,8 @@ router.post('/:threadId', creationMiddleware, async (req, res) => {
         }
       }
     }
+    // ...
+
 
     return res.status(201).json({ id: c._id });
   } catch (e) {
